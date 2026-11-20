@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Welcome · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>ArborStudio Help</h1>
+<p class="lead">ArborStudio is a procedural tree modeller for games and real-time 3D. You describe a tree with a small set of generators and settings, and ArborStudio grows the trunk, branches, roots and leaves, builds a game-ready mesh with levels of detail, and exports it for Unity, Unreal, Godot or your own engine.</p>
+
+<figure class="hero">
+<img src="images/ui-window.jpg" alt="The ArborStudio window with an oak tree in the viewport">
+<figcaption>The ArborStudio window: generators on the left, the 3D viewport in the centre and the properties of the selected generator on the right.</figcaption>
+</figure>
+
+<h2>What you can do with ArborStudio</h2>
+<ul>
+<li>Start from one of eight species presets or build a tree from scratch with trunk, branch, root and leaf generators.</li>
+<li>Shape every part of the tree: length, angle, gravity, thickness, bark surface, leaf form and more. Most settings can vary along a stem or up the tree with a <a href="curves.html">curve</a>.</li>
+<li>Get one watertight mesh where branches and roots grow out of their parents, with bark texture coordinates that stay continuous across <a href="joints.html">joints</a>.</li>
+<li>Apply <a href="materials.html">materials</a> with colour textures and normal maps, and preview them under five lighting presets.</li>
+<li>Bend growth with <a href="forces.html">forces</a>, trim the crown to a volume, and edit <a href="node-editing.html">individual branches</a> by hand.</li>
+<li>Export four mesh <a href="lod.html">levels of detail</a> plus a billboard, collision objects, wind weights and baked ambient occlusion in GLB, OBJ or JSON.</li>
+<li>Let a <a href="agents.html">coding agent</a> build, preview and export trees through the built-in MCP server.</li>
+</ul>
+
+<h2>Where to start</h2>
+<div class="cards">
+<a href="installation.html"><strong>Installing and starting</strong><span>Download ArborStudio and open it for the first time.</span></a>
+<a href="first-tree.html"><strong>Your first tree</strong><span>A ten-minute walkthrough from preset to exported model.</span></a>
+<a href="interface.html"><strong>The window</strong><span>Toolbar, panels, viewport navigation and menus.</span></a>
+<a href="concepts.html"><strong>How trees are built</strong><span>Generators, the hierarchy, and how values relate to parents.</span></a>
+<a href="export.html"><strong>Exporting</strong><span>File formats, levels of detail and importing into engines.</span></a>
+<a href="reference.html"><strong>Parameter reference</strong><span>Every setting with its range on one page.</span></a>
+</div>
+
+<h2>Conventions in this help</h2>
+<ul>
+<li>Names of buttons, menus and settings appear in <strong>bold</strong>, as they are written in the window.</li>
+<li>Keyboard shortcuts are written for macOS with <kbd>⌘</kbd>. On Windows and Linux, use <kbd>Ctrl</kbd> instead.</li>
+<li>Lengths are in metres. ArborStudio uses a right-handed coordinate system with Y pointing up, the convention of glTF.</li>
+<li>Names in <code>code</code> style are the identifiers used in project files and by the agent tools.</li>
+</ul>
+</main>
+</body>
+</html>

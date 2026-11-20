@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roots · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Roots</h1>
+<p class="lead">A roots generator grows roots from the base of a trunk. Roots follow the ground, sink into it and never rise above it. Branches added under roots become side roots and follow the same rules.</p>
+
+<figure class="narrow"><img src="images/ui-props-roots.jpg" alt="Properties of a roots generator"></figure>
+
+<h2>Adding roots</h2>
+<ol class="steps">
+<li>Select a trunk generator.</li>
+<li>Click <strong>+ Roots</strong>. The roots start just above the ground around the trunk.</li>
+<li>For side roots, select the roots generator and click <strong>+ Branches</strong>.</li>
+</ol>
+<p>When roots are added, the trunk reaches a little below the ground so that every root grows out of bark, and its buttress flare and flutes line up with the roots.</p>
+
+<h2>Settings that work differently for roots</h2>
+<dl class="params">
+<dt>Start and End</dt>
+<dd>The band of the trunk where roots begin. The default, 0 to 0.03, keeps them at the very bottom.</dd>
+<dt>Angle</dt>
+<dd>The starting direction relative to the trunk. Values above 90° point the roots outwards and slightly down. Roots never start upwards.</dd>
+<dt>Gravity (dive) <span class="range">0 to 1</span></dt>
+<dd>How steeply the roots head into the soil. At 0 they run along the ground surface, at 1 they turn straight down. Roots turn towards this direction gradually, so they leave the trunk near the surface and dive further away from it. Negative values have no effect on roots.</dd>
+<dt>Wiggle</dt>
+<dd>Roots meander more than branches with the same value, mostly sideways.</dd>
+<dt>Force response</dt>
+<dd>Roots ignore forces by default (0).</dd>
+</dl>
+<div class="gallery wide">
+<figure><img src="images/roots-gravity-0.0.jpg" alt="Root gravity 0"><figcaption>Gravity 0: along the surface</figcaption></figure>
+<figure><img src="images/roots-gravity-0.4.jpg" alt="Root gravity 0.4"><figcaption>Gravity 0.4</figcaption></figure>
+<figure><img src="images/roots-gravity-1.0.jpg" alt="Root gravity 1"><figcaption>Gravity 1: straight down</figcaption></figure>
+</div>
+
+<h2>Ground</h2>
+<dl class="params">
+<dt>Sunk into ground <span class="range">0 to 1</span></dt>
+<dd>How deep the roots lie in the soil, measured in root thicknesses. 0 rests them on top of the ground; 1 sinks them until their top is just below the surface. Values around 0.5 show the upper half of each root, which looks natural on flat terrain.</dd>
+</dl>
+<div class="gallery wide">
+<figure><img src="images/roots-buried-0.0.jpg" alt="Sunk 0"><figcaption>Sunk into ground 0</figcaption></figure>
+<figure><img src="images/roots-buried-0.5.jpg" alt="Sunk 0.5"><figcaption>Sunk into ground 0.5</figcaption></figure>
+<figure><img src="images/roots-buried-1.0.jpg" alt="Sunk 1"><figcaption>Sunk into ground 1</figcaption></figure>
+</div>
+
+<h2>Side roots</h2>
+<p>Side roots are branches under a roots generator. They start with defaults suited to roots: a few per root, starting a quarter of the way out, short and thin. Like roots, they stay in the ground and take Gravity as the dive angle.</p>
+<div class="gallery wide">
+<figure><img src="images/roots-noside.jpg" alt="Roots without side roots"><figcaption>Roots only</figcaption></figure>
+<figure><img src="images/roots-side.jpg" alt="Roots with side roots"><figcaption>With side roots</figcaption></figure>
+</div>
+
+<div class="note"><strong>Note</strong> Roots are part of the tree mesh and are exported with it. Parts below the ground are hidden by the terrain in your engine. Pruning never cuts roots.</div>
+</main>
+</body>
+</html>

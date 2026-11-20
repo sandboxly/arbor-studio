@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Curves · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Curves</h1>
+<p class="lead">A curve lets a setting change along a stem or up the tree instead of having one value everywhere. Use curves to make the lower branches longer than the upper ones, to let a trunk keep its thickness low down, or to make branches droop only at their tips.</p>
+
+<h2>How a curve works</h2>
+<p>A curve maps a position <em>x</em> from 0 to 1 to a factor from 0 to 1. Wherever the setting is used, ArborStudio multiplies its value by the curve's factor at that position. With a <strong>Gravity</strong> of 0.6 and a curve that rises from 0 to 1, a stem has no gravity at its base and the full 0.6 at its tip.</p>
+<p>What <em>x</em> measures depends on the setting:</p>
+<table>
+<tr><th>Setting</th><th>x runs along</th></tr>
+<tr><td>Length, Angle, Radius, Count (density), Angle variation, Length variation, Kink, Broken branches, leaf Size, Fold, Curl, Face the sky</td><td>The parent, from <strong>Start</strong> (0) to <strong>End</strong> (1). Each child takes the factor at the point where it grows.</td></tr>
+<tr><td>Taper, Thickness, Gravity, Wiggle, Jitter, Force response, Flute depth, Flatten, Bark lumps</td><td>The stem itself, from its base (0) to its tip (1).</td></tr>
+</table>
+<p>Instead, any curve can follow the <strong>tree height</strong>: x is then 0 at the ground and 1 at the top of the tree, the same for every branch level. A gravity curve along the tree height, for example, makes all branches in the upper crown droop, wherever they start.</p>
+
+<h2>Editing a curve</h2>
+<figure class="narrow"><img src="images/ui-curve-popup.jpg" alt="The curve editor popup for Taper"></figure>
+<ol class="steps">
+<li>Click the curve button at the end of a setting's row in the Properties panel. The curve editor opens below it.</li>
+<li>Select the check box next to the curve's name to switch the curve on. The button turns green while a curve is on.</li>
+<li>Choose what <em>x</em> measures: along the parent or the stem, or <strong>Tree height</strong>.</li>
+<li>Click a shape button to start from a preset: <strong>Flat</strong>, <strong>Up</strong>, <strong>Down</strong>, <strong>Bell</strong>, <strong>Valley</strong> or <strong>Ease</strong>.</li>
+<li>Drag the points to change the curve. Double-click the graph to add a point; right-click a point to remove it.</li>
+<li>Click outside the popup to close it. The viewport updates while you edit.</li>
+</ol>
+<p>Some settings offer more than one curve in the same popup. <strong>Taper</strong>, for example, has <strong>Taper strength</strong> and <strong>Thickness along the stem</strong>; see <a href="skin.html">Thickness and bark surface</a>.</p>
+
+<h2>Example: the shape of the crown</h2>
+<p>A <strong>Length</strong> curve on the main branches replaces the crown profile and gives the crown any outline you draw.</p>
+<div class="gallery">
+<figure><img src="images/curve-none.jpg" alt="No length curve"><figcaption>No curve (crown profile)</figcaption></figure>
+<figure><img src="images/curve-length-bell.jpg" alt="Bell length curve"><figcaption>Length curve: Bell</figcaption></figure>
+<figure><img src="images/curve-length-ramp_down.jpg" alt="Down length curve"><figcaption>Length curve: Down</figcaption></figure>
+</div>
+
+<h2>Example: trunk taper</h2>
+<p>By default a trunk narrows evenly from base to tip. With a <strong>Taper strength</strong> curve set to <strong>Up</strong>, the trunk narrows little near the ground and more towards the top, as in many old trees. The thickness at the tip still matches the Taper value.</p>
+
+<h2>Curves for agents and scripts</h2>
+<p>Agents set curves with the <code>set_curve</code> tool. It takes the generator, the curve's name, and either a preset (<code>flat</code>, <code>ramp_up</code>, <code>ramp_down</code>, <code>bell</code>, <code>valley</code>, <code>ease_out</code>) or a list of points, plus <code>along: "tree_height"</code> for curves that follow the tree height. The <a href="reference.html#curves">parameter reference</a> lists the curve names.</p>
+</main>
+</body>
+</html>

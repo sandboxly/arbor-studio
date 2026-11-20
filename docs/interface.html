@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The window · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>The window</h1>
+<p class="lead">The ArborStudio window has a toolbar at the top, the generator list on the left, the 3D viewport in the centre, the properties on the right and an activity panel below the viewport.</p>
+
+<figure>
+<img src="images/ui-window.jpg" alt="The ArborStudio window">
+<figcaption>The main window with the Main branches generator selected.</figcaption>
+</figure>
+
+<h2>Menus</h2>
+<p>On macOS the menus are in the menu bar at the top of the screen. On Windows and Linux they are at the top of the window, above the toolbar. Both offer the same commands:</p>
+<table>
+<tr><th>Menu</th><th>Commands</th></tr>
+<tr><td>File</td><td>New tree, Open, Open Recent, Save, Save As, export options and exports (GLB, OBJ, JSON, variations), Quit (Windows and Linux).</td></tr>
+<tr><td>Edit</td><td>Undo, Redo, Delete generator, Randomize seed.</td></tr>
+<tr><td>Generators</td><td>Add a trunk, branches, roots or leaves; delete the selected generator.</td></tr>
+<tr><td>Presets</td><td>Replace the tree with one of the species presets.</td></tr>
+<tr><td>View</td><td>Render mode, ground grid, leaves, selection highlight, wind preview, helpers for forces and pruning, collision objects, Frame tree. On macOS also Enter Full Screen.</td></tr>
+<tr><td>Agent</td><td>Connect a coding agent: shows how to connect an MCP client.</td></tr>
+<tr><td>Window (macOS)</td><td>Minimize, Zoom, Bring All to Front.</td></tr>
+<tr><td>Help</td><td>ArborStudio Help, Keyboard and mouse, About ArborStudio.</td></tr>
+</table>
+<p>On macOS, <strong>About ArborStudio</strong>, <strong>Hide</strong> and <strong>Quit</strong> are in the application menu.</p>
+
+<h2>Toolbar</h2>
+<figure><img src="images/ui-toolbar.jpg" alt="The toolbar"></figure>
+<table>
+<tr><th>Control</th><th>Function</th></tr>
+<tr><td>New</td><td>Starts a new tree from the Sapling preset.</td></tr>
+<tr><td>Open, Save</td><td>Open and save project files. See <a href="projects.html">Projects and files</a>.</td></tr>
+<tr><td>Export</td><td>Export menu with the level-of-detail options and the GLB, OBJ and JSON exports.</td></tr>
+<tr><td>Undo, Redo</td><td>Step back and forward through your changes.</td></tr>
+<tr><td>Randomize</td><td>Picks a new random seed: the same species as a different individual.</td></tr>
+<tr><td>Shaded, Wireframe, Skeleton</td><td>Render mode of the viewport.</td></tr>
+<tr><td>Wind</td><td>Plays or stops the wind animation in the viewport.</td></tr>
+<tr><td>LOD 0 1 2 3 BB</td><td>Shows a level of detail; BB is the billboard. See <a href="lod.html">Levels of detail</a>.</td></tr>
+<tr><td>Pick: Generators, Branches</td><td>What a click in the viewport selects: a whole generator, or a single branch for <a href="node-editing.html">editing</a>.</td></tr>
+<tr><td>Frame</td><td>Fits the tree in the viewport (<kbd>F</kbd>).</td></tr>
+<tr><td>Agent link</td><td>Status of the MCP server. Click it to see connection details.</td></tr>
+</table>
+
+<h2>Generation panel</h2>
+<figure class="narrow"><img src="images/ui-left-panel.jpg" alt="The left panel with generators, materials and presets"></figure>
+<p>The left panel has three sections:</p>
+<ul>
+<li><strong>Generation</strong> lists the generators as a tree that mirrors how the parts grow on each other. The number after each name, such as <code>×10</code>, is the count per parent. Use the check box to switch a generator off without deleting it, and click a name to select it. The buttons below add a trunk, branches, roots or leaves; the bin deletes the selected generator and everything that grows on it.</li>
+<li><strong>Materials</strong> lists the tree's materials. Click one to edit it, or click <strong>+ Material</strong> to create one. See <a href="materials.html">Materials and textures</a>.</li>
+<li><strong>Species presets</strong> replace the current tree with a preset. You can undo this.</li>
+</ul>
+
+<h2>Viewport</h2>
+<figure><img src="images/ui-viewport.jpg" alt="The viewport"></figure>
+<p>The viewport shows the tree as it will be exported. The line at the top left names the camera, the render mode and the level of detail; the top right shows the tree's name and triangle count.</p>
+<h3>Navigating</h3>
+<table>
+<tr><th>Action</th><th>Mouse or key</th></tr>
+<tr><td>Orbit around the tree</td><td>Drag with the left mouse button.</td></tr>
+<tr><td>Pan</td><td>Drag with the right mouse button.</td></tr>
+<tr><td>Zoom</td><td>Scroll wheel or trackpad scroll.</td></tr>
+<tr><td>Select a generator</td><td>Click a part of the tree. Click the sky or ground to clear the selection.</td></tr>
+<tr><td>Frame the tree</td><td><kbd>F</kbd> or the <strong>Frame</strong> button.</td></tr>
+</table>
+<h3>Lighting</h3>
+<p>The buttons at the top left of the viewport switch between five lighting presets: <strong>Unlit</strong> shows colours and textures without shading, and <strong>Morning</strong>, <strong>Noon</strong>, <strong>Evening</strong> and <strong>Night</strong> light the tree from different sun positions and sky colours. Lighting affects only the preview, never the exported model.</p>
+<div class="gallery">
+<figure><img src="images/light-unlit.jpg" alt="Unlit"><figcaption>Unlit</figcaption></figure>
+<figure><img src="images/light-morning.jpg" alt="Morning"><figcaption>Morning</figcaption></figure>
+<figure><img src="images/light-noon.jpg" alt="Noon"><figcaption>Noon</figcaption></figure>
+<figure><img src="images/light-evening.jpg" alt="Evening"><figcaption>Evening</figcaption></figure>
+<figure><img src="images/light-night.jpg" alt="Night"><figcaption>Night</figcaption></figure>
+</div>
+<h3>Render modes</h3>
+<div class="gallery wide">
+<figure><img src="images/mode-shaded.jpg" alt="Shaded"><figcaption><strong>Shaded</strong>: the finished look with materials.</figcaption></figure>
+<figure><img src="images/mode-wireframe.jpg" alt="Wireframe"><figcaption><strong>Wireframe</strong>: the triangles of the mesh.</figcaption></figure>
+<figure><img src="images/mode-skeleton.jpg" alt="Skeleton"><figcaption><strong>Skeleton</strong>: the centre line of each stem, coloured by generator.</figcaption></figure>
+</div>
+<p>In the <strong>View</strong> menu you can also hide the ground grid and the leaves, turn off the highlight of the selected generator, and show the helpers for forces, pruning and collision objects.</p>
+
+<h2>Properties panel</h2>
+<p>The right panel shows the settings of the selected generator, followed by the <strong>Tree</strong> section with settings for the whole tree. Settings are grouped into collapsible sections such as <strong>Generation</strong>, <strong>Spine</strong>, <strong>Skin</strong> and <strong>Leaves</strong>. Rest the pointer on a setting's name to see a short explanation.</p>
+<p>Drag a slider to change a value, or click the number next to it and type a value. The small curve button at the end of a row opens the <a href="curves.html">curve editor</a> for that setting; it turns green when a curve is active.</p>
+
+<h2>Activity and statistics</h2>
+<figure><img src="images/ui-statistics.jpg" alt="The statistics tab"></figure>
+<p>The panel below the viewport has two tabs. <strong>Agent activity</strong> logs what connected coding agents do, with the time and the tool they called. <strong>Statistics</strong> shows the triangle, vertex, stem and leaf counts, the height and crown width of the tree and the level of detail on display.</p>
+
+<h2>Status bar</h2>
+<p>The bar at the bottom of the window shows messages on the left, such as the file that was saved, and a summary of the current tree on the right: triangles, vertices, stems, leaves, height and seed.</p>
+</main>
+</body>
+</html>

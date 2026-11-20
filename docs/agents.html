@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Working with coding agents · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Working with coding agents</h1>
+<p class="lead">ArborStudio contains an MCP server (Model Context Protocol). A coding agent such as Claude Code can use it to read and change the open tree, render previews and export files, while you watch the changes in the window. You can describe a tree in words, ask for a set of variations for a game level, or let the agent export trees straight into your game project.</p>
+
+<h2>Connecting an agent</h2>
+<p>Choose <strong>Agent › Connect a coding agent…</strong>, or click the agent status at the right end of the toolbar. The dialog shows three ways to connect:</p>
+<figure><img src="images/ui-connect.jpg" alt="The Connect a coding agent dialog"></figure>
+<dl class="params">
+<dt>Claude Code</dt>
+<dd>Copy the command and run it once in a terminal:
+<pre><code>claude mcp add --transport http arbor-studio http://127.0.0.1:7878/mcp</code></pre></dd>
+<dt>Other MCP clients with HTTP support</dt>
+<dd>Add the server URL, <code>http://127.0.0.1:7878/mcp</code>, in the client's MCP settings.</dd>
+<dt>Clients that start servers themselves (stdio)</dt>
+<dd>Add the JSON block from the dialog to the client's MCP configuration. It runs ArborStudio with <code>--mcp-stdio</code>. In this mode ArborStudio passes the agent's requests to the open window, and starts the window first if it is not running.</dd>
+</dl>
+<p>The server only accepts connections from the same computer. It runs while the ArborStudio window is open.</p>
+<p>The toolbar shows the state of the link: <strong>Agent link ready</strong> when the server is running, the client's name once an agent has connected, and <strong>Agent link off</strong> when the server could not start.</p>
+<div class="note"><strong>Port</strong> The server uses port 7878. If that port is in use, for example by a second ArborStudio window, ArborStudio picks a free port; the Connect dialog always shows the address in use. To choose a port, start ArborStudio with <code>--port 7900</code>.</div>
+
+<h2>Following what the agent does</h2>
+<p>Every change an agent makes appears in the viewport at once and can be undone like your own changes. The <strong>Agent activity</strong> tab below the viewport lists each tool call with its time.</p>
+<figure><img src="images/ui-bottom-panel.jpg" alt="The Agent activity log"></figure>
+
+<h2>What agents can do</h2>
+<p>The agent sees the following tools. Each tool has a description and the allowed values of its arguments, so you can ask in plain words; the agent chooses the tools.</p>
+<table>
+<tr><th>Area</th><th>Tools</th></tr>
+<tr><td>Reading the tree</td><td><code>get_tree</code>, <code>get_parameter_reference</code>, <code>get_stats</code>, <code>list_presets</code></td></tr>
+<tr><td>Starting a tree</td><td><code>new_tree</code>, <code>load_preset</code>, <code>randomize_seed</code></td></tr>
+<tr><td>Generators</td><td><code>add_generator</code>, <code>update_generator</code>, <code>remove_generator</code>, <code>select_generator</code>, <code>set_curve</code></td></tr>
+<tr><td>Tree settings</td><td><code>update_settings</code> (seed, scale, age, colours, season, joints, wind)</td></tr>
+<tr><td>Materials</td><td><code>list_materials</code>, <code>add_material</code>, <code>update_material</code>, <code>remove_material</code>, <code>assign_material</code></td></tr>
+<tr><td>Forces, pruning, collision</td><td><code>add_force</code>, <code>update_force</code>, <code>remove_force</code>, <code>set_pruning</code>, <code>set_collision</code></td></tr>
+<tr><td>Single branches</td><td><code>list_nodes</code>, <code>edit_node</code>, <code>clear_node_edits</code></td></tr>
+<tr><td>Viewing</td><td><code>set_view</code>, <code>render_preview</code>, <code>capture_window</code></td></tr>
+<tr><td>Files</td><td><code>export_tree</code>, <code>export_variations</code>, <code>save_project</code>, <code>open_project</code></td></tr>
+<tr><td>History</td><td><code>undo</code>, <code>redo</code></td></tr>
+</table>
+<p><code>render_preview</code> returns a picture of the tree, which lets the agent check its own work. It renders in the background, so it also works while the window is hidden behind other windows. <code>capture_window</code> returns a picture of the whole window.</p>
+
+<h2>Example requests</h2>
+<ul>
+<li>“Load the pine preset, make it 20 m tall, render a preview and export it as GLB with LODs into my game's Assets/Trees folder.”</li>
+<li>“Make a weeping willow that leans towards the river on the +X side.”</li>
+<li>“Export eight variations of this oak with billboards, for a forest.”</li>
+<li>“Prune the tree into a 3 m wide ball on a 2 m stem, like a topiary.”</li>
+<li>“Show me the tree at ages 0.2, 0.5 and 1 and export each stage.”</li>
+<li>“Remove the lowest main branch on the side facing the camera.”</li>
+</ul>
+
+<h2>Running without a window</h2>
+<p>For scripts and build pipelines, ArborStudio can run without a window:</p>
+<table>
+<tr><th>Command</th><th>Effect</th></tr>
+<tr><td><code>arbor_studio --headless</code></td><td>Serves MCP over HTTP on port 7878 without opening a window.</td></tr>
+<tr><td><code>arbor_studio --headless --mcp-stdio</code></td><td>Serves MCP over standard input and output without a window.</td></tr>
+<tr><td><code>arbor_studio --no-mcp</code></td><td>Opens the window without starting the MCP server.</td></tr>
+</table>
+<p>Without a window, <code>render_preview</code> still works; <code>capture_window</code> does not.</p>
+</main>
+</body>
+</html>

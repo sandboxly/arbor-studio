@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stem shape · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Stem shape</h1>
+<p class="lead">The <strong>Spine</strong> section controls the centre line of each stem: how long it is, in which direction it starts and how it bends on its way to the tip.</p>
+
+<h2>Length</h2>
+<dl class="params">
+<dt>Height <span class="range">trunk, 0.2 to 40 m</span></dt>
+<dd>The length of each trunk in metres. A leaning or bending trunk ends lower than its length.</dd>
+<dt>Length (× parent) <span class="range">branches and roots, 0.02 to 1.5</span></dt>
+<dd>The length of each child as a fraction of its parent's length. The crown profile and a length curve then vary it along the parent.</dd>
+<dt>Length variation <span class="range">0 to 1</span></dt>
+<dd>Random variation of the length. 0.2 lets each stem be up to 20 percent longer or shorter.</dd>
+<dt>Crown profile</dt>
+<dd>How the length of branches changes from the bottom to the top of their parent. This gives the crown its outline.</dd>
+</dl>
+
+<div class="gallery">
+<figure><img src="images/profile-conical.jpg" alt="Conical"><figcaption>Conical: long at the bottom, short at the top</figcaption></figure>
+<figure><img src="images/profile-spherical.jpg" alt="Spherical"><figcaption>Spherical: longest in the middle</figcaption></figure>
+<figure><img src="images/profile-hemispherical.jpg" alt="Hemispherical"><figcaption>Hemispherical: a rounded top</figcaption></figure>
+<figure><img src="images/profile-cylindrical.jpg" alt="Cylindrical"><figcaption>Cylindrical: equal lengths</figcaption></figure>
+<figure><img src="images/profile-flame.jpg" alt="Flame"><figcaption>Flame: widest at two thirds of the height</figcaption></figure>
+<figure><img src="images/profile-inverse_conical.jpg" alt="Inverse conical"><figcaption>Inverse conical: short at the bottom, long at the top</figcaption></figure>
+</div>
+<p>For a profile of your own, set a <strong>Length</strong> curve on the generator. A length curve replaces the crown profile. See <a href="curves.html">Curves</a>.</p>
+
+<h2>Direction</h2>
+<dl class="params">
+<dt>Lean <span class="range">trunk, 0° to 60°</span></dt>
+<dd>Tilts the trunk away from vertical.</dd>
+<dt>Angle <span class="range">branches, roots and leaves, 0° to 120°</span></dt>
+<dd>The angle between a child and its parent at the point where it starts. Small angles point the child along the parent towards its tip, 90° points it straight out, and angles above 90° point it back towards the base.</dd>
+<dt>Angle variation <span class="range">0° to 60°</span></dt>
+<dd>Random variation of the angle or lean.</dd>
+</dl>
+<div class="gallery">
+<figure><img src="images/angle-25.jpg" alt="Angle 25°"><figcaption>Angle 25°</figcaption></figure>
+<figure><img src="images/angle-55.jpg" alt="Angle 55°"><figcaption>Angle 55°</figcaption></figure>
+<figure><img src="images/angle-90.jpg" alt="Angle 90°"><figcaption>Angle 90°</figcaption></figure>
+</div>
+
+<h2>Bending</h2>
+<dl class="params">
+<dt>Gravity <span class="range">−1 to 1</span></dt>
+<dd>Bends each stem as it grows. Positive values make stems droop towards the ground, negative values make them curve upwards towards the light. The effect builds up along the stem, so long stems bend more than short ones. For roots the setting works differently; see <a href="roots.html">Roots</a>.</dd>
+<dt>Wiggle <span class="range">0 to 1</span></dt>
+<dd>Random changes of direction along the stem, for a natural, meandering line.</dd>
+<dt>Force response <span class="range">0 to 3</span></dt>
+<dd>How strongly this generator follows the tree's <a href="forces.html">forces</a>. 0 ignores them; 1 is the normal response.</dd>
+<dt>Kink <span class="range">0° to 120°</span></dt>
+<dd>One sudden bend somewhere in the middle of each stem, as left by a lost leader or an old injury.</dd>
+<dt>Jitter <span class="range">0 to 1</span></dt>
+<dd>Small, sharp zig-zags along the stem, typical of twigs and old wood.</dd>
+<dt>Segments <span class="range">1 to 32</span></dt>
+<dd>The number of straight pieces each stem is made of. More segments give smoother curves and more triangles. Lower levels of detail reduce the count automatically.</dd>
+</dl>
+<div class="gallery">
+<figure><img src="images/gravity--0.5.jpg" alt="Gravity −0.5"><figcaption>Gravity −0.5</figcaption></figure>
+<figure><img src="images/gravity-0.0.jpg" alt="Gravity 0"><figcaption>Gravity 0</figcaption></figure>
+<figure><img src="images/gravity-0.7.jpg" alt="Gravity 0.7"><figcaption>Gravity 0.7</figcaption></figure>
+</div>
+<div class="gallery">
+<figure><img src="images/wiggle-0.0.jpg" alt="Wiggle 0"><figcaption>Wiggle 0</figcaption></figure>
+<figure><img src="images/wiggle-0.5.jpg" alt="Wiggle 0.5"><figcaption>Wiggle 0.5</figcaption></figure>
+<figure><img src="images/wiggle-1.0.jpg" alt="Wiggle 1"><figcaption>Wiggle 1</figcaption></figure>
+<figure><img src="images/kink-50.jpg" alt="Kink 50°"><figcaption>Kink 50°</figcaption></figure>
+<figure><img src="images/jitter-0.8.jpg" alt="Jitter 0.8"><figcaption>Jitter 0.8</figcaption></figure>
+</div>
+
+<div class="tip"><strong>Tip</strong> Gravity, Wiggle, Jitter and Force response can follow a curve along the stem. A gravity curve that rises towards the tip lets branches grow out straight and droop only at their ends, as in willows.</div>
+</main>
+</body>
+</html>

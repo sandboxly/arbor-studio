@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parameter reference · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Parameter reference</h1>
+<p class="lead">This page lists every setting with its label in the Properties panel, its name for agents and in project files, the generators it applies to, its range and its effect.</p>
+<p>The ranges are the values that project files and agents accept. Some sliders cover a smaller, commonly used part of the range. Values outside the range are set to the nearest allowed value.</p>
+
+<h2 id="placement">Generation</h2>
+<table class="ref">
+<tr><th>Label</th><th>Name</th><th>Applies to</th><th>Range</th><th>Effect</th></tr>
+<tr><td>Trunks / Count per parent</td><td><code>count</code></td><td>all</td><td>trunk 1–24, others 0–200</td><td>Trunk: the number of trunks. Other generators: how many children grow on each parent stem.</td></tr>
+<tr><td>Start</td><td><code>start</code></td><td>branches, leaves, roots</td><td>0–1</td><td>Where along the parent the children begin (0 = base, 1 = tip).</td></tr>
+<tr><td>End</td><td><code>end</code></td><td>branches, leaves, roots</td><td>0–1</td><td>Where along the parent the children stop.</td></tr>
+<tr><td>Phyllotaxis</td><td><code>phyllotaxis</code></td><td>branches, leaves</td><td>0°–360°</td><td>Rotation around the parent from one child to the next. 137.5° is the golden angle.</td></tr>
+<tr><td>Per node (whorl)</td><td><code>whorl</code></td><td>branches, leaves</td><td>1–12</td><td>Children at each position: 1 alternate, 2 opposite, 3 or more in a whorl.</td></tr>
+<tr><td>Randomness</td><td><code>random</code></td><td>all</td><td>0–1</td><td>Random variation of the children's positions.</td></tr>
+<tr><td>Spacing (0 = count)</td><td><code>interval</code></td><td>branches, leaves, roots</td><td>0–20 m</td><td>Distance between children along the parent. Long parents then get more children than short ones. 0 uses the count instead.</td></tr>
+</table>
+
+<h2 id="spine">Spine</h2>
+<table class="ref">
+<tr><th>Label</th><th>Name</th><th>Applies to</th><th>Range</th><th>Effect</th></tr>
+<tr><td>Height / Length (× parent)</td><td><code>length</code></td><td>all</td><td>trunk 0.1–100 m, others 0.01–3</td><td>Trunk: height in metres. Others: length as a multiple of the parent's length.</td></tr>
+<tr><td>Length variation</td><td><code>length_variation</code></td><td>all</td><td>0–1</td><td>Random variation of the length.</td></tr>
+<tr><td>Crown profile</td><td><code>profile</code></td><td>branches</td><td>conical, spherical, hemispherical, cylindrical, flame, inverse_conical</td><td>How the length of the children changes along the parent; gives the crown its outline.</td></tr>
+<tr><td>Lean / Angle</td><td><code>angle</code></td><td>all</td><td>0°–180°</td><td>Angle away from the parent's direction. Trunk: lean from the vertical.</td></tr>
+<tr><td>Angle variation</td><td><code>angle_variation</code></td><td>all</td><td>0°–90°</td><td>Random variation of the angle.</td></tr>
+<tr><td>Gravity / Gravity (dive)</td><td><code>gravity</code></td><td>trunk, branches, roots</td><td>−1–1 (roots 0–1)</td><td>Positive values bend stems down, negative values bend them up. Roots: how steeply they head into the soil, from 0 (along the surface) to 1 (straight down).</td></tr>
+<tr><td>Wiggle</td><td><code>wiggle</code></td><td>trunk, branches, roots</td><td>0–1</td><td>Random curves along the stem.</td></tr>
+<tr><td>Kink</td><td><code>kink</code></td><td>trunk, branches, roots</td><td>0°–120°</td><td>One sudden bend somewhere in the middle of each stem.</td></tr>
+<tr><td>Jitter</td><td><code>jitter</code></td><td>trunk, branches, roots</td><td>0–1</td><td>Small, sharp zig-zags along the stem.</td></tr>
+<tr><td>Segments</td><td><code>segments</code></td><td>trunk, branches, roots</td><td>1–64</td><td>Number of sections along the stem; more segments give smoother bends.</td></tr>
+<tr><td>Force response</td><td><code>force_response</code></td><td>trunk, branches, roots</td><td>0–3</td><td>How strongly the tree's forces bend this generator. 0 ignores them.</td></tr>
+</table>
+
+<h2 id="skin">Skin</h2>
+<table class="ref">
+<tr><th>Label</th><th>Name</th><th>Applies to</th><th>Range</th><th>Effect</th></tr>
+<tr><td>Radius / Radius (× parent)</td><td><code>radius</code></td><td>trunk, branches, roots</td><td>trunk in metres, others 0.01–1</td><td>Trunk: radius at the base in metres. Others: radius as a fraction of the parent's radius where the child starts.</td></tr>
+<tr><td>Taper</td><td><code>taper</code></td><td>trunk, branches, roots</td><td>0–1</td><td>Radius at the tip as a fraction of the radius at the base.</td></tr>
+<tr><td>Buttress flare</td><td><code>flare</code></td><td>trunk</td><td>0–3</td><td>Widening of the trunk at the ground.</td></tr>
+<tr><td>Branch welding</td><td><code>weld</code></td><td>branches</td><td>0–1</td><td>Widens the base of each branch into a collar that blends into the parent.</td></tr>
+<tr><td>Broken branches</td><td><code>break_chance</code></td><td>branches</td><td>0–1</td><td>Chance that a branch is a broken stub, with nothing growing on it.</td></tr>
+<tr><td>Stub length</td><td><code>break_length</code></td><td>branches</td><td>0.03–0.9</td><td>Length of broken stubs relative to the full branch.</td></tr>
+<tr><td>Sides</td><td><code>sides</code></td><td>trunk, branches, roots</td><td>3–32</td><td>Number of sides around the stem.</td></tr>
+<tr><td>Flutes</td><td><code>flutes</code></td><td>trunk, branches, roots</td><td>0–24</td><td>Number of grooves along the stem. 0 gives a round cross-section.</td></tr>
+<tr><td>Flute depth</td><td><code>flute_depth</code></td><td>trunk, branches, roots</td><td>0–0.8</td><td>Depth of the grooves as a fraction of the radius.</td></tr>
+<tr><td>Flatten</td><td><code>flatten</code></td><td>trunk, branches, roots</td><td>0–0.85</td><td>Squashes the cross-section into an ellipse.</td></tr>
+<tr><td>Bark lumps</td><td><code>bumps</code></td><td>trunk, branches, roots</td><td>0–0.6</td><td>Height of irregular lumps on the bark, as a fraction of the radius.</td></tr>
+<tr><td>Lump size</td><td><code>bump_size</code></td><td>trunk, branches, roots</td><td>0.02–10 m</td><td>Size of the bark lumps.</td></tr>
+<tr><td>Sunk into ground</td><td><code>buried</code></td><td>roots</td><td>0–1</td><td>How deep roots lie: 0 on top of the ground, 1 just under the surface.</td></tr>
+<tr><td>Material</td><td><code>material_id</code></td><td>all</td><td>a material, or none</td><td>The material from the library; none uses the default bark or leaf colour.</td></tr>
+</table>
+
+<h2 id="leaves">Leaves</h2>
+<table class="ref">
+<tr><th>Label</th><th>Name</th><th>Range</th><th>Effect</th></tr>
+<tr><td>Shape</td><td><code>leaf_shape</code></td><td>broad, narrow, needle, round, frond, card, mesh</td><td>The outline of each leaf. <code>card</code> is a rectangle for leaf textures; <code>mesh</code> uses a model of your own.</td></tr>
+<tr><td>Model</td><td><code>leaf_mesh</code></td><td>path to an OBJ file</td><td>The model for the shape <code>mesh</code>.</td></tr>
+<tr><td>Size</td><td><code>leaf_size</code></td><td>0.01–10 m</td><td>Length of each leaf.</td></tr>
+<tr><td>Size variation</td><td><code>leaf_size_variation</code></td><td>0–1</td><td>Random variation of the size.</td></tr>
+<tr><td>Width</td><td><code>leaf_aspect</code></td><td>0.05–2</td><td>Width relative to the length.</td></tr>
+<tr><td>Fold</td><td><code>leaf_fold</code></td><td>0°–89°</td><td>Folds the two halves up along the midrib.</td></tr>
+<tr><td>Curl</td><td><code>leaf_bend</code></td><td>−1–1</td><td>Bends the tip down (positive) or up (negative).</td></tr>
+<tr><td>Face the sky</td><td><code>leaf_face_up</code></td><td>0–1</td><td>Turns the upper side of the leaves towards the sky.</td></tr>
+</table>
+
+<h2 id="settings">Tree settings</h2>
+<table class="ref">
+<tr><th>Label</th><th>Name</th><th>Range</th><th>Effect</th></tr>
+<tr><td>Name</td><td><code>name</code></td><td>text</td><td>Used for mesh and file names in exports.</td></tr>
+<tr><td>Seed</td><td><code>seed</code></td><td>whole number</td><td>The same seed and settings always give the same tree.</td></tr>
+<tr><td>Scale</td><td><code>scale</code></td><td>0.05–20</td><td>Uniform scale of the whole tree.</td></tr>
+<tr><td>Age</td><td><code>age</code></td><td>0.05–1</td><td>Growth stage; 1 is the mature tree.</td></tr>
+<tr><td>Join branches to parent</td><td><code>join_branches</code></td><td>on, off</td><td>Joins branches and roots to their parent as one surface.</td></tr>
+<tr><td>Joint method</td><td><code>join_method</code></td><td>stitch, weld</td><td>Cut an opening and stitch it, or wrap the branch base onto the parent.</td></tr>
+<tr><td>Branch welding</td><td><code>branch_welding</code></td><td>0–1</td><td>Sets <code>weld</code> on every branches generator at once.</td></tr>
+<tr><td>Default bark colour</td><td><code>bark_color</code></td><td>red, green, blue 0–255</td><td>Colour of stems without a material.</td></tr>
+<tr><td>Default leaf colour</td><td><code>leaf_color</code></td><td>red, green, blue 0–255</td><td>Colour of leaves without a material.</td></tr>
+<tr><td>Colour variation</td><td><code>leaf_color_variation</code></td><td>0–1</td><td>Random leaf colour variation.</td></tr>
+<tr><td>Autumn</td><td><code>autumn</code></td><td>0–1</td><td>Blends leaf colours towards autumn colours.</td></tr>
+<tr><td>Fallen leaves</td><td><code>leaf_drop</code></td><td>0–1</td><td>Share of leaves that have fallen.</td></tr>
+<tr><td>Ambient occlusion</td><td><code>ao_strength</code></td><td>0–1</td><td>Darkening of the inner crown, stored in the vertex colours.</td></tr>
+<tr><td>Wind: Strength</td><td><code>wind.strength</code></td><td>0–2</td><td>How far the tree moves in the wind.</td></tr>
+<tr><td>Wind: Direction</td><td><code>wind.direction</code></td><td>0°–360°</td><td>Direction the wind blows towards.</td></tr>
+<tr><td>Wind: Gustiness</td><td><code>wind.gustiness</code></td><td>0–1</td><td>Irregularity of the wind.</td></tr>
+<tr><td>Wind: Speed</td><td><code>wind.speed</code></td><td>0.05–5</td><td>Speed of the animation.</td></tr>
+</table>
+
+<h2 id="materials">Materials</h2>
+<table class="ref">
+<tr><th>Label</th><th>Name</th><th>Range</th><th>Effect</th></tr>
+<tr><td>Name</td><td><code>name</code></td><td>text</td><td>Material name in exports.</td></tr>
+<tr><td>Colour / tint</td><td><code>color</code></td><td>red, green, blue 0–255</td><td>Base colour, or the tint of the texture.</td></tr>
+<tr><td>Texture</td><td><code>texture</code></td><td>PNG or JPEG file</td><td>Colour image.</td></tr>
+<tr><td>Normal map</td><td><code>normal_map</code></td><td>PNG or JPEG file</td><td>Tangent-space normal map.</td></tr>
+<tr><td>Normal strength</td><td><code>normal_strength</code></td><td>0–4</td><td>Strength of the normal map; 1 as painted.</td></tr>
+<tr><td>DirectX style (flip green)</td><td><code>normal_flip_green</code></td><td>on, off</td><td>For normal maps with the green channel pointing down.</td></tr>
+<tr><td>Roughness</td><td><code>roughness</code></td><td>0–1</td><td>Surface roughness for engines.</td></tr>
+<tr><td>Tiling: around, along</td><td><code>tiling</code></td><td>0.05–50 each</td><td>Repeats of a bark texture around and along each stem.</td></tr>
+<tr><td>Cut-out</td><td><code>alpha_cutout</code></td><td>on, off</td><td>Transparent pixels become holes.</td></tr>
+<tr><td>Two-sided</td><td><code>double_sided</code></td><td>on, off</td><td>Render both faces in engines.</td></tr>
+</table>
+
+<h2 id="curves">Curves</h2>
+<p>Each curve multiplies one setting by a factor from 0 to 1. The column <strong>x runs along</strong> gives the curve's own axis; any curve can follow the tree height instead. See <a href="curves.html">Curves</a>.</p>
+<table class="ref">
+<tr><th>Curve</th><th>Applies to</th><th>x runs along</th><th>Shapes</th></tr>
+<tr><td><code>length</code></td><td>branches, roots</td><td>parent</td><td>The length of the children; replaces the crown profile.</td></tr>
+<tr><td><code>angle</code></td><td>branches, leaves, roots</td><td>parent</td><td>The angle from the parent.</td></tr>
+<tr><td><code>radius</code></td><td>branches, roots</td><td>parent</td><td>The thickness of the children.</td></tr>
+<tr><td><code>density</code></td><td>branches, leaves, roots</td><td>parent</td><td>The chance that a child grows at each position (on the Count row).</td></tr>
+<tr><td><code>leaf_size</code></td><td>leaves</td><td>parent</td><td>The leaf size.</td></tr>
+<tr><td><code>angle_variation</code></td><td>branches, leaves, roots</td><td>parent</td><td>The random angle variation.</td></tr>
+<tr><td><code>length_variation</code></td><td>branches, roots</td><td>parent</td><td>The random length variation.</td></tr>
+<tr><td><code>kink</code></td><td>branches, roots</td><td>parent</td><td>The kink of the children.</td></tr>
+<tr><td><code>break_chance</code></td><td>branches</td><td>parent</td><td>The chance of broken stubs.</td></tr>
+<tr><td><code>leaf_fold</code></td><td>leaves</td><td>parent</td><td>The leaf fold.</td></tr>
+<tr><td><code>leaf_bend</code></td><td>leaves</td><td>parent</td><td>The leaf curl.</td></tr>
+<tr><td><code>leaf_face_up</code></td><td>leaves</td><td>parent</td><td>How much leaves turn to the sky.</td></tr>
+<tr><td><code>radius_profile</code></td><td>trunk, branches, roots</td><td>stem</td><td>The thickness along the stem; replaces the even taper (Thickness along the stem).</td></tr>
+<tr><td><code>taper</code></td><td>trunk, branches, roots</td><td>stem</td><td>Where the stem narrows: low values keep the thickness, high values narrow it (Taper strength).</td></tr>
+<tr><td><code>gravity</code></td><td>trunk, branches, roots</td><td>stem</td><td>How strongly gravity bends each part of the stem.</td></tr>
+<tr><td><code>wiggle</code></td><td>trunk, branches, roots</td><td>stem</td><td>How much each part of the stem meanders.</td></tr>
+<tr><td><code>jitter</code></td><td>trunk, branches, roots</td><td>stem</td><td>The size of the zig-zags.</td></tr>
+<tr><td><code>force_response</code></td><td>trunk, branches, roots</td><td>stem</td><td>How strongly forces bend each part of the stem.</td></tr>
+<tr><td><code>flute_depth</code></td><td>trunk, branches, roots</td><td>stem</td><td>The depth of the bark grooves.</td></tr>
+<tr><td><code>flatten</code></td><td>trunk, branches, roots</td><td>stem</td><td>How flat the cross-section is.</td></tr>
+<tr><td><code>bumps</code></td><td>trunk, branches, roots</td><td>stem</td><td>The height of the bark lumps.</td></tr>
+</table>
+<p>Curve presets for agents: <code>flat</code>, <code>ramp_up</code>, <code>ramp_down</code>, <code>bell</code>, <code>valley</code>, <code>ease_out</code>. In the curve editor they are named Flat, Up, Down, Bell, Valley and Ease.</p>
+
+<h2 id="forces">Forces, pruning and collision</h2>
+<table class="ref">
+<tr><th>Label</th><th>Name</th><th>Range</th><th>Effect</th></tr>
+<tr><td>Force type</td><td><code>kind</code></td><td>direction, attractor</td><td>Push along a direction, or pull towards a point.</td></tr>
+<tr><td>Strength</td><td><code>strength</code></td><td>−2–2</td><td>Strength of the force; negative values reverse it.</td></tr>
+<tr><td>Direction</td><td><code>direction</code></td><td>x, y, z</td><td>Direction of a direction force.</td></tr>
+<tr><td>Position (m)</td><td><code>position</code></td><td>x, y, z in metres</td><td>Position of an attractor.</td></tr>
+<tr><td>Trim the crown to a volume</td><td><code>enabled</code></td><td>on, off</td><td>Switches pruning on.</td></tr>
+<tr><td>Shape</td><td><code>shape</code></td><td>ellipsoid, box</td><td>Shape of the pruning volume.</td></tr>
+<tr><td>Centre (m), Half-size (m)</td><td><code>center</code>, <code>size</code></td><td>x, y, z in metres</td><td>Position and extent of the pruning volume.</td></tr>
+<tr><td>Export collision objects</td><td><code>enabled</code></td><td>on, off</td><td>Adds collision objects to exports.</td></tr>
+<tr><td>Levels</td><td><code>max_depth</code></td><td>0–4</td><td>0 trunks only, 1 with main branches, and so on.</td></tr>
+<tr><td>Thinnest branch</td><td><code>min_radius</code></td><td>metres</td><td>Thinner stems get no collision.</td></tr>
+<tr><td>Capsules per branch</td><td><code>segments</code></td><td>1–12</td><td>Capsules along each stem.</td></tr>
+<tr><td>Size</td><td><code>radius_scale</code></td><td>0.2–3</td><td>Scales the capsule radius.</td></tr>
+<tr><td>Naming</td><td><code>naming</code></td><td>neutral, unreal, godot</td><td>Name convention for collision meshes.</td></tr>
+</table>
+</main>
+</body>
+</html>

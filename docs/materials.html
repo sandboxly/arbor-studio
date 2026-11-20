@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Materials and textures · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Materials and textures</h1>
+<p class="lead">Each tree has a library of materials. A material has a colour, an optional colour texture and normal map, and settings for game engines. Any number of generators can share one material; generators without a material use the tree's default bark or leaf colour.</p>
+
+<h2>Creating and assigning a material</h2>
+<ol class="steps">
+<li>Select the generator that should use the material, for example the trunk.</li>
+<li>Click <strong>+ Material</strong> in the left panel. ArborStudio creates a bark or leaf material, depending on the generator, assigns it to the selected generator and opens the material editor.</li>
+<li>To use the same material on other generators, select each of them and choose the material in the <strong>Material</strong> menu at the top of the Properties panel.</li>
+</ol>
+<p>To edit a material later, click it in the <strong>Materials</strong> list, or click <strong>Edit…</strong> next to the <strong>Material</strong> menu of a generator that uses it.</p>
+
+<figure class="narrow"><img src="images/ui-material-editor.jpg" alt="The material editor"><figcaption>The material editor with a bark texture and a normal map.</figcaption></figure>
+
+<h2>Material settings</h2>
+<dl class="params">
+<dt>Name</dt>
+<dd>Used as the material name in exports.</dd>
+<dt>Colour / tint</dt>
+<dd>The base colour. With a texture, it tints the texture; use white to show the texture unchanged.</dd>
+<dt>Texture</dt>
+<dd>A colour image in PNG or JPEG format. Click <strong>Choose…</strong> to select it and <strong>Clear</strong> to remove it.</dd>
+<dt>Normal map</dt>
+<dd>A tangent-space normal map in PNG or JPEG format. It adds surface detail to the lighting in the viewport and is exported for engines.</dd>
+<dt>Normal strength <span class="range">0 to 4</span></dt>
+<dd>How strongly the normal map bends the lighting. 1 shows the map as painted.</dd>
+<dt>DirectX style (flip green)</dt>
+<dd>Select this for normal maps whose green channel points down (DirectX convention). glTF and ArborStudio expect the OpenGL convention with green pointing up. If the bark looks lit from the wrong side, toggle this setting.</dd>
+<dt>Roughness <span class="range">0 to 1</span></dt>
+<dd>Surface roughness for physically based shading in engines. Bark is usually close to 1.</dd>
+<dt>Tiling: around, along <span class="range">0.05 to 50</span></dt>
+<dd>How often a bark texture repeats around each stem (<strong>around</strong>) and along it (<strong>along</strong>).</dd>
+<dt>Cut-out</dt>
+<dd>Transparent pixels of the texture become holes. Use it for leaf cards.</dd>
+<dt>Two-sided</dt>
+<dd>Asks engines to render both faces. Leaf materials are always exported as two-sided.</dd>
+</dl>
+<p>The line <strong>Used by</strong> lists the generators that use the material. <strong>Delete material</strong> removes it; those generators return to the default colours.</p>
+
+<h2>How bark textures are mapped</h2>
+<p>A bark texture wraps once around each stem for each unit of <strong>around</strong> tiling. Along the stem it repeats once per circumference of the stem at that point, multiplied by the <strong>along</strong> tiling. This keeps the texture's proportions on thick trunks and thin twigs alike: the bark pattern is smaller on thin branches, as on a real tree. The circumference is measured on the actual surface, including buttress flare and flutes.</p>
+<p>Texture coordinates continue across <a href="joints.html">joints</a>, so the bark of a branch flows into its collar.</p>
+<div class="gallery wide">
+<figure><img src="images/material-bark.jpg" alt="Textured trunk at noon"><figcaption>Bark texture and normal map, Noon lighting</figcaption></figure>
+<figure><img src="images/material-bark-evening.jpg" alt="Textured trunk in the evening"><figcaption>The same in Evening lighting</figcaption></figure>
+<figure><img src="images/material-bark-nonormal.jpg" alt="Without normal map"><figcaption>Without the normal map</figcaption></figure>
+</div>
+<div class="tip"><strong>Tip</strong> Use textures that tile seamlessly in both directions and show the bark with even, diffuse lighting. The help folder contains a sample bark texture and normal map in <code>samples/</code> that you can use to try materials out.</div>
+
+<h2 id="leaf-textures">Leaf textures</h2>
+<ol class="steps">
+<li>Select the leaves generator and set its <strong>Shape</strong> to <strong>Card (for leaf textures)</strong>.</li>
+<li>Click <strong>+ Material</strong>, choose a PNG leaf texture with transparency and select <strong>Cut-out</strong>.</li>
+<li>Set the colour to white to show the texture's own colours, or tint it.</li>
+</ol>
+<p>Each card shows the whole texture, so a texture with several leaves makes a dense crown from fewer cards.</p>
+
+<h2>Textures in exports</h2>
+<ul>
+<li><strong>GLB</strong> files contain the textures, so the export is a single file.</li>
+<li><strong>OBJ</strong> exports copy the textures next to the <code>.obj</code> file and reference them from the <code>.mtl</code> file.</li>
+<li>The normal map is exported with its strength, and the colour is exported as the base colour factor.</li>
+</ul>
+</main>
+</body>
+</html>

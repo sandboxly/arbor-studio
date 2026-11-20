@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forces, pruning and collision · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Forces, pruning and collision</h1>
+<p class="lead">Forces bend the whole tree while it grows, pruning trims it to a volume, and collision objects give game physics a simple shape of the trunk and main branches. All three are in the <strong>Tree</strong> section of the Properties panel, below the wind settings.</p>
+
+<figure class="narrow"><img src="images/ui-tree-settings-lower.jpg" alt="Forces, Pruning, Collision and Level of detail sections"></figure>
+
+<h2>Forces</h2>
+<p>A force bends every stem as it grows, in addition to gravity. Use forces for wind-swept trees on a coast, trees leaning out of a forest edge, or trees growing towards a light source.</p>
+<ol class="steps">
+<li>Open the <strong>Forces</strong> section and click <strong>+ Direction</strong> or <strong>+ Attractor</strong>.</li>
+<li>Adjust the force's <strong>Strength</strong> and its <strong>Direction</strong> or <strong>Position (m)</strong>. You can rename a force in its name field.</li>
+<li>To see forces in the viewport, choose <strong>View › Forces and pruning helpers</strong> (on by default).</li>
+</ol>
+<dl class="params">
+<dt>Direction</dt>
+<dd>Pushes every stem along a direction given as x, y and z. A direction of (1, 0, 0) leans the tree towards +X.</dd>
+<dt>Attractor</dt>
+<dd>Pulls stems towards a point, given as a position in metres. A negative strength pushes them away from it.</dd>
+<dt>Strength</dt>
+<dd>How strongly the force bends the stems, from −2 to 2. Negative values reverse the force.</dd>
+</dl>
+<p>Each force can be switched off with its check box and removed with the bin button. Each generator's <strong>Force response</strong> scales how much it follows the forces; roots ignore them by default.</p>
+<div class="gallery">
+<figure><img src="images/force-none.jpg" alt="No force"><figcaption>No force</figcaption></figure>
+<figure><img src="images/force-direction.jpg" alt="Direction force"><figcaption>Direction force towards +X</figcaption></figure>
+<figure><img src="images/force-attractor.jpg" alt="Attractor"><figcaption>Attractor above and to the side</figcaption></figure>
+</div>
+<figure><img src="images/forces-viewport.jpg" alt="Force helpers in the viewport"><figcaption>With helpers on, a direction force is drawn as an arrow and an attractor as a circle with its name.</figcaption></figure>
+
+<h2>Pruning</h2>
+<p>Pruning trims the tree to a box or an ellipsoid: topiary, hedges, or a tree that has to fit under a roof or between buildings.</p>
+<dl class="params">
+<dt>Trim the crown to a volume</dt>
+<dd>Switches pruning on.</dd>
+<dt>Shape</dt>
+<dd><strong>Ellipsoid</strong> or <strong>Box</strong>.</dd>
+<dt>Centre (m) and Half-size (m)</dt>
+<dd>The position of the volume's centre and its extent from the centre along x, y and z.</dd>
+<dt>Fit to tree</dt>
+<dd>Places the volume just inside the current crown, as a starting point.</dd>
+</dl>
+<p>Branches and leaves stop at the surface of the volume. Trunks are only cut where they leave the top of the volume, and roots are never pruned.</p>
+<div class="gallery">
+<figure><img src="images/pruning-box.jpg" alt="Pruned to a box"><figcaption>Box</figcaption></figure>
+<figure><img src="images/pruning-ellipsoid.jpg" alt="Pruned to an ellipsoid"><figcaption>Ellipsoid</figcaption></figure>
+</div>
+<figure><img src="images/pruning-viewport.jpg" alt="Pruning volume in the viewport"><figcaption>The pruning volume drawn as a helper.</figcaption></figure>
+
+<h2 id="collision">Collision objects</h2>
+<p>Game physics works best with a few simple shapes instead of the full tree mesh. ArborStudio fits capsules to the trunk and the thick branches and exports them as convex hulls with the tree.</p>
+<dl class="params">
+<dt>Export collision objects</dt>
+<dd>Adds the collision objects to exports.</dd>
+<dt>Levels</dt>
+<dd>Which stems get capsules: <strong>Trunk only</strong>, <strong>Trunk + main branches</strong> or <strong>3 levels</strong>.</dd>
+<dt>Thinnest branch <span class="range">0 to 0.5 m</span></dt>
+<dd>Branches thinner than this radius get no capsules.</dd>
+<dt>Capsules per branch <span class="range">1 to 12</span></dt>
+<dd>How many capsules follow each stem. More capsules follow bends more closely.</dd>
+<dt>Size <span class="range">0.2× to 3×</span></dt>
+<dd>Scales the radius of the capsules.</dd>
+<dt>Naming</dt>
+<dd>How the collision meshes are named in exports, so your engine recognises them:
+<ul>
+<li><strong>Neutral</strong>: <code>&lt;Tree&gt;_Collision_01</code>, <code>_02</code> and so on.</li>
+<li><strong>Unreal (UCX_)</strong>: <code>UCX_&lt;mesh&gt;_01</code>, the prefix Unreal uses for custom collision.</li>
+<li><strong>Godot (-convcolonly)</strong>: the suffix that makes Godot create collision shapes from the meshes on import.</li>
+</ul></dd>
+<dt>Show in the view</dt>
+<dd>Draws the capsules in the viewport.</dd>
+</dl>
+<figure><img src="images/collision-viewport.jpg" alt="Collision capsules in the viewport"><figcaption>Collision capsules on the trunk and main branches.</figcaption></figure>
+<p>GLB exports also store the capsule data (end points and radius) in the node extras, and JSON exports list it, for engines that create capsule colliders directly.</p>
+</main>
+</body>
+</html>

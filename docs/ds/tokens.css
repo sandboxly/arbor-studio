@@ -1,0 +1,150 @@
+/* Arbor Studio — generated from tokens.json */
+:root, [data-theme="dark"] {
+  --bg-000: #07090a; /* Deepest ground: footer, code blocks, the area behind the hero render. */
+  --bg-100: #0c0f0e; /* Page background. All text and control contrast is checked against this. */
+  --bg-200: #121614; /* Raised surface: panels, cards, feature tiles. */
+  --bg-300: #19201c; /* Hover and pressed fill for surfaces; input fields. */
+  --line-100: #1f2723; /* Hairline dividers and the background grid. Decorative only, never a control edge. */
+  --line-200: #2c3731; /* Default panel border on bg-100 / bg-200. */
+  --line-300: #56685c; /* Control borders (secondary button, inputs). 3.1:1 on bg-100. */
+  --ink-100: #e8efe9; /* Primary text and headings on bg-100 / bg-200 (16:1). */
+  --ink-200: #a7b4ab; /* Secondary text: body copy under headings, descriptions (9:1). */
+  --ink-300: #77867c; /* Muted text: captions, metadata, mono labels (4.9:1 on bg-100). */
+  --forest-900: #0b2416; /* Accent tint ground: badges, selected rows, callouts. */
+  --forest-800: #123a22; /* Accent tint, stronger: active nav item, highlighted panel fill. */
+  --forest-700: #1a5a33; /* Accent borders on tinted grounds (badges, accent panels). */
+  --forest-600: #23753f; /* Deep forest: pressed primary button, chart fills, decorative marks. */
+  --forest-500: #2f9b56; /* Mid forest: secondary accent marks, progress bars. */
+  --forest-400: #4cc274; /* THE accent. Primary button fill, focus ring, active state. Text on it is accent-ink (8.4:1). */
+  --forest-300: #7fd99c; /* Accent as text: links, ghost buttons, highlighted numbers on dark grounds. */
+  --accent: var(--forest-400); /* Alias of forest-400 for components. */
+  --accent-hover: #66d48a; /* Primary button hover fill. */
+  --accent-ink: #07130b; /* Text and icons on accent / accent-hover fills. */
+  --link: var(--forest-300); /* Inline links. */
+  --focus: var(--forest-400); /* Focus ring colour on every interactive element. */
+  --gizmo: #e3a33b; /* Gizmo amber, borrowed from the editor's selection gizmo. Sparingly: selection outlines, 'new' markers, warnings. Never a second brand colour. */
+  --danger: #ef6b5e; /* Errors and destructive states only (5.9:1 on bg-100). */
+  --shadow-focus: 0 0 0 2px #0c0f0e, 0 0 0 4px #4cc274; /* Focus ring: a ground-coloured gap then the accent at bw-strong. */
+  --shadow-glow: 0 0 0 1px #4cc274, 0 0 24px rgba(76, 194, 116, 0.28); /* Primary button hover and the one hero CTA. Never on panels. */
+  --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px rgba(0, 0, 0, 0.55); /* Floating media only (hero screenshot). Panels stay flat. */
+}
+:root {
+  --space-1: 4px; /* Icon-to-label gap, badge inner padding (vertical). */
+  --space-2: 8px; /* Gap inside button groups; badge horizontal padding. */
+  --space-3: 12px; /* Small button horizontal padding; stacked label gap. */
+  --space-4: 16px; /* Button horizontal padding; gap between related items. */
+  --space-6: 24px; /* Panel padding; background grid pitch. */
+  --space-8: 32px; /* Gap between cards in a grid. */
+  --space-12: 48px; /* Gap between a section heading and its content. */
+  --space-16: 64px; /* Page side gutters on desktop. */
+  --space-24: 96px; /* Vertical rhythm between page sections. */
+  --radius-0: 0px; /* Full-bleed bands, viewport frames, the tick-corner panel. */
+  --radius-xs: 2px; /* Badges, keyboard keys, checkbox-sized marks. */
+  --radius-sm: 4px; /* Buttons and inputs. */
+  --radius-md: 6px; /* Panels and cards. */
+  --radius-lg: 8px; /* Large media frames (screenshots, video). */
+  --radius-pill: 999px; /* Status dots and the rare pill toggle. */
+  --bw-hairline: 1px; /* Every panel, divider and control border. */
+  --bw-strong: 2px; /* Focus rings and the active-tab underline. Nothing else. */
+  --border-solid: solid; /* Default for panels and controls. */
+  --border-dashed: dashed; /* Placeholders, roadmap items, drop zones, bounding boxes around media. */
+  --font-display: "Space Grotesk", "Geist", system-ui, sans-serif;
+  --font-sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --text-display-xl: 600 72px/72px var(--font-display); /* Hero headline, once per page. */
+  --text-display-lg: 600 52px/56px var(--font-display); /* Section openers on wide screens; hero on mobile. */
+  --text-h1: 600 36px/42px var(--font-display); /* Section headings. */
+  --text-h2: 500 26px/32px var(--font-display); /* Sub-section and feature headings. */
+  --text-h3: 500 18px/26px var(--font-display); /* Card and panel titles. */
+  --text-body-lg: 400 18px/28px var(--font-sans); /* Hero subline and lead paragraphs, in ink-200. */
+  --text-body: 400 15px/24px var(--font-sans); /* Default running text. */
+  --text-body-sm: 400 13px/20px var(--font-sans); /* Captions, footnotes, dense panel copy. */
+  --text-button: 500 14px/20px var(--font-sans); /* Button labels (sentence case). */
+  --text-label: 500 11px/16px var(--font-mono); /* Eyebrows, section labels, badges. Set in uppercase, ink-300 or forest-300. */
+  --text-code: 400 13px/20px var(--font-mono); /* Code blocks, install commands, file names. */
+  --text-metric: 500 28px/32px var(--font-mono); /* Spec numbers (vertex counts, LODs, stems). Tabular figures. */
+}
+.display-xl {
+  font-family: var(--font-display);
+  font-size: 72px;
+  line-height: 72px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+.display-lg {
+  font-family: var(--font-display);
+  font-size: 52px;
+  line-height: 56px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.h1 {
+  font-family: var(--font-display);
+  font-size: 36px;
+  line-height: 42px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+.h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+.body-lg {
+  font-family: var(--font-sans);
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.body-sm {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.button {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+.code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.metric {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}

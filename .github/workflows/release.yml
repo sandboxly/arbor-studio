@@ -1,0 +1,116 @@
+# Pushing a version tag (for example v0.1.0) builds Arbor Studio for Linux, macOS and Windows and
+# attaches the downloads to a GitHub release of that name.
+#
+# macOS: one "Arbor Studio.app" that runs on Apple silicon and Intel Macs. It is signed and
+# notarised by Apple when these repository secrets exist (Settings > Secrets and variables >
+# Actions); without them the app is still built, with an ad-hoc signature (users then confirm it
+# once under System Settings > Privacy & Security):
+#   MACOS_CERTIFICATE           the "Developer ID Application" certificate exported as .p12, base64
+#   MACOS_CERTIFICATE_PASSWORD  the password chosen when exporting the .p12
+#   APPLE_ID                    the Apple Account email of the developer membership
+#   APPLE_APP_PASSWORD          an app-specific password for that account (account.apple.com)
+#   APPLE_TEAM_ID               the 10-character team id (developer.apple.com > Membership)
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: arbor_studio-linux-x86_64.tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: arbor_studio-windows-x86_64.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libgl1-mesa-dev
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir dist
+          cp -R target/${{ matrix.target }}/release/arbor_studio README.md LICENSE dist/
+          tar -czf ${{ matrix.archive }} -C dist .
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/arbor_studio.exe, README.md, LICENSE dist/
+          Compress-Archive -Path dist/* -DestinationPath ${{ matrix.archive }}
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.archive }}
+          generate_release_notes: true
+
+  macos:
+    runs-on: macos-latest
+    env:
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ARCHIVE: ArborStudio-macos-universal.zip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - name: Build (Apple silicon and Intel)
+        run: |
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          lipo -create -output "$RUNNER_TEMP/arbor_studio" \
+            target/aarch64-apple-darwin/release/arbor_studio \
+            target/x86_64-apple-darwin/release/arbor_studio
+      - name: Import the signing certificate
+        if: env.MACOS_CERTIFICATE != ''
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep 'Developer ID Application' | head -1 | awk -F'"' '{print $2}')"
+          if [ -z "$IDENTITY" ]; then echo "No 'Developer ID Application' certificate in MACOS_CERTIFICATE" >&2; exit 1; fi
+          echo "MACOS_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+      - name: Make the app
+        run: |
+          mkdir dist
+          sh macos/bundle.sh "$RUNNER_TEMP/arbor_studio" dist "${GITHUB_REF_NAME#v}"
+          ditto -c -k --keepParent "dist/ArborStudio.app" "$ARCHIVE"
+      - name: Notarise with Apple
+        if: env.MACOS_SIGN_IDENTITY != '' && env.APPLE_ID != ''
+        run: |
+          xcrun notarytool submit "$ARCHIVE" --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple "dist/ArborStudio.app"
+          rm "$ARCHIVE"
+          ditto -c -k --keepParent "dist/ArborStudio.app" "$ARCHIVE"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ARCHIVE }}
+          generate_release_notes: true

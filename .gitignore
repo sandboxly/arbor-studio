@@ -1,0 +1,15 @@
+# build output
+/target/
+
+# test screenshots made while developing
+/shots/
+
+# exports and scratch files
+*.glb
+*.obj
+*.mtl
+*_billboard.png
+
+# system files
+.DS_Store
+Thumbs.db

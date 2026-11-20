@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generators and placement · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Generators and placement</h1>
+<p class="lead">This page explains how to add, arrange and remove generators, and how the settings in the <strong>Generation</strong> section decide how many children grow on a parent and where.</p>
+
+<h2>Adding a generator</h2>
+<ol class="steps">
+<li>Select the parent in the <strong>Generation</strong> list. To add a trunk, the selection doesn't matter.</li>
+<li>Click <strong>+ Trunk</strong>, <strong>+ Branches</strong>, <strong>+ Roots</strong> or <strong>+ Leaves</strong> below the list, or use the <strong>Generators</strong> menu.</li>
+<li>The new generator is selected, so you can adjust it in the Properties panel straight away.</li>
+</ol>
+<p>Buttons that don't apply to the selection are dimmed: leaves can't carry children, and roots can only grow on a trunk. Branches added to a branch generator start with shorter, thinner defaults suited to twigs; branches added to roots start as side roots.</p>
+
+<h2>Selecting, renaming and switching off</h2>
+<ul>
+<li>Click a generator in the list or click its part of the tree in the viewport to select it. The selected generator is briefly highlighted in the viewport.</li>
+<li>Type a new name in the field at the top of the Properties panel. Names appear in the list and as mesh and material names in exports.</li>
+<li>Clear the check box in front of a generator, or the <strong>On</strong> box in the Properties panel, to switch it off. Everything that grows on it disappears too, but all settings are kept.</li>
+<li>The <strong>Material</strong> menu at the top of the Properties panel assigns a material. See <a href="materials.html">Materials and textures</a>.</li>
+</ul>
+
+<h2>Removing a generator</h2>
+<p>Select the generator and click the bin button below the list, choose <strong>Edit › Delete Generator</strong>, or press <kbd>Delete</kbd> or <kbd>Backspace</kbd> while no text field is being edited. The generator and every generator below it are removed. Use <strong>Undo</strong> to restore them.</p>
+
+<h2>Generation settings</h2>
+<figure class="narrow"><img src="images/ui-props-branches.jpg" alt="Generation settings of a branch generator"></figure>
+
+<dl class="params">
+<dt>Trunks <span class="range">1 to 24</span></dt>
+<dd>Trunk generators only: the number of trunks growing from the ground. Several trunks are spread around the origin, as in a shrub or a multi-stemmed tree.</dd>
+
+<dt>Count per parent <span class="range">0 to 120</span></dt>
+<dd>How many children grow on each stem of the parent. For leaves this is the number of leaves per stem. A curve on this setting (density) thins children out along the parent.</dd>
+
+<dt>Start and End <span class="range">0 to 1</span></dt>
+<dd>The part of the parent where children grow, from 0 at the base to 1 at the tip. A start of 0.3 keeps the lowest 30 percent of the trunk free of branches.</dd>
+
+<dt>Phyllotaxis <span class="range">0° to 360°</span></dt>
+<dd>The turn around the parent from one child to the next. 137.5°, the golden angle, spreads children evenly in all directions as in many real plants. 180° places them on alternating sides.</dd>
+
+<dt>Per node (whorl) <span class="range">1 to 8</span></dt>
+<dd>How many children start at the same height. 1 gives alternate branching, 2 opposite pairs as in maples, and 3 or more whorls as in pines and firs. The count per parent is shared among the nodes.</dd>
+
+<dt>Randomness <span class="range">0 to 1</span></dt>
+<dd>How much the position and the turn of each child deviate from the regular pattern.</dd>
+
+<dt>Spacing (0 = count) <span class="range">0 to 5 m</span></dt>
+<dd>When above 0, children are placed at this distance along the parent instead of using the count. Long parents then carry more children than short ones, which keeps the density even across the tree.</dd>
+</dl>
+
+<div class="gallery">
+<figure><img src="images/start-0.6.jpg" alt="Branches from 0.6 to 1"><figcaption>Start 0.6, End 1</figcaption></figure>
+<figure><img src="images/end-0.6.jpg" alt="Branches from 0.1 to 0.6"><figcaption>Start 0.1, End 0.6</figcaption></figure>
+</div>
+<div class="gallery">
+<figure><img src="images/whorl-1.jpg" alt="One branch per node"><figcaption>Per node 1 (alternate)</figcaption></figure>
+<figure><img src="images/whorl-2.jpg" alt="Two branches per node"><figcaption>Per node 2 (opposite)</figcaption></figure>
+<figure><img src="images/whorl-4.jpg" alt="Four branches per node"><figcaption>Per node 4 (whorled)</figcaption></figure>
+</div>
+
+<div class="tip"><strong>Tip</strong> To make the lower branches of a tree shorter or the crown denser at the top, combine Start and End with a curve on Length or Count per parent. See <a href="curves.html">Curves</a>.</div>
+</main>
+</body>
+</html>

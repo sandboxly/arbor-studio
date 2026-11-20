@@ -1,0 +1,93 @@
+/* Arbor Studio — component styles. Reads tokens.css custom properties only. */
+
+/* ---------- Button ---------- */
+.ab-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  height: 40px; padding: 0 var(--space-4);
+  font-family: var(--font-sans); font-size: 14px; line-height: 20px; font-weight: 500;
+  border: var(--bw-hairline) var(--border-solid) transparent; border-radius: var(--radius-sm);
+  background: transparent; color: var(--ink-100);
+  cursor: pointer; text-decoration: none; white-space: nowrap;
+  transition: background-color .12s ease, border-color .12s ease, box-shadow .12s ease, color .12s ease;
+}
+.ab-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.ab-btn[disabled], .ab-btn[aria-disabled="true"] { opacity: .4; cursor: not-allowed; box-shadow: none; }
+.ab-btn svg { width: 16px; height: 16px; flex: none; }
+
+.ab-btn--primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.ab-btn--primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); box-shadow: var(--shadow-glow); }
+.ab-btn--primary:active { background: var(--forest-500); border-color: var(--forest-500); box-shadow: none; }
+
+.ab-btn--secondary { background: var(--bg-200); color: var(--ink-100); border-color: var(--line-300); }
+.ab-btn--secondary:hover { background: var(--bg-300); border-color: var(--forest-500); }
+.ab-btn--secondary:active { background: var(--bg-100); }
+
+.ab-btn--ghost { color: var(--forest-300); padding: 0 var(--space-3); }
+.ab-btn--ghost:hover { background: var(--forest-900); }
+.ab-btn--ghost:active { background: var(--forest-800); }
+
+.ab-btn--sm { height: 32px; padding: 0 var(--space-3); font-size: 13px; }
+.ab-btn--lg { height: 48px; padding: 0 var(--space-6); font-size: 15px; }
+
+/* mono "command" button: copy-to-clipboard install line */
+.ab-btn--command {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 400;
+  background: var(--bg-000); color: var(--ink-200); border-color: var(--line-200);
+}
+.ab-btn--command::before { content: "$"; color: var(--forest-300); }
+.ab-btn--command:hover { border-color: var(--line-300); color: var(--ink-100); }
+
+/* ---------- Panel (border styles) ---------- */
+.ab-panel {
+  position: relative; padding: var(--space-6);
+  background: var(--bg-200); color: var(--ink-200);
+  border: var(--bw-hairline) var(--border-solid) var(--line-200); border-radius: var(--radius-md);
+  font-family: var(--font-sans); font-size: 15px; line-height: 24px;
+}
+.ab-panel__title { margin: 0 0 var(--space-2); color: var(--ink-100); font-family: var(--font-display); font-size: 18px; line-height: 26px; font-weight: 500; }
+.ab-panel__label { display: block; margin-bottom: var(--space-3); color: var(--ink-300); font-family: var(--font-mono); font-size: 11px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; }
+
+.ab-panel--flush { background: transparent; }
+.ab-panel--dashed { background: transparent; border-style: var(--border-dashed); border-color: var(--line-300); }
+.ab-panel--accent { background: var(--forest-900); border-color: var(--forest-700); }
+.ab-panel--accent .ab-panel__label { color: var(--forest-300); }
+
+/* Tick corners: viewport-style crop marks, square, no fill border */
+.ab-panel--ticks {
+  border-color: var(--line-100); border-radius: var(--radius-0); background-color: var(--bg-100);
+  --tick: 12px;
+  background-image:
+    linear-gradient(var(--accent), var(--accent)), linear-gradient(var(--accent), var(--accent)),
+    linear-gradient(var(--accent), var(--accent)), linear-gradient(var(--accent), var(--accent)),
+    linear-gradient(var(--accent), var(--accent)), linear-gradient(var(--accent), var(--accent)),
+    linear-gradient(var(--accent), var(--accent)), linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-size:
+    var(--tick) 1px, 1px var(--tick), var(--tick) 1px, 1px var(--tick),
+    var(--tick) 1px, 1px var(--tick), var(--tick) 1px, 1px var(--tick);
+  background-position:
+    top left, top left, top right, top right,
+    bottom left, bottom left, bottom right, bottom right;
+}
+
+/* Grid ground: the 24px blueprint grid behind hero media */
+.ab-grid {
+  background-color: var(--bg-000);
+  background-image:
+    linear-gradient(var(--line-100) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-100) 1px, transparent 1px);
+  background-size: var(--space-6) var(--space-6);
+}
+
+/* ---------- Badge ---------- */
+.ab-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 var(--space-2);
+  font-family: var(--font-mono); font-size: 11px; line-height: 16px; font-weight: 500;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-200); background: var(--bg-200);
+  border: var(--bw-hairline) var(--border-solid) var(--line-200); border-radius: var(--radius-xs);
+}
+.ab-badge--accent { color: var(--forest-300); background: var(--forest-900); border-color: var(--forest-700); }
+.ab-badge--gizmo { color: var(--gizmo); background: transparent; border-color: var(--gizmo); border-style: var(--border-dashed); }
+.ab-badge__dot { width: 6px; height: 6px; border-radius: var(--radius-pill); background: currentColor; }

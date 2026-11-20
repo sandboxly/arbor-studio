@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branch joints · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Branch joints</h1>
+<p class="lead">Where a branch or root meets its parent, ArborStudio can join the two surfaces into one mesh. Joined trees have no hidden geometry inside the parent, no visible seam and continuous bark texture across the joint.</p>
+
+<h2>Settings</h2>
+<p>The joint settings are in the <strong>Tree</strong> section of the Properties panel, which is visible when no generator is selected.</p>
+<dl class="params">
+<dt>Join branches to parent</dt>
+<dd>Joins branches and roots to their parents. When off, each branch is a separate tube whose base is pushed into its parent. That is the cheapest option, but the parent's surface cuts through the branch.</dd>
+<dt>Joint method</dt>
+<dd>How joined branches meet their parent:
+<ul>
+<li><strong>Cut &amp; stitch (one mesh)</strong> cuts an opening in the parent that fits the whole base of the branch and stitches the opening to the branch. The result is one watertight mesh.</li>
+<li><strong>Weld (wrap onto parent)</strong> leaves the parent's surface whole and wraps the base of the branch onto it with a curved fillet. Normals, colour and wind weights blend into the parent, so the joint shades smoothly. It uses fewer triangles than stitching.</li>
+</ul></dd>
+<dt>Branch welding <span class="range">0 to 1</span></dt>
+<dd>Widens the base of every branch into a collar, as wood grows around the branch's base on a real tree. This slider sets the value for all branch generators; each branch generator also has its own <strong>Branch welding</strong> setting in its Skin section. When the levels differ, the slider shows <strong>(mixed)</strong>.</dd>
+</dl>
+
+<div class="gallery wide">
+<figure><img src="images/join-off.jpg" alt="Separate tubes"><figcaption>Join off: the branch tube is pushed into the trunk.</figcaption></figure>
+<figure><img src="images/join-stitch.jpg" alt="Cut and stitch"><figcaption>Cut &amp; stitch: an opening in the trunk is stitched to the branch.</figcaption></figure>
+<figure><img src="images/join-weld.jpg" alt="Weld"><figcaption>Weld with Branch welding 0.6: the base wraps onto the trunk.</figcaption></figure>
+<figure><img src="images/join-stitch-shaded.jpg" alt="Shaded stitched joint"><figcaption>The stitched joint, shaded.</figcaption></figure>
+</div>
+
+<h2>Bark texture at joints</h2>
+<p>The strip between the opening in the parent and the branch uses the branch's own texture coordinates, continued from the branch. The bark of the branch therefore flows into the joint, without smearing between the parent's and the branch's texture. See <a href="materials.html">Materials and textures</a> for how bark textures are mapped.</p>
+
+<h2>Roots</h2>
+<p>Roots and side roots are joined in the same way. A trunk with roots reaches a little below the ground, so every root grows out of bark and the base of the trunk stays closed.</p>
+
+<h2>Choosing a method</h2>
+<table>
+<tr><th>Method</th><th>Use it when</th></tr>
+<tr><td>Cut &amp; stitch</td><td>You need a closed mesh, for example for baking, 3D printing or close-up views, or when branches are almost as thick as their parent.</td></tr>
+<tr><td>Weld</td><td>You want smooth shading at joints with a low triangle count, as in most real-time uses.</td></tr>
+<tr><td>Join off</td><td>Triangle count matters most, for example for distant trees or very large forests.</td></tr>
+</table>
+</main>
+</body>
+</html>

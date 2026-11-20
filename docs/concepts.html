@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How trees are built · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>How trees are built</h1>
+<p class="lead">A tree in ArborStudio is a hierarchy of generators. Each generator describes one kind of part, such as the trunk, a level of branches or the leaves, and how many of them grow on each part of its parent.</p>
+
+<h2>Generators</h2>
+<p>There are four kinds of generator:</p>
+<table>
+<tr><th>Kind</th><th>Grows on</th><th>Creates</th></tr>
+<tr><td>Trunk</td><td>The ground</td><td>One or more trunks or stems. A tree usually has one trunk generator; shrubs use several trunks.</td></tr>
+<tr><td>Branches</td><td>A trunk, branches or roots</td><td>Branches along each stem of the parent. Stack branch generators to get main branches, twigs and smaller twigs. Under roots they create side roots.</td></tr>
+<tr><td>Roots</td><td>A trunk</td><td>Roots that spread from the base of the trunk along and into the ground.</td></tr>
+<tr><td>Leaves</td><td>A trunk or branches</td><td>Leaves, needles or fronds, or your own leaf model.</td></tr>
+</table>
+<p>The Oak preset, for example, has this hierarchy:</p>
+<pre><code>Trunk
+├── Roots
+│   └── Side roots
+└── Main branches
+    └── Twigs
+        └── Leaves</code></pre>
+<p>Each generator applies to every stem of its parent. If <strong>Main branches</strong> has a count of 10 and <strong>Twigs</strong> a count of 12, each of the 10 main branches carries 12 twigs, so the tree has 120 twigs. The <strong>Statistics</strong> tab shows the totals.</p>
+
+<h2>Values relative to the parent</h2>
+<p>Most values of branches, roots and leaves are relative to the stem they grow on. This keeps a tree in proportion when you change its size.</p>
+<ul>
+<li><strong>Length</strong> of branches is a fraction of the parent's length. A value of 0.5 makes each branch half as long as the stem it grows from.</li>
+<li><strong>Radius</strong> of branches is a fraction of the parent's radius at the point where the branch starts.</li>
+<li><strong>Start</strong> and <strong>End</strong> are positions along the parent, from 0 at its base to 1 at its tip.</li>
+</ul>
+<p>The trunk has absolute values: its <strong>Height</strong> and <strong>Radius</strong> are in metres. The <strong>Scale</strong> setting of the tree multiplies all sizes.</p>
+
+<h2>Seed and randomness</h2>
+<p>Natural trees are irregular, so most settings come with a variation, and ArborStudio draws random numbers when it grows a tree. The <strong>Seed</strong> decides which random numbers are drawn. The same seed and the same settings always give exactly the same tree, on every computer. A different seed gives a different individual of the same species.</p>
+<ul>
+<li><strong>Randomize</strong> in the toolbar picks a new seed.</li>
+<li>Changing one setting changes only what depends on it. Branches don't jump to new places when you change, for example, the leaf size.</li>
+<li><strong>Export variations</strong> writes several seeds of the same species in one step. See <a href="export.html#variations">Exporting</a>.</li>
+</ul>
+
+<h2>From settings to mesh</h2>
+<p>Whenever a setting changes, ArborStudio grows the tree again in three steps:</p>
+<ol>
+<li><strong>Skeleton.</strong> Each generator places its stems on its parent and grows them segment by segment: it starts in the direction given by the angle, then bends with gravity, wiggle and forces. The result is a centre line with a radius at each point. The <strong>Skeleton</strong> render mode shows it.</li>
+<li><strong>Mesh.</strong> The skeleton is turned into a surface: rings of vertices around each stem, shaped by flutes, flattening and bark lumps. Branches and roots are joined to their parents, and leaves are placed as cards or models.</li>
+<li><strong>Extras.</strong> Texture coordinates, wind weights, ambient occlusion, collision objects and the lower levels of detail are computed from the mesh.</li>
+</ol>
+
+<h2>Presets</h2>
+<p>ArborStudio includes eight species presets as starting points. They are ordinary trees made of generators, so everything about them can be changed.</p>
+<div class="gallery">
+<figure><img src="images/preset-oak.jpg" alt="Oak"><figcaption>Oak</figcaption></figure>
+<figure><img src="images/preset-pine.jpg" alt="Pine"><figcaption>Pine</figcaption></figure>
+<figure><img src="images/preset-birch.jpg" alt="Birch"><figcaption>Birch</figcaption></figure>
+<figure><img src="images/preset-willow.jpg" alt="Willow"><figcaption>Willow</figcaption></figure>
+<figure><img src="images/preset-maple.jpg" alt="Maple (autumn)"><figcaption>Maple (autumn)</figcaption></figure>
+<figure><img src="images/preset-palm.jpg" alt="Palm"><figcaption>Palm</figcaption></figure>
+<figure><img src="images/preset-shrub.jpg" alt="Shrub"><figcaption>Shrub</figcaption></figure>
+<figure><img src="images/preset-sapling.jpg" alt="Sapling"><figcaption>Sapling</figcaption></figure>
+</div>
+</main>
+</body>
+</html>

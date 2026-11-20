@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Level of detail · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Level of detail</h1>
+<p class="lead">Game engines draw distant trees with simpler meshes. ArborStudio builds four mesh levels, LOD0 to LOD3, and a billboard (LOD4) from the same tree, and exports them named so that Unity, Unreal and Godot can group them.</p>
+
+<h2>Viewing a level</h2>
+<p>Click <strong>0</strong>, <strong>1</strong>, <strong>2</strong>, <strong>3</strong> or <strong>BB</strong> next to <strong>LOD</strong> in the toolbar, or use the <strong>Level of detail</strong> section at the end of the Properties panel. The viewport header shows the level on display and its triangle count. Switch to <strong>Wireframe</strong> to see how the mesh is reduced.</p>
+
+<h2>How the levels are built</h2>
+<p>All mesh levels share one skeleton: every branch starts at the same place, follows the same path and ends at the same point. Only the mesh around the skeleton becomes coarser, so the silhouette of the tree stays the same and an engine can switch between levels without a visible jump.</p>
+<table>
+<tr><th>Level</th><th>Sides around stems</th><th>Points along stems</th><th>Leaves kept</th></tr>
+<tr><td>LOD0</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><td>LOD1</td><td>65%</td><td>70%</td><td>60%</td></tr>
+<tr><td>LOD2</td><td>45%</td><td>50%</td><td>35%</td></tr>
+<tr><td>LOD3</td><td>25%</td><td>30%</td><td>15%</td></tr>
+</table>
+<ul>
+<li><strong>Points along stems</strong> are removed where they change the stem's path and thickness least, so bends and kinks are kept.</li>
+<li>A stem with fewer sides is a polygon with a smaller average width than a round stem. ArborStudio widens the radius to compensate, so branches do not look thinner at lower levels. Trunks keep at least five sides.</li>
+<li>Leaves are thinned out evenly over the crown, and the remaining leaves grow larger, so the crown keeps the same leaf area and density from a distance.</li>
+</ul>
+<div class="gallery wide">
+<figure><img src="images/lodwire-0.jpg" alt="LOD0 wireframe"><figcaption>LOD0</figcaption></figure>
+<figure><img src="images/lodwire-1.jpg" alt="LOD1 wireframe"><figcaption>LOD1</figcaption></figure>
+<figure><img src="images/lodwire-2.jpg" alt="LOD2 wireframe"><figcaption>LOD2</figcaption></figure>
+<figure><img src="images/lodwire-3.jpg" alt="LOD3 wireframe"><figcaption>LOD3</figcaption></figure>
+</div>
+<div class="gallery">
+<figure><img src="images/lod-0.jpg" alt="LOD0"><figcaption>LOD0</figcaption></figure>
+<figure><img src="images/lod-1.jpg" alt="LOD1"><figcaption>LOD1</figcaption></figure>
+<figure><img src="images/lod-2.jpg" alt="LOD2"><figcaption>LOD2</figcaption></figure>
+<figure><img src="images/lod-3.jpg" alt="LOD3"><figcaption>LOD3</figcaption></figure>
+<figure><img src="images/lod-4.jpg" alt="Billboard"><figcaption>Billboard (LOD4)</figcaption></figure>
+</div>
+<p>The detail of LOD0 is set by each generator's <strong>Sides</strong> and <strong>Segments</strong> and by the leaf counts. Lower levels follow from these values, so a tree with more detail at LOD0 also has more detail at the lower levels.</p>
+
+<h2>Billboard</h2>
+<p>The billboard is the tree rendered from eight sides into one image, an atlas of 4 × 2 pictures. In the export it is shown on four crossed cards with both faces, a few triangles in total. Use it for the farthest distance and for large forests.</p>
+<p>The atlas is saved as a PNG file with a transparent background next to the export, named <code>&lt;file&gt;_billboard.png</code>.</p>
+
+<h2>Exporting levels</h2>
+<p>Turn on <strong>Include LOD0–3 in exports</strong> and <strong>Include billboard LOD in exports</strong> in the <strong>File</strong> menu or the toolbar's <strong>Export</strong> menu. The meshes are then named:</p>
+<table>
+<tr><th>Mesh</th><th>Content</th></tr>
+<tr><td><code>&lt;Tree&gt;_LOD0</code> to <code>&lt;Tree&gt;_LOD3</code></td><td>The mesh levels</td></tr>
+<tr><td><code>&lt;Tree&gt;_LOD4</code></td><td>The billboard, when the mesh levels are included</td></tr>
+<tr><td><code>&lt;Tree&gt;_Billboard</code></td><td>The billboard, when it is the only extra level</td></tr>
+</table>
+<p>The <code>_LOD0</code> to <code>_LOD4</code> suffixes follow the naming convention that Unity and Unreal use for LOD groups. Depending on the engine version, the importer and the file format, the engine builds the group on import or you assign the levels yourself in its LOD settings. In Godot, switch between the levels by distance with visibility ranges. See <a href="export.html">Exporting</a>.</p>
+
+<h2>Levels for agents</h2>
+<p><code>get_stats</code> with <code>all_lods: true</code> returns the triangle and vertex counts of every level. <code>set_view</code> with <code>lod</code> shows a level in the viewport, and <code>render_preview</code> with <code>lod</code> renders it.</p>
+</main>
+</body>
+</html>

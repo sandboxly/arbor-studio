@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your first tree · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Your first tree</h1>
+<p class="lead">This walkthrough takes you from a preset to an exported model in about ten minutes. It touches the most common tasks: choosing a species, changing the shape of its branches, adjusting the season and exporting the result for a game engine.</p>
+
+<h2>1. Start from a preset</h2>
+<p>In the left panel, under <strong>Species presets</strong>, click <strong>Oak</strong>. The viewport shows a broad deciduous tree with roots, two branch levels and leaves.</p>
+<div class="gallery">
+<figure><img src="images/preset-oak.jpg" alt="Oak preset"><figcaption>The Oak preset.</figcaption></figure>
+</div>
+<p>Look around the tree: drag in the viewport to orbit, scroll to zoom and drag with the right mouse button to pan. Press <kbd>F</kbd> to frame the whole tree again.</p>
+
+<h2>2. Make a different individual</h2>
+<p>Click <strong>Randomize</strong> in the toolbar. ArborStudio picks a new random seed, so you get another tree of the same species: the branches sit in different places, but their number, length and angle follow the same settings. Click it a few times until you like the result.</p>
+<div class="gallery">
+<figure><img src="images/seed-1.jpg" alt="Seed 11"><figcaption>One seed</figcaption></figure>
+<figure><img src="images/seed-2.jpg" alt="Seed 22"><figcaption>Another seed</figcaption></figure>
+<figure><img src="images/seed-3.jpg" alt="Seed 33"><figcaption>A third seed</figcaption></figure>
+</div>
+
+<h2>3. Change the branches</h2>
+<ol class="steps">
+<li>In the <strong>Generation</strong> list at the top left, click <strong>Main branches</strong>. The branches are highlighted in the viewport and their settings appear in the <strong>Properties</strong> panel on the right.</li>
+<li>Under <strong>Spine</strong>, drag <strong>Gravity</strong> to the right. The branches droop more the further you go; negative values make them curve upwards.</li>
+<li>Drag <strong>Angle</strong> to change how far the branches spread from the trunk.</li>
+<li>Under <strong>Generation</strong>, change <strong>Count per parent</strong> to add or remove branches.</li>
+</ol>
+<figure class="narrow"><img src="images/ui-props-branches.jpg" alt="Properties of the Main branches generator"><figcaption>Properties of the Main branches generator.</figcaption></figure>
+<p>Every change can be undone with <kbd>⌘</kbd><kbd>Z</kbd>.</p>
+
+<h2>4. Pick a season</h2>
+<p>Click an empty part of the viewport, such as the sky, or press <kbd>Esc</kbd>, so that no generator is selected. The <strong>Tree</strong> section of the Properties panel now holds the settings for the whole tree. Drag <strong>Autumn</strong> to colour the leaves and <strong>Fallen leaves</strong> to thin out the crown.</p>
+<div class="gallery">
+<figure><img src="images/autumn-0.6.jpg" alt="Autumn 0.6"><figcaption>Autumn 0.6</figcaption></figure>
+<figure><img src="images/leafdrop-0.5.jpg" alt="Fallen leaves 0.5"><figcaption>Fallen leaves 0.5</figcaption></figure>
+</div>
+
+<h2>5. Check the levels of detail</h2>
+<p>Click <strong>1</strong>, <strong>2</strong> and <strong>3</strong> next to <strong>LOD</strong> in the toolbar. Each level uses fewer triangles but keeps the outline of the tree, so an engine can switch between them without visible popping. <strong>BB</strong> shows the billboard, a set of flat cards for very large distances. The status bar shows the triangle count of the current level.</p>
+
+<h2>6. Export the tree</h2>
+<ol class="steps">
+<li>Choose <strong>File › Export GLB (glTF)…</strong> or press <kbd>⌘</kbd><kbd>E</kbd>.</li>
+<li>Choose a file name and folder, for example inside your game project's assets folder.</li>
+<li>Import the file into your engine. See <a href="export.html">Exporting</a> for notes on Unity, Unreal and Godot.</li>
+</ol>
+<p>By default the export contains all four levels of detail and the billboard. You can turn either off in the <strong>File</strong> menu.</p>
+
+<h2>7. Save the project</h2>
+<p>Choose <strong>File › Save</strong> (<kbd>⌘</kbd><kbd>S</kbd>). The project file (<code>.arbor.json</code>) keeps every setting, so you can come back later, change the tree and export it again. Recently used projects are listed under <strong>File › Open Recent</strong>.</p>
+
+<h2>Next steps</h2>
+<ul>
+<li>Read <a href="concepts.html">How trees are built</a> to understand generators and the hierarchy.</li>
+<li>Add a bark texture in <a href="materials.html">Materials and textures</a>.</li>
+<li>Shape settings along the tree with <a href="curves.html">Curves</a>.</li>
+</ul>
+</main>
+</body>
+</html>

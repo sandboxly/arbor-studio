@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tree settings · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Tree settings</h1>
+<p class="lead">Tree settings apply to the whole tree: its name, random seed, size and growth stage, the default colours, the season, ambient occlusion and wind. They are in the <strong>Tree</strong> section at the bottom of the Properties panel. To see them without scrolling, press <kbd>Esc</kbd> to deselect the current generator.</p>
+
+<figure class="narrow"><img src="images/ui-tree-settings.jpg" alt="The Tree section of the Properties panel"></figure>
+
+<h2>Appearance</h2>
+<dl class="params">
+<dt>Name</dt>
+<dd>The tree's name. Exports use it for mesh and file names, for example <code>Oak_LOD0</code>.</dd>
+<dt>Seed</dt>
+<dd>The random seed. The same seed with the same settings always grows the same tree. Click the dice button, or <strong>Randomize</strong> in the toolbar, to pick a new seed: the result is another individual of the same species.</dd>
+<dt>Scale <span class="range">0.1 to 5</span></dt>
+<dd>Scales the whole tree uniformly. Use it to fit a preset to the size you need without changing its proportions.</dd>
+<dt>Age <span class="range">0.05 to 1</span></dt>
+<dd>The growth stage. At 1 the tree is grown as designed. Lower values grow a younger version of the same individual: shorter, thinner and with fewer branches, with the deepest branch levels appearing last. Export the tree at several ages to show it growing.</dd>
+<dt>Join branches to parent, Joint method, Branch welding</dt>
+<dd>How branches and roots meet their parent. See <a href="joints.html">Branch joints</a>.</dd>
+<dt>Default bark colour, Default leaf colour</dt>
+<dd>The colours of generators that have no material. The same two colours appear at the top of the Materials list in the left panel.</dd>
+<dt>Colour variation <span class="range">0 to 1</span></dt>
+<dd>Random variation of the leaf colour from leaf to leaf.</dd>
+<dt>Autumn <span class="range">0 to 1</span></dt>
+<dd>Blends the leaf colours towards autumn yellows, oranges and reds. Each leaf turns by a slightly different amount.</dd>
+<dt>Fallen leaves <span class="range">0 to 1</span></dt>
+<dd>The share of leaves that have fallen. At 1 the tree is bare. For a given seed the same leaves always fall first, so you can step the value to make a sequence.</dd>
+<dt>Ambient occlusion <span class="range">0 to 1</span></dt>
+<dd>Darkens the inner branches and the leaves deep inside the crown, where little light reaches. The darkening is stored in the vertex colours, so it is also visible in game engines. 0 turns it off.</dd>
+</dl>
+
+<h3>Age</h3>
+<div class="gallery">
+<figure><img src="images/age-0.25.jpg" alt="Age 0.25"><figcaption>Age 0.25</figcaption></figure>
+<figure><img src="images/age-0.55.jpg" alt="Age 0.55"><figcaption>Age 0.55</figcaption></figure>
+<figure><img src="images/age-1.0.jpg" alt="Age 1"><figcaption>Age 1</figcaption></figure>
+</div>
+
+<h3>Season</h3>
+<div class="gallery">
+<figure><img src="images/autumn-0.0.jpg" alt="Autumn 0"><figcaption>Autumn 0</figcaption></figure>
+<figure><img src="images/autumn-1.0.jpg" alt="Autumn 1"><figcaption>Autumn 1</figcaption></figure>
+<figure><img src="images/leafdrop-0.9.jpg" alt="Fallen leaves 0.9"><figcaption>Fallen leaves 0.9</figcaption></figure>
+</div>
+
+<h3>Ambient occlusion</h3>
+<div class="gallery">
+<figure><img src="images/ao-0.0.jpg" alt="Ambient occlusion 0"><figcaption>Ambient occlusion 0</figcaption></figure>
+<figure><img src="images/ao-1.0.jpg" alt="Ambient occlusion 1"><figcaption>Ambient occlusion 1</figcaption></figure>
+</div>
+
+<h3>Seed</h3>
+<div class="gallery">
+<figure><img src="images/seed-1.jpg" alt="One seed"><figcaption>One seed</figcaption></figure>
+<figure><img src="images/seed-4.jpg" alt="Another seed"><figcaption>Another seed, same settings</figcaption></figure>
+</div>
+
+<h2>Wind</h2>
+<p>The wind settings control the wind animation in the viewport and the sway data written to exports.</p>
+<dl class="params">
+<dt>Strength <span class="range">0 to 2</span></dt>
+<dd>How far branches and leaves move.</dd>
+<dt>Direction <span class="range">0° to 360°</span></dt>
+<dd>The direction the wind blows towards, measured around the vertical axis.</dd>
+<dt>Gustiness <span class="range">0 to 1</span></dt>
+<dd>How irregular the wind is. At 0 the tree sways evenly; higher values add gusts.</dd>
+<dt>Speed <span class="range">0.1 to 4</span></dt>
+<dd>The speed of the animation.</dd>
+<dt>Preview</dt>
+<dd>Plays the wind in the viewport. The <strong>Wind</strong> button in the toolbar does the same.</dd>
+</dl>
+<p>The trunk sways little and the crown tips most; leaves also flutter on their own. GLB exports contain a sway weight and a flutter weight for every vertex, so a wind shader in your engine can animate the tree the same way. See <a href="export.html#wind">Wind data</a>.</p>
+
+<h2>Forces, pruning, collision and level of detail</h2>
+<p>The sections below Wind are described on their own pages:</p>
+<ul>
+<li><a href="forces.html">Forces, pruning and collision</a></li>
+<li><a href="lod.html">Level of detail</a></li>
+</ul>
+</main>
+</body>
+</html>

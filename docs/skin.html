@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thickness and bark surface · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Thickness and bark surface</h1>
+<p class="lead">The <strong>Skin</strong> section controls the surface around each centre line: how thick a stem is, how it narrows towards the tip and how its cross-section is shaped.</p>
+
+<h2>Thickness</h2>
+<dl class="params">
+<dt>Radius <span class="range">trunk, 0.01 to 2 m</span></dt>
+<dd>The radius of the trunk at the ground, in metres.</dd>
+<dt>Radius (× parent) <span class="range">branches and roots, 0.05 to 1</span></dt>
+<dd>The radius of a child at its base as a fraction of the parent's radius at the point where the child starts. Values close to 1 make the child as thick as its parent, as in a fork.</dd>
+<dt>Taper <span class="range">0 to 1</span></dt>
+<dd>The radius at the tip as a fraction of the radius at the base. 0 ends the stem in a point; 1 keeps it equally thick. Roots narrow quickly near the trunk and then slowly, as real roots do.</dd>
+</dl>
+<p>The curve button of <strong>Taper</strong> offers two curves:</p>
+<ul>
+<li><strong>Taper strength</strong> varies how quickly the stem narrows along its length. The tip still ends at the Taper value. With a rising curve, the trunk keeps its thickness low down and narrows faster towards the top.</li>
+<li><strong>Thickness along the stem</strong> sets the radius directly along the stem, from base to tip. It replaces Taper.</li>
+</ul>
+
+<h2>Trunk base</h2>
+<dl class="params">
+<dt>Buttress flare <span class="range">trunk, 0 to 2</span></dt>
+<dd>Widens the base of the trunk. When the trunk has roots, the flare forms ridges that run into the roots, with hollows between them. Without roots it forms a few irregular ridges.</dd>
+</dl>
+<div class="gallery">
+<figure><img src="images/flare-0.0.jpg" alt="Flare 0"><figcaption>Buttress flare 0</figcaption></figure>
+<figure><img src="images/flare-0.7.jpg" alt="Flare 0.7"><figcaption>Buttress flare 0.7</figcaption></figure>
+<figure><img src="images/flare-1.6.jpg" alt="Flare 1.6"><figcaption>Buttress flare 1.6</figcaption></figure>
+</div>
+
+<h2>Cross-section</h2>
+<dl class="params">
+<dt>Sides <span class="range">3 to 24</span></dt>
+<dd>The number of vertices around the stem at the highest level of detail. More sides look rounder and cost more triangles. Lower levels of detail use fewer sides and widen the stem slightly, so it keeps its apparent thickness.</dd>
+<dt>Flutes <span class="range">0 to 16</span></dt>
+<dd>Lengthwise grooves in the bark. 0 keeps the stem round. On a trunk with roots, the grooves follow the roots: a ridge runs up from every root and a groove lies between neighbouring roots. The panel then shows <strong>follow the roots</strong> instead of a count.</dd>
+<dt>Flute depth <span class="range">0 to 0.8</span></dt>
+<dd>The depth of the grooves as a fraction of the radius. Shown when the stem has flutes.</dd>
+<dt>Flatten <span class="range">0 to 0.85</span></dt>
+<dd>Squashes the cross-section into an ellipse, as in wind-shaped or leaning trunks.</dd>
+<dt>Bark lumps <span class="range">0 to 0.6</span></dt>
+<dd>Irregular bumps on the surface, as a fraction of the radius. They are part of the geometry, so they show in the silhouette.</dd>
+<dt>Lump size <span class="range">0.05 to 3 m</span></dt>
+<dd>The size of the lumps. Shown when Bark lumps is above 0.</dd>
+</dl>
+<div class="gallery">
+<figure><img src="images/flutes-0.jpg" alt="Round trunk"><figcaption>Round</figcaption></figure>
+<figure><img src="images/flutes-10.jpg" alt="10 flutes"><figcaption>Flutes 10, depth 0.45</figcaption></figure>
+<figure><img src="images/flatten-0.45.jpg" alt="Flatten 0.45"><figcaption>Flatten 0.45</figcaption></figure>
+<figure><img src="images/bumps-0.35.jpg" alt="Bark lumps"><figcaption>Bark lumps 0.35, size 0.25 m</figcaption></figure>
+</div>
+
+<h2>Branch details</h2>
+<dl class="params">
+<dt>Branch welding <span class="range">branches, 0 to 1</span></dt>
+<dd>Swells the base of each branch into a collar that blends into its parent. See <a href="joints.html">Branch joints</a>.</dd>
+<dt>Broken branches <span class="range">branches, 0 to 1</span></dt>
+<dd>The chance that a branch is broken off. A broken branch is a short, blunt stub with no children and no leaves: dead wood, storm damage or pruned lower branches.</dd>
+<dt>Stub length <span class="range">0.03 to 0.9</span></dt>
+<dd>The length of the stubs as a fraction of the full branch length. Shown when Broken branches is above 0.</dd>
+</dl>
+<figure class="narrow"><img src="images/broken-0.5.jpg" alt="Oak with broken branches"><figcaption>Main branches with Broken branches 0.5.</figcaption></figure>
+<div class="tip"><strong>Tip</strong> A <strong>Broken branches</strong> curve that is high near the base of the parent and low at the top breaks off mostly the lower branches, as in trees that grew in a dense forest.</div>
+</main>
+</body>
+</html>

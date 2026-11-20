@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exporting · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Exporting</h1>
+<p class="lead">ArborStudio exports trees as GLB (binary glTF 2.0), as OBJ with an MTL material file, or as JSON tree data. GLB and OBJ open in Unity, Unreal, Godot, Blender and most other 3D tools. All exports use metres, with Y pointing up.</p>
+
+<h2>Exporting a tree</h2>
+<ol class="steps">
+<li>In the <strong>File</strong> menu, or the <strong>Export</strong> menu in the toolbar, choose which levels of detail to include: <strong>Include LOD0–3</strong> and <strong>Include billboard LOD</strong>.</li>
+<li>Choose <strong>Export GLB</strong>, <strong>Export OBJ</strong> or <strong>Export tree data (JSON)</strong>. <kbd>⌘E</kbd> (<kbd>Ctrl+E</kbd> on Windows and Linux) exports GLB.</li>
+<li>Choose a file name and folder. The status bar lists the files that were written.</li>
+</ol>
+<p>Exports contain the tree as it is shown, with node edits, pruning and the current season. Hidden generators (check box off) are left out.</p>
+
+<h2>Formats</h2>
+<table>
+<tr><th></th><th>GLB</th><th>OBJ + MTL</th><th>JSON</th></tr>
+<tr><td>Meshes with normals and texture coordinates</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+<tr><td>Levels of detail and billboard</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+<tr><td>Materials and textures</td><td>Embedded in the file</td><td>MTL file; textures copied next to it</td><td>Settings only</td></tr>
+<tr><td>Vertex colours (leaf colour variation, ambient occlusion)</td><td>Yes</td><td>No</td><td>No</td></tr>
+<tr><td>Wind sway weights</td><td>Yes</td><td>No</td><td>Wind settings only</td></tr>
+<tr><td>Collision objects</td><td>Hulls and capsule data</td><td>Hulls</td><td>Capsule data</td></tr>
+<tr><td>Skeleton (stem paths, radii, leaf positions)</td><td>No</td><td>No</td><td>Yes</td></tr>
+</table>
+<p>Use GLB where your engine supports it: it is a single file and carries the most data.</p>
+
+<h3>Names in the file</h3>
+<p>Mesh names start with the tree's name, with characters other than letters and digits replaced by underscores. Inside each level, the mesh is split by material; OBJ groups are named <code>&lt;mesh&gt;_&lt;material&gt;</code>.</p>
+<table>
+<tr><th>Content</th><th>Name</th></tr>
+<tr><td>Tree without extra levels</td><td><code>&lt;Tree&gt;</code></td></tr>
+<tr><td>Levels of detail</td><td><code>&lt;Tree&gt;_LOD0</code> … <code>&lt;Tree&gt;_LOD4</code></td></tr>
+<tr><td>Billboard only</td><td><code>&lt;Tree&gt;_Billboard</code></td></tr>
+<tr><td>Billboard atlas</td><td><code>&lt;file&gt;_billboard.png</code>, next to the export</td></tr>
+<tr><td>Collision objects</td><td>See <a href="forces.html#collision">Collision objects</a></td></tr>
+</table>
+
+<h3 id="wind">Wind data</h3>
+<p>GLB exports store two wind weights for every vertex in the second texture coordinate set (<code>TEXCOORD_1</code>, often called UV2):</p>
+<ul>
+<li><strong>x</strong>: branch sway, from 0 at the ground to 1 at the tips of the crown.</li>
+<li><strong>y</strong>: leaf flutter, from 0 to 1.</li>
+</ul>
+<p>A vertex shader can move each vertex by these weights with the wind direction and strength. The wind settings of the tree are stored in the file's <code>extras</code>. Welded branch joints blend their weights into the parent, so the joint does not tear when the tree moves.</p>
+
+<h3>Vertex colours</h3>
+<p>GLB exports contain a vertex colour (<code>COLOR_0</code>) with the material colour, the per-leaf colour variation, the autumn colours and the baked ambient occlusion. Multiply it with the colour texture in your material to get the look of the viewport.</p>
+
+<h2 id="variations">Exporting variations</h2>
+<p>A forest needs many individuals of one species. <strong>Export variations</strong> grows the tree with several seeds and writes one file per individual.</p>
+<ol class="steps">
+<li>Set the number of variations next to <strong>Variations</strong> in the toolbar's <strong>Export</strong> menu (or the File menu on Windows and Linux).</li>
+<li>Choose <strong>Variations as GLB…</strong> or <strong>Variations as OBJ…</strong> and select a folder.</li>
+</ol>
+<p>The files are named <code>&lt;Tree&gt;_v01</code>, <code>&lt;Tree&gt;_v02</code> and so on, and their meshes carry the same suffix. The first variation uses the current seed, and each following one the next seed. The level-of-detail options apply to every file. Node edits are not applied to variations.</p>
+
+<h2>Using the export in an engine</h2>
+<p>The steps below describe the usual import route. Menu names differ between engine versions.</p>
+<h3>Unity</h3>
+<ul>
+<li>Copy the OBJ with its MTL and textures, or the GLB, into the project's <code>Assets</code> folder. GLB requires a glTF importer package, for example glTFast.</li>
+<li>Use the <code>_LOD</code> meshes in a LOD Group component, if the importer does not create one.</li>
+<li>Leaves need a material with alpha clipping and both faces rendered.</li>
+</ul>
+<h3>Unreal Engine</h3>
+<ul>
+<li>Import the GLB or OBJ through the Content Browser. Unreal uses centimetres; set the import scale if the tree arrives at 1/100 of its size.</li>
+<li>Choose <strong>Unreal (UCX_)</strong> as collision naming before exporting, so the collision hulls become the mesh's collision.</li>
+<li>Assign LOD1 to LOD4 as levels of detail of the LOD0 static mesh.</li>
+</ul>
+<h3>Godot</h3>
+<ul>
+<li>Copy the GLB into the project. Godot imports it as a scene.</li>
+<li>Choose <strong>Godot (-convcolonly)</strong> as collision naming before exporting, so the collision hulls become collision shapes.</li>
+<li>Switch between levels with the visibility range settings of each mesh instance.</li>
+</ul>
+
+<h2>JSON tree data</h2>
+<p>The JSON export is for custom engines and tools that build their own meshes. It contains:</p>
+<dl class="params">
+<dt>document</dt><dd>All generator, material and tree settings, enough to grow the tree again.</dd>
+<dt>skeleton</dt><dd>Every stem as a list of points with a radius per point, and every leaf with position, direction from base to tip, normal and size.</dd>
+<dt>collision</dt><dd>The collision capsules, each with two end points and a radius.</dd>
+<dt>stats</dt><dd>Stem, leaf, vertex and triangle counts and the size of the tree.</dd>
+</dl>
+<p>The file also states its units (metres) and up axis (Y).</p>
+</main>
+</body>
+</html>

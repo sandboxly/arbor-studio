@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Installing and starting · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Installing and starting</h1>
+<p class="lead">ArborStudio is a single program with no installer and no runtime dependencies. Download the archive for your system, unpack it and start the program.</p>
+
+<h2>System requirements</h2>
+<ul>
+<li>macOS 11 or later (Apple silicon or Intel), Windows 10 or later (64-bit), or a 64-bit Linux desktop with X11 or Wayland.</li>
+<li>A graphics card with OpenGL 3.3 support. Without it, the viewport falls back to a slower software path.</li>
+<li>About 30 MB of disk space, plus space for your projects and exports.</li>
+</ul>
+
+<h2>Downloading</h2>
+<p>Every release on the project's GitHub <strong>Releases</strong> page has one download per system:</p>
+<table>
+<tr><th>System</th><th>File</th><th>Contents</th></tr>
+<tr><td>macOS</td><td><code>ArborStudio-macos-universal.zip</code></td><td>The app <strong>ArborStudio.app</strong>, for Apple silicon and Intel Macs.</td></tr>
+<tr><td>Windows</td><td><code>arbor_studio-windows-x86_64.zip</code></td><td><code>arbor_studio.exe</code> and the licence.</td></tr>
+<tr><td>Linux</td><td><code>arbor_studio-linux-x86_64.tar.gz</code></td><td>The <code>arbor_studio</code> program and the licence.</td></tr>
+</table>
+
+<h3>macOS</h3>
+<ol class="steps">
+<li>Unpack the zip file and move <strong>ArborStudio.app</strong> to your Applications folder.</li>
+<li>Double-click the app. Releases signed and notarised by the developer open straight away.</li>
+<li>If macOS reports that it cannot check the app for malicious software, open <strong>System Settings › Privacy &amp; Security</strong>, scroll to the message about ArborStudio and click <strong>Open Anyway</strong>. You only need to do this once.</li>
+</ol>
+
+<h3>Windows</h3>
+<ol class="steps">
+<li>Unpack the zip file to a folder of your choice, for example <code>C:\Tools\ArborStudio</code>.</li>
+<li>Double-click <code>arbor_studio.exe</code>. If Windows SmartScreen shows a warning, click <strong>More info</strong> and then <strong>Run anyway</strong>.</li>
+</ol>
+
+<h3>Linux</h3>
+<ol class="steps">
+<li>Unpack the archive: <code>tar -xzf arbor_studio-linux-x86_64.tar.gz</code></li>
+<li>Start the program from a terminal with <code>./arbor_studio</code>, or create a desktop launcher that points to it.</li>
+</ol>
+
+<h2>The first start</h2>
+<p>ArborStudio opens with a small sapling. The status indicator at the right end of the toolbar shows <strong>Agent link ready</strong> once the built-in MCP server is listening. If you don't use coding agents, you can ignore it; see <a href="agents.html">Coding agents</a> for details.</p>
+<p>To open an existing project, use <strong>File › Open…</strong> or <strong>File › Open Recent</strong>, or pass the project's path on the command line when you start the program.</p>
+
+<h2>Command-line options</h2>
+<table>
+<tr><th>Option</th><th>Effect</th></tr>
+<tr><td><code>project.arbor.json</code></td><td>Opens the project file.</td></tr>
+<tr><td><code>--port N</code></td><td>Uses port <code>N</code> for the MCP server (default 7878). The environment variable <code>ARBOR_MCP_PORT</code> does the same.</td></tr>
+<tr><td><code>--no-mcp</code></td><td>Starts without the MCP server.</td></tr>
+<tr><td><code>--mcp-stdio</code></td><td>Runs as a stdio MCP server for agents that start their tools themselves. It relays to an open window and starts one if needed.</td></tr>
+<tr><td><code>--headless</code></td><td>Runs without a window. With <code>--mcp-stdio</code> it answers requests itself; otherwise it serves MCP over HTTP. Useful for build scripts and continuous integration.</td></tr>
+<tr><td><code>--screenshot FILE.png</code></td><td>Opens the window, saves a picture of it and exits.</td></tr>
+<tr><td><code>--help</code></td><td>Lists the options.</td></tr>
+</table>
+
+<h2>Building from source</h2>
+<p>ArborStudio is written in Rust. To build it yourself, install Rust from <code>rustup.rs</code>, then run in the source folder:</p>
+<pre><code>cargo build --release</code></pre>
+<p>The program is written to <code>target/release/arbor_studio</code>. On Linux, install the window-system development packages first, for example on Ubuntu:</p>
+<pre><code>sudo apt install libgtk-3-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev</code></pre>
+<p>To make a Mac app from your build, run <code>sh macos/bundle.sh target/release/arbor_studio &lt;empty folder&gt;</code>.</p>
+
+<h2>Opening this help</h2>
+<p>Choose <strong>Help › ArborStudio Help</strong> in the menu bar or press <kbd>F1</kbd>. The help opens in your default web browser, so the browser's back and forward buttons, bookmarks, search within the page and printing all work as usual. <strong>Help › Keyboard and mouse</strong> opens the list of shortcuts directly.</p>
+<p>The help is published online with the project and needs an internet connection. To read it offline, download the project's source code: the same pages are in its <code>docs</code> folder and open in any browser.</p>
+<p>On each page, the contents list is on the left and the field above it filters the list. Links at the end of each page lead to the previous and next page.</p>
+</main>
+</body>
+</html>

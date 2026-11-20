@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editing single branches · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Editing single branches</h1>
+<p class="lead">Generators shape all branches of a level at once. Node editing changes one particular branch: shorten a branch that blocks a path, remove one that crosses another, or turn a limb towards the camera. Edits are saved with the project and included in exports.</p>
+
+<h2>Selecting a branch</h2>
+<ol class="steps">
+<li>In the toolbar, set <strong>Pick</strong> to <strong>Branches</strong>.</li>
+<li>Click a branch in the viewport. It is highlighted in blue, and the <strong>Branch (node editing)</strong> section appears at the top of the Properties panel.</li>
+<li>To return to normal selection, set <strong>Pick</strong> back to <strong>Generators</strong>.</li>
+</ol>
+<figure><img src="images/ui-node-editing.jpg" alt="A selected main branch in node editing"><figcaption>A main branch selected for editing. Its settings are at the top right.</figcaption></figure>
+
+<h2>Branch settings</h2>
+<p>The first line names the generator the branch belongs to, its length, its level (0 for trunks, 1 for main branches and so on) and its key, a number that identifies the branch.</p>
+<figure class="narrow"><img src="images/ui-node-panel.jpg" alt="The node editing section above the Properties panel"></figure>
+<dl class="params">
+<dt>Length <span class="range">0.05× to 3×</span></dt>
+<dd>Multiplies the length of the branch. Branches and leaves growing on it move with it and are placed along the new length.</dd>
+<dt>Thickness <span class="range">0.1× to 3×</span></dt>
+<dd>Multiplies the radius of the branch.</dd>
+<dt>Angle <span class="range">−120° to 120°</span></dt>
+<dd>Adds to the angle between the branch and its parent. Positive values open the branch further away from the parent.</dd>
+<dt>Rotate around parent <span class="range">−180° to 180°</span></dt>
+<dd>Turns the branch around its parent stem.</dd>
+<dt>Delete branch</dt>
+<dd>Removes the branch together with everything that grows on it. While the branch is still selected, the button changes to <strong>Restore branch</strong>.</dd>
+<dt>Reset</dt>
+<dd>Removes all edits of this branch.</dd>
+</dl>
+<p>When at least one branch is edited, a line below the settings shows how many branches are edited and deleted. <strong>Clear all</strong> removes every hand edit and restores deleted branches.</p>
+
+<h2>When edits are kept</h2>
+<p>Each edit is stored with the key of its branch. The key depends on the branch's position in the hierarchy: which parent it grows on and its place on that parent. Edits therefore survive changes to most settings, such as angles, gravity, thickness or colours.</p>
+<p>When you change a setting that adds or removes branches above an edited branch, such as the <strong>Count</strong> of its own or a parent generator, or the seed, the branches are numbered anew and the edits may apply to different branches or to none. Make node edits as the last step, after the generators are set up.</p>
+<div class="note"><strong>Note</strong> <strong>Export variations</strong> grows each variation with a different seed, so hand edits are not applied to variations.</div>
+
+<h2>Node editing for agents</h2>
+<p>Agents use <code>list_nodes</code> to list branches with their keys, generator, level and length, and <code>edit_node</code> to change one. <code>clear_node_edits</code> removes all edits. See <a href="agents.html">Working with coding agents</a>.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leaves · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Leaves</h1>
+<p class="lead">A leaves generator places leaves, needles or fronds along the stems of its parent. Placement works like for branches (count, start, end, phyllotaxis, angle); the <strong>Leaves</strong> section sets their form.</p>
+
+<figure class="narrow"><img src="images/ui-props-leaves.jpg" alt="Properties of a leaves generator"></figure>
+
+<h2>Shape</h2>
+<p>The <strong>Shape</strong> menu selects the outline of each leaf:</p>
+<div class="gallery">
+<figure><img src="images/leaf-broad.jpg" alt="Broad"><figcaption>Broad</figcaption></figure>
+<figure><img src="images/leaf-narrow.jpg" alt="Narrow"><figcaption>Narrow</figcaption></figure>
+<figure><img src="images/leaf-needle.jpg" alt="Needle"><figcaption>Needle</figcaption></figure>
+<figure><img src="images/leaf-round.jpg" alt="Round"><figcaption>Round</figcaption></figure>
+<figure><img src="images/leaf-frond.jpg" alt="Frond"><figcaption>Frond (palm)</figcaption></figure>
+<figure><img src="images/leaf-card.jpg" alt="Card"><figcaption>Card (for leaf textures)</figcaption></figure>
+</div>
+<ul>
+<li><strong>Broad</strong>, <strong>Narrow</strong>, <strong>Needle</strong> and <strong>Round</strong> are modelled leaf outlines that look right with a plain colour.</li>
+<li><strong>Frond (palm)</strong> is a long feathered leaf for palms and ferns.</li>
+<li><strong>Card (for leaf textures)</strong> is a plain rectangle. Use it with a leaf texture that has transparency, and turn on <strong>Cut-out</strong> in the material, so the texture defines the outline. One card can show a whole cluster of leaves.</li>
+<li><strong>Custom mesh (OBJ)</strong> uses a model of your own. See below.</li>
+</ul>
+
+<h2>Size and form</h2>
+<dl class="params">
+<dt>Size <span class="range">0.02 to 6 m</span></dt>
+<dd>The length of each leaf from base to tip, in metres. A size curve makes leaves larger or smaller along the parent.</dd>
+<dt>Size variation <span class="range">0 to 1</span></dt>
+<dd>Random variation of the size.</dd>
+<dt>Width <span class="range">0.1 to 1.5</span></dt>
+<dd>The width of the leaf relative to its length.</dd>
+<dt>Fold <span class="range">0° to 89°</span></dt>
+<dd>Folds the two halves of the leaf up along the midrib.</dd>
+<dt>Curl <span class="range">−1 to 1</span></dt>
+<dd>Bends the leaf tip down (positive) or up (negative).</dd>
+<dt>Face the sky <span class="range">0 to 1</span></dt>
+<dd>Turns the leaves so their upper side faces up. At 0 they keep the orientation of their stem; at 1 they lie flat towards the sky, as many broadleaf trees hold their leaves in the sun.</dd>
+</dl>
+<div class="gallery">
+<figure><img src="images/leaf-broad.jpg" alt="Default"><figcaption>Default</figcaption></figure>
+<figure><img src="images/leaf_fold-50.jpg" alt="Fold 50°"><figcaption>Fold 50°</figcaption></figure>
+<figure><img src="images/leaf_bend-0.8.jpg" alt="Curl 0.8"><figcaption>Curl 0.8</figcaption></figure>
+<figure><img src="images/leaf_face_up-1.0.jpg" alt="Face the sky 1"><figcaption>Face the sky 1</figcaption></figure>
+</div>
+
+<h2>Custom leaf models</h2>
+<p>With the shape <strong>Custom mesh (OBJ)</strong>, every leaf is a copy of a model you provide: a leaf cluster, a sprig of needles, a flower or a fruit.</p>
+<ol class="steps">
+<li>Model the leaf in any 3D program so that it points along +Y from its base to its tip, with its upper face towards +Z. The base is the point where it attaches to the twig.</li>
+<li>Export it as an OBJ file with texture coordinates. Keep it under 5,000 triangles, because it is repeated for every leaf.</li>
+<li>Choose <strong>Custom mesh (OBJ)</strong> as the shape, click <strong>Choose…</strong> next to <strong>Model</strong> and select the file.</li>
+</ol>
+<p>ArborStudio moves the model so that its lowest point is at the base and scales it to a length of 1, so the <strong>Size</strong> setting gives its length in metres and <strong>Width</strong> scales it sideways. Models without normals get computed normals. ArborStudio reloads the model when the file changes on disk.</p>
+
+<h2>Colour</h2>
+<p>Leaves without a material use the <strong>Default leaf colour</strong> of the tree with a random variation per leaf (<strong>Colour variation</strong>). The <strong>Autumn</strong> and <strong>Fallen leaves</strong> settings change colours and thin out the crown for the season. See <a href="tree-settings.html">Tree settings</a>. For textured leaves, assign a material; see <a href="materials.html#leaf-textures">Leaf textures</a>.</p>
+</main>
+</body>
+</html>
