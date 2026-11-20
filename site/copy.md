@@ -10,7 +10,7 @@ the source or the docs in this repository.
 - Title: ArborStudio: game tree editor with an MCP server
 - Description: Desktop editor for game-ready trees. GLB or OBJ with four LODs, a billboard and per-vertex
   wind weights. Every editor operation is an MCP tool, so your agent can grow the variants. Free, MIT.
-- OG image text: "Game-ready trees. Ready for your favorite AI agent." / "GLB · OBJ · 4 LODs + billboard · wind weights · 37 MCP tools"
+- OG image text: "Game-ready trees. Ready for your favorite AI agent." / "GLB · OBJ · 4 LODs + billboard · wind weights · 35 MCP tools"
 
 ## Hero
 
@@ -60,7 +60,6 @@ the source or the docs in this repository.
 - Vertex colour: COLOR_0 carries tint, per-leaf variation, autumn colour and baked ambient occlusion.
 - Materials: colour textures, normal maps, alpha-cutout leaf cards.
 - Formats: GLB, OBJ with MTL, and JSON with the full branch skeleton for your own tools.
-- Triangle budgets (from code; marked "Next release" because v0.1.0 doesn't have them): one maximum (LOD1 to LOD3 get 1/2, 1/4, 1/8) or one per level; levels over budget lose sides, rings and leaves until they fit, or are flagged in amber; check_triangle_budget tells the agent.
 - Collision hulls, named for Unreal (UCX_) or Godot (-convcolonly) if you pick it.
 - Engines: The docs describe the import into Unity, Unreal and Godot. [TODO: engines tested, with versions]
 
@@ -83,7 +82,7 @@ the source or the docs in this repository.
 - Lead: SpeedTree is the reference for game vegetation and has far more features. ArborStudio is
   younger and smaller. It adds features when people ask for them in the issue tracker.
 - Table:
-  - Agent access: ArborStudio: MCP server, 37 tools | SpeedTree: no such interface
+  - Agent access: ArborStudio: MCP server, 35 tools | SpeedTree: no such interface
   - Price: ArborStudio: free | SpeedTree: paid licence
   - Source: ArborStudio: MIT, read and change the generator | SpeedTree: closed
   - Feature set: ArborStudio: smaller, grows from requests | SpeedTree: larger and more mature

@@ -3,72 +3,109 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ArborStudio: game tree editor with an MCP server</title>
+<title>ArborStudio: game-ready trees, ready for your favorite AI agent</title>
 <meta name="description" content="Desktop editor for game-ready trees. GLB or OBJ with four LODs, a billboard and per-vertex wind weights. Every editor operation is an MCP tool, so your agent can grow the variants. Free, MIT.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="ArborStudio: game-ready trees, ready for your favorite AI agent">
-<meta property="og:description" content="GLB and OBJ with four LODs, a billboard and wind weights. 37 MCP tools. Free and open source, MIT.">
+<meta property="og:title" content="ArborStudio: game-ready trees. Ready for your favorite AI agent.">
+<meta property="og:description" content="GLB and OBJ with four LODs, a billboard and wind weights. 35 MCP tools. Free and open source, MIT.">
 <meta property="og:image" content="https://sandboxly.github.io/arbor-studio/images/og.png">
-<meta property="og:image:alt" content="ArborStudio v0.1.0: Game-ready trees. Ready for your favorite AI agent. Next to the text, a hand-authored oak in the editor's viewport.">
+<meta property="og:image:alt" content="ArborStudio v0.1.0: game-ready trees. Next to the text, a hand-authored oak in the editor's viewport.">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0c0f0e">
 <link rel="icon" href="docs/images/app-icon.png">
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
+<!-- ============================================================ top bar -->
 <header class="top">
   <div class="wrap top__row">
     <a class="brand" href="./">ArborStudio</a>
+    <span class="ab-badge ab-badge--accent top__ver"><span class="ab-badge__dot"></span>v0.1.0</span>
     <nav class="top__links" aria-label="Page sections">
-      <a href="#session">Agent session</a>
+      <a href="#agent">Agent</a>
       <a href="#output">Output</a>
+      <a href="#generators">Generators</a>
       <a href="#compare">vs SpeedTree</a>
       <a href="docs/">Docs</a>
-      <a href="https://github.com/sandboxly/arbor-studio">GitHub</a>
     </nav>
+    <a class="ab-btn ab-btn--secondary ab-btn--sm top__gh" href="https://github.com/sandboxly/arbor-studio">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>
+      GitHub
+    </a>
   </div>
 </header>
 
 <main id="main">
 
-<!-- ======================================================== hero -->
-<section class="hero">
-  <div class="hero__text">
-    <p class="label eyebrow">Tree editor for games · v0.1.0</p>
-    <h1 class="display">Game-ready trees. Ready for your favorite AI agent.</h1>
-    <p class="sub">ArborStudio is a desktop editor that grows trees from trunk, branch, root and leaf generators and exports them as GLB or OBJ with four LODs, a billboard and wind weights. Every operation in the editor is also an MCP tool, so Claude Code or another MCP client can make the twelve variants you need while you do something else.</p>
-    <p class="for">For game developers and environment artists who need many distinct trees and would rather script them than click out each one.</p>
-    <div class="cta">
-      <a class="ab-btn ab-btn--primary ab-btn--lg js-download" href="#download">Download v0.1.0</a>
-      <p class="cta__fact">Free and open source. <a href="https://github.com/sandboxly/arbor-studio/blob/main/LICENSE">MIT licence</a>. <a href="https://github.com/sandboxly/arbor-studio">Source on GitHub</a>.</p>
+<!-- ============================================================ hero -->
+<section class="hero ab-grid">
+  <div class="wrap">
+    <div class="hero__head">
+      <div class="hero__title">
+        <p class="label eyebrow">Tree editor for games · v0.1.0</p>
+        <h1 class="display"><span class="nowrap">Game-ready</span> trees. <span class="display__accent">Ready for your favorite AI&nbsp;agent.</span></h1>
+      </div>
+      <div class="hero__aside">
+        <p class="sub">ArborStudio is a desktop editor that grows trees from trunk, branch, root and leaf generators and exports them as GLB or OBJ with four LODs, a billboard and wind weights. Every operation in the editor is also an MCP tool, so Claude Code or another MCP client can make the twelve variants you need while you do something else.</p>
+        <div class="hero__act">
+        <div class="cta">
+          <a class="ab-btn ab-btn--primary ab-btn--lg js-download" href="#download">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 2v9M4 7l4 4 4-4M2.5 13.5h11"/></svg>
+            <span class="js-download-label">Download v0.1.0</span>
+          </a>
+          <a class="ab-btn ab-btn--secondary ab-btn--lg" href="https://github.com/sandboxly/arbor-studio">Source on GitHub</a>
+        </div>
+        <p class="cta__fact">Free and open source. <a href="https://github.com/sandboxly/arbor-studio/blob/main/LICENSE">MIT licence</a>. Written in Rust.</p>
+        </div>
+      </div>
     </div>
-    <p><a class="more" href="docs/agents.html">Set up the MCP server →</a></p>
+
+    <figure class="viewport">
+      <div class="viewport__bar">
+        <span class="label">Viewport · Oak · LOD0</span>
+        <a class="viewport__mcp" href="docs/agents.html">MCP server on 127.0.0.1:7878 →</a>
+      </div>
+      <picture>
+        <source type="image/webp" srcset="images/editor-oak-1000.webp 1000w, images/editor-oak.webp 1860w" sizes="(max-width: 1200px) 100vw, 1072px">
+        <img src="images/editor-oak.jpg" width="1860" height="1192" fetchpriority="high" alt="The ArborStudio editor with a hand-authored oak: a full, rounded crown on a thick trunk with spreading surface roots, lit at noon. The trunk generator is selected; an orange ellipsoid outlines the crown, and the right panel shows its settings, such as Height 21.0 m, Gravity, Taper and Buttress flare.">
+      </picture>
+      <figcaption class="viewport__stats">
+        <span class="sr">An oak authored in ArborStudio: </span>
+        <span class="stat"><span class="stat__num">744</span><span class="label">Stems</span></span>
+        <span class="stat"><span class="stat__num">15,390</span><span class="label">Leaves</span></span>
+        <span class="stat"><span class="stat__num">119,996</span><span class="label">Triangles at LOD0</span></span>
+        <span class="stat stat--accent"><span class="stat__num">96 ms</span><span class="label">To grow it<sup><a href="#m1" id="r1">1</a></sup></span></span>
+      </figcaption>
+    </figure>
+
+    <p class="for">For game developers and environment artists who need many distinct trees and would rather script them than click out each one.</p>
   </div>
-  <figure class="hero__shot">
-    <picture>
-      <source type="image/webp" srcset="images/editor-oak-1000.webp 1000w, images/editor-oak.webp 1860w" sizes="(max-width: 1080px) 100vw, 1100px">
-      <img src="images/editor-oak.jpg" width="1860" height="1192" fetchpriority="high" alt="The ArborStudio editor with a hand-authored oak: a full, rounded crown on a thick trunk with spreading surface roots, lit at noon. The trunk generator is selected; an orange ellipsoid outlines the crown, and the right panel shows its settings, such as Height 21.0 m, Gravity, Taper and Buttress flare.">
-    </picture>
-    <figcaption>An oak authored in ArborStudio: 744 stems, 15,390 leaves, 119,996 triangles at LOD0, grown in 96 ms.<sup><a href="#m1" id="r1">1</a></sup></figcaption>
-  </figure>
 </section>
 
-<!-- ======================================================== session -->
-<section class="wrap section" id="session">
-  <header class="head">
-    <p class="label eyebrow">An agent session, start to finish</p>
-    <h2 class="h1">Twelve birches for a northern forest, from one prompt.</h2>
-    <p class="lead">A session run against v0.1.0 while writing this page: the prompt, the calls, and what came out. Long results are cut, nothing else is edited.</p>
-  </header>
+<!-- ============================================================ 01 agent -->
+<section class="section" id="agent">
+  <div class="wrap">
+    <header class="head">
+      <div>
+        <p class="label eyebrow"><span class="n">01</span>An agent session, start to finish</p>
+        <h2 class="h1">Twelve birches for a northern forest, from one prompt.</h2>
+      </div>
+      <p class="lead">A session run against v0.1.0 while writing this page: the prompt, the calls, and what came out. Long results are cut, nothing else is edited.</p>
+    </header>
 
-  <div class="session">
-    <div class="session__left">
-      <blockquote class="prompt">
-        <p class="label">Prompt</p>
-        <p>Make 12 birch variants for a northern forest. Narrower crowns, a little early autumn colour. GLB with all LODs and billboards.</p>
-      </blockquote>
-      <div class="calls" role="region" aria-label="MCP tool calls" tabindex="0">
+    <ol class="pipe">
+      <li class="pipe__step">
+        <p class="pipe__label label"><span>A</span>You ask</p>
+        <blockquote class="ab-panel ab-panel--accent prompt">
+          <p>Make 12 birch variants for a northern forest. Narrower crowns, a little early autumn colour. GLB with all LODs and billboards.</p>
+        </blockquote>
+      </li>
+      <li class="pipe__step">
+        <p class="pipe__label label"><span>B</span>The agent calls ArborStudio</p>
+        <div class="term">
+          <div class="calls" role="region" aria-label="MCP tool calls" tabindex="0">
 <pre><span class="c-tool">load_preset</span>       <span class="c-arg">{"name": "Birch"}</span>
 <span class="c-tool">update_generator</span>  <span class="c-arg">{"id": 2, "params":</span>
                    <span class="c-arg">{"length": 0.36, "angle": 32}}</span>
@@ -83,167 +120,210 @@
                    <span class="c-arg">"include_billboard": true}</span>
   <span class="c-res">→ Birch_v01.glb … Birch_v12.glb</span>       <span class="c-ms">1,434 ms</span>
     <span class="c-res">+ 12 billboard atlas PNGs</span></pre>
-      </div>
-    </div>
-    <figure class="session__result">
+          </div>
+        </div>
+      </li>
+      <li class="pipe__step">
+        <p class="pipe__label label"><span>C</span>You get</p>
+        <div class="ab-panel files-out">
+          <ul>
+            <li>Birch_v01.glb</li><li>Birch_v02.glb</li><li>Birch_v03.glb</li><li class="files-out__gap">…</li><li>Birch_v12.glb</li>
+          </ul>
+          <p class="files-out__plus">+ 12 billboard atlas PNGs</p>
+          <div class="files-out__time"><span class="stat__num">1,434 ms</span><span class="label">For all twelve</span></div>
+        </div>
+      </li>
+    </ol>
+
+    <figure class="frame birches">
       <img src="images/birch-variants.jpg" width="1320" height="780" loading="lazy" alt="Twelve birch renders in two rows of six: tall white trunks with narrow, slightly yellow-green crowns. They share the species settings and differ in branch placement and crown outline.">
       <figcaption>Birch_v01 to Birch_v12, seeds 1 to 12. Each GLB holds LOD0 to LOD3 and a billboard.</figcaption>
     </figure>
-  </div>
-  <p class="todo">[TODO: screen recording of a real agent session, prompt → MCP calls → trees in the viewport. The calls above were sent by a script written for this page, not a chat client. Also: which MCP clients were tested.]</p>
+    <p class="todo">[TODO: screen recording of a real agent session, prompt → MCP calls → trees in the viewport. The calls above were sent by a script written for this page, not a chat client. Also: which MCP clients were tested.]</p>
 
-  <div class="band">
-    <a class="ab-btn ab-btn--primary js-download" href="#download">Download v0.1.0</a>
-    <p>Then connect your agent with one command: <code>claude mcp add --transport http arbor-studio http://127.0.0.1:7878/mcp</code></p>
+    <div class="connect">
+      <div>
+        <p class="label eyebrow">Connect your agent</p>
+        <p class="connect__text">Download ArborStudio, then connect your agent with one command:</p>
+      </div>
+      <button class="ab-btn ab-btn--command copy" type="button" data-copy="claude mcp add --transport http arbor-studio http://127.0.0.1:7878/mcp" aria-label="Copy the command: claude mcp add --transport http arbor-studio http://127.0.0.1:7878/mcp"><code>claude mcp add --transport http arbor-studio http://127.0.0.1:7878/mcp</code><span class="copy__state label" aria-hidden="true">Copy</span></button>
+      <a class="ab-btn ab-btn--ghost" href="docs/agents.html">Set up the MCP server →</a>
+    </div>
   </div>
 </section>
 
-<!-- ======================================================== output -->
-<section class="wrap section" id="output">
-  <header class="head">
-    <p class="label eyebrow">What ends up in the file</p>
-    <h2 class="h1">Four LODs, a billboard and wind weights, in one GLB.</h2>
-  </header>
+<!-- ============================================================ 02 output -->
+<section class="section" id="output">
+  <div class="wrap">
+    <header class="head">
+      <div>
+        <p class="label eyebrow"><span class="n">02</span>What ends up in the file</p>
+        <h2 class="h1">Four LODs, a billboard and wind weights, in one GLB.</h2>
+      </div>
+      <p class="lead">Lower levels keep the skeleton and coarsen the mesh around it, so the outline holds when the engine switches. The billboard is the tree rendered from eight sides into one 4 × 2 atlas.</p>
+    </header>
 
-  <div class="output">
-    <div class="lods">
-      <figure class="ab-panel ab-panel--ticks"><img src="docs/images/lod-0.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD0, full detail"><figcaption><span class="label">LOD0</span><span class="num">20,668</span></figcaption></figure>
-      <figure class="ab-panel ab-panel--ticks"><img src="docs/images/lod-1.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD1, same outline with fewer leaves"><figcaption><span class="label">LOD1</span><span class="num">11,280</span></figcaption></figure>
-      <figure class="ab-panel ab-panel--ticks"><img src="docs/images/lod-2.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD2"><figcaption><span class="label">LOD2</span><span class="num">6,954</span></figcaption></figure>
-      <figure class="ab-panel ab-panel--ticks"><img src="docs/images/lod-3.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD3, coarse branches and large leaf clusters"><figcaption><span class="label">LOD3</span><span class="num">4,498</span></figcaption></figure>
-      <figure class="ab-panel ab-panel--ticks"><img src="docs/images/lod-4.jpg" width="300" height="340" loading="lazy" alt="Oak as a billboard: crossed cards showing renders of the tree"><figcaption><span class="label">Billboard</span><span class="num">16</span></figcaption></figure>
-      <p class="lods__note">Triangles per level, Oak preset, seed 1. Lower levels keep the skeleton and coarsen the mesh around it, so the outline holds when the engine switches. The billboard is the tree rendered from eight sides into one 4 × 2 atlas.</p>
+    <div class="strip" role="list" aria-label="Triangles per level, Oak preset, seed 1">
+      <figure class="strip__cell" role="listitem" style="--share: 1"><img src="docs/images/lod-0.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD0, full detail"><figcaption><span class="label">LOD0</span><span class="num">20,668</span><span class="bar"></span></figcaption></figure>
+      <figure class="strip__cell" role="listitem" style="--share: .546"><img src="docs/images/lod-1.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD1, same outline with fewer leaves"><figcaption><span class="label">LOD1</span><span class="num">11,280</span><span class="bar"></span></figcaption></figure>
+      <figure class="strip__cell" role="listitem" style="--share: .336"><img src="docs/images/lod-2.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD2"><figcaption><span class="label">LOD2</span><span class="num">6,954</span><span class="bar"></span></figcaption></figure>
+      <figure class="strip__cell" role="listitem" style="--share: .218"><img src="docs/images/lod-3.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD3, coarse branches and large leaf clusters"><figcaption><span class="label">LOD3</span><span class="num">4,498</span><span class="bar"></span></figcaption></figure>
+      <figure class="strip__cell strip__cell--bb" role="listitem" style="--share: .004"><img src="docs/images/lod-4.jpg" width="300" height="340" loading="lazy" alt="Oak as a billboard: crossed cards showing renders of the tree"><figcaption><span class="label">Billboard</span><span class="num">16</span><span class="bar"></span></figcaption></figure>
     </div>
+    <p class="strip__note">Triangles per level, Oak preset, seed 1.</p>
 
-    <dl class="facts">
-      <dt>Wind</dt>
-      <dd>Two weights per vertex in <code>TEXCOORD_1</code> (UV2). <code>x</code> is branch sway, from 0 at the ground to 1 at the crown tips. <code>y</code> is leaf flutter. Your vertex shader applies them; ArborStudio doesn't ship an engine shader.</dd>
-      <dt>Vertex colour</dt>
-      <dd><code>COLOR_0</code> carries tint, per-leaf variation, autumn colour and baked ambient occlusion. Multiply it with the texture.</dd>
-      <dt>Materials</dt>
-      <dd>Colour textures, normal maps and alpha-cutout leaf cards.</dd>
-      <dt>Formats</dt>
-      <dd>GLB, OBJ with MTL, or JSON with every stem as points and radii for your own tools. Meshes are named <code>Oak_LOD0</code> to <code>Oak_LOD4</code>.</dd>
-      <dt>Triangle budgets <span class="ab-badge ab-badge--gizmo">Next release</span></dt>
-      <dd>Enter one maximum and LOD1 to LOD3 get a half, a quarter and an eighth of it, or set each level. A level over budget loses sides, rings and leaves until it fits. If it can't, it is flagged in amber, and <code>check_triangle_budget</code> tells your agent.</dd>
-      <dt>Collision</dt>
-      <dd>Convex hulls, named <code>UCX_</code> for Unreal or <code>-convcolonly</code> for Godot if you pick it.</dd>
-      <dt>Engines</dt>
-      <dd>The docs walk through the import into Unity, Unreal and Godot. <span class="todo-inline">[TODO: engines tested, with versions]</span></dd>
+    <dl class="sheet">
+      <div class="sheet__row"><dt class="label">Wind</dt>
+      <dd>Two weights per vertex in <code>TEXCOORD_1</code> (UV2). <code>x</code> is branch sway, from 0 at the ground to 1 at the crown tips. <code>y</code> is leaf flutter. Your vertex shader applies them; ArborStudio doesn't ship an engine shader.</dd></div>
+      <div class="sheet__row"><dt class="label">Vertex colour</dt>
+      <dd><code>COLOR_0</code> carries tint, per-leaf variation, autumn colour and baked ambient occlusion. Multiply it with the texture.</dd></div>
+      <div class="sheet__row"><dt class="label">Materials</dt>
+      <dd>Colour textures, normal maps and alpha-cutout leaf cards.</dd></div>
+      <div class="sheet__row"><dt class="label">Formats</dt>
+      <dd>GLB, OBJ with MTL, or JSON with every stem as points and radii for your own tools. Meshes are named <code>Oak_LOD0</code> to <code>Oak_LOD4</code>.</dd></div>
+      <div class="sheet__row"><dt class="label">Collision</dt>
+      <dd>Convex hulls, named <code>UCX_</code> for Unreal or <code>-convcolonly</code> for Godot if you pick it.</dd></div>
+      <div class="sheet__row"><dt class="label">Engines</dt>
+      <dd>The docs walk through the import into Unity, Unreal and Godot. <span class="todo-inline">[TODO: engines tested, with versions]</span></dd></div>
     </dl>
   </div>
 </section>
 
-<!-- ======================================================== controls -->
-<section class="wrap section" id="controls">
-  <div class="controls">
-    <figure class="controls__panel">
+<!-- ============================================================ 03 generators -->
+<section class="section" id="generators">
+  <div class="wrap gen">
+    <figure class="frame gen__panel">
       <img src="docs/images/ui-props-branches.jpg" width="390" height="842" loading="lazy" alt="The Properties panel for a branch generator, with sliders in three groups. Generation: Count per parent, Start, End, Phyllotaxis. Spine: Length, Crown profile, Angle, Gravity, Wiggle, Kink. Skin: Radius, Taper, Branch welding, Broken branches, Flutes, Bark lumps.">
     </figure>
-    <div class="controls__text">
-      <p class="label eyebrow">Every part has its own controls</p>
+    <div class="gen__body">
+      <p class="label eyebrow"><span class="n">03</span>Every part has its own controls</p>
       <h2 class="h1">A stack of generators, each with its own sliders.</h2>
       <p class="lead">Trunk, branches, twigs, roots and leaves are separate generators. Each one has its own settings, and most of them can follow a curve along the parent: longer branches low in the crown, steeper ones at the top.</p>
+
+      <ol class="stack" aria-label="Generator stack">
+        <li><span class="stack__dot"></span>Trunk</li>
+        <li><span class="stack__dot"></span>Roots</li>
+        <li><span class="stack__dot"></span>Branches</li>
+        <li><span class="stack__dot"></span>Twigs</li>
+        <li><span class="stack__dot stack__dot--leaf"></span>Leaves</li>
+      </ol>
+
       <ul class="params" aria-label="Some of the parameters">
         <li>Count per parent</li><li>Phyllotaxis</li><li>Length (× parent)</li><li>Crown profile</li><li>Angle</li><li>Gravity</li><li>Wiggle</li><li>Kink</li><li>Taper</li><li>Branch welding</li><li>Broken branches</li><li>Flutes</li><li>Bark lumps</li><li>Leaf fold</li><li>Age</li><li>Autumn</li><li>Fallen leaves</li><li>Ambient occlusion</li>
       </ul>
-      <table class="timing">
-        <caption>Time to grow one tree<sup><a href="#m1">1</a></sup></caption>
-        <thead><tr><th scope="col">Preset</th><th scope="col">Triangles</th><th scope="col">LOD0</th><th scope="col">All 5 levels</th></tr></thead>
-        <tbody>
-          <tr><th scope="row">Oak</th><td>21k</td><td>17 ms</td><td>103 ms</td></tr>
-          <tr><th scope="row">Birch</th><td>36k</td><td>24 ms</td><td>112 ms</td></tr>
-          <tr><th scope="row">Willow</th><td>41k</td><td>42 ms</td><td>223 ms</td></tr>
-          <tr><th scope="row">Pine</th><td>75k</td><td>96 ms</td><td>404 ms</td></tr>
-        </tbody>
-      </table>
-      <p class="small">Short enough that the viewport keeps up while you drag a slider.</p>
+
+      <div class="ab-panel timing">
+        <p class="label timing__cap">Time to grow one tree<sup><a href="#m1">1</a></sup></p>
+        <table>
+          <thead><tr><th scope="col">Preset</th><th scope="col">Triangles</th><th scope="col">LOD0</th><th scope="col">All 5 levels</th><th scope="col"><span class="sr">Relative time</span></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Oak</th><td>21k</td><td>17 ms</td><td>103 ms</td><td class="timing__bar"><span style="--t: .255"></span></td></tr>
+            <tr><th scope="row">Birch</th><td>36k</td><td>24 ms</td><td>112 ms</td><td class="timing__bar"><span style="--t: .277"></span></td></tr>
+            <tr><th scope="row">Willow</th><td>41k</td><td>42 ms</td><td>223 ms</td><td class="timing__bar"><span style="--t: .552"></span></td></tr>
+            <tr><th scope="row">Pine</th><td>75k</td><td>96 ms</td><td>404 ms</td><td class="timing__bar"><span style="--t: 1"></span></td></tr>
+          </tbody>
+        </table>
+        <p class="small">Short enough that the viewport keeps up while you drag a slider.</p>
+      </div>
       <p class="todo">[TODO: 10 to 20 s loop of a tree regenerating while a slider moves]</p>
       <p class="todo">[TODO: wind animation loop]</p>
     </div>
   </div>
 </section>
 
-<!-- ======================================================== compare -->
-<section class="wrap section" id="compare">
-  <header class="head">
-    <p class="label eyebrow">ArborStudio and SpeedTree</p>
-    <h2 class="h1">SpeedTree does more. Here is where ArborStudio differs.</h2>
-    <p class="lead">SpeedTree is the reference for game vegetation and has far more features. ArborStudio is younger and smaller, and it adds features when people ask for them.</p>
-  </header>
-  <table class="compare">
-    <thead><tr><th scope="col"><span class="sr">Aspect</span></th><th scope="col">ArborStudio</th><th scope="col">SpeedTree</th></tr></thead>
-    <tbody>
-      <tr><th scope="row">Agent access</th><td class="win">MCP server with 37 tools, over HTTP or stdio, with or without a window</td><td>No such interface</td></tr>
-      <tr><th scope="row">Price</th><td class="win">Free, no seat limits</td><td>Paid licence</td></tr>
-      <tr><th scope="row">Source</th><td class="win">MIT. Read and change the generator.</td><td>Closed</td></tr>
-      <tr><th scope="row">Features</th><td>Smaller set, grows from requests</td><td class="win">Larger and more mature</td></tr>
-    </tbody>
-  </table>
-  <p class="after"><a class="more" href="https://github.com/sandboxly/arbor-studio/issues">Missing something? Request it on GitHub →</a></p>
-</section>
+<!-- ============================================================ 04 compare -->
+<section class="section" id="compare">
+  <div class="wrap">
+    <header class="head">
+      <div>
+        <p class="label eyebrow"><span class="n">04</span>ArborStudio and SpeedTree</p>
+        <h2 class="h1">SpeedTree does more. Here is where ArborStudio differs.</h2>
+      </div>
+      <p class="lead">SpeedTree is the reference for game vegetation and has far more features. ArborStudio is younger and smaller, and it adds features when people ask for them.</p>
+    </header>
 
-<!-- ======================================================== fit -->
-<section class="wrap section fit" id="fit">
-  <div>
-    <h2 class="h2">Not for you if</h2>
-    <ul>
-      <li>you need a hand-sculpted hero tree for a cinematic,</li>
-      <li>you need SpeedTree's full feature set today,</li>
-      <li>you work in a film or VFX pipeline.</li>
-    </ul>
-    <p class="todo">[TODO: confirm this list]</p>
+    <div class="vs">
+      <table class="compare">
+        <thead><tr><th scope="col"><span class="sr">Aspect</span></th><th scope="col" class="compare__us">ArborStudio</th><th scope="col">SpeedTree</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Agent access</th><td class="compare__us win">MCP server with 35 tools, over HTTP or stdio, with or without a window</td><td>No such interface</td></tr>
+          <tr><th scope="row">Price</th><td class="compare__us win">Free, no seat limits</td><td>Paid licence</td></tr>
+          <tr><th scope="row">Source</th><td class="compare__us win">MIT. Read and change the generator.</td><td>Closed</td></tr>
+          <tr><th scope="row">Features</th><td class="compare__us">Smaller set, grows from requests</td><td class="win">Larger and more mature</td></tr>
+        </tbody>
+      </table>
+      <a class="ab-btn ab-btn--ghost vs__ask" href="https://github.com/sandboxly/arbor-studio/issues">Missing something? Request it on GitHub →</a>
+    </div>
+
+    <div class="fit">
+      <div class="ab-panel ab-panel--flush">
+        <h3 class="h3">Not for you if</h3>
+        <ul class="dash">
+          <li>you need a hand-sculpted hero tree for a cinematic,</li>
+          <li>you need SpeedTree's full feature set today,</li>
+          <li>you work in a film or VFX pipeline.</li>
+        </ul>
+        <p class="todo">[TODO: confirm this list]</p>
+      </div>
+      <div class="ab-panel ab-panel--dashed">
+        <h3 class="h3"><span class="ab-badge ab-badge--gizmo">Known</span> Rough edges in v0.1.0</h3>
+        <ul class="dash">
+          <li>The macOS build isn't notarised yet. macOS asks you once to allow it under System Settings › Privacy &amp; Security.</li>
+          <li>Variations ignore hand edits to single branches.</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="todo">[TODO: 5 to 10 real quotes from game developers about making trees, SpeedTree licensing and hand-modelled vegetation]</p>
+    <p class="todo">[TODO: founder note, 2 to 4 sentences, first person, signed with a real name]</p>
   </div>
-  <div>
-    <h2 class="h2">Rough edges in v0.1.0</h2>
-    <ul>
-      <li>The macOS build isn't notarised yet. macOS asks you once to allow it under System Settings › Privacy &amp; Security.</li>
-      <li>Variations ignore hand edits to single branches.</li>
-    </ul>
-  </div>
 </section>
 
-<section class="wrap section open">
-  <p class="todo">[TODO: 5 to 10 real quotes from game developers about making trees, SpeedTree licensing and hand-modelled vegetation]</p>
-  <p class="todo">[TODO: founder note, 2 to 4 sentences, first person, signed with a real name]</p>
-</section>
-
-<!-- ======================================================== download -->
-<section class="wrap section" id="download">
-  <header class="head">
-    <p class="label eyebrow">Download</p>
-    <h2 class="h1">v0.1.0 for macOS, Windows and Linux.</h2>
-  </header>
-  <a class="ab-btn ab-btn--primary ab-btn--lg js-download dl__cta" href="https://github.com/sandboxly/arbor-studio/releases/latest">Download v0.1.0</a>
-  <div class="dl">
-    <ul class="files">
-      <li data-os="mac"><a href="https://github.com/sandboxly/arbor-studio/releases/latest/download/ArborStudio-macos-universal.zip"><span class="files__os">macOS 11 or later</span><span class="files__name">ArborStudio-macos-universal.zip</span><span class="files__size">12.4 MB</span></a><span class="files__note">Apple silicon and Intel</span></li>
-      <li data-os="win"><a href="https://github.com/sandboxly/arbor-studio/releases/latest/download/arbor_studio-windows-x86_64.zip"><span class="files__os">Windows 10 or later</span><span class="files__name">arbor_studio-windows-x86_64.zip</span><span class="files__size">4.8 MB</span></a><span class="files__note">64-bit, no installer</span></li>
-      <li data-os="linux"><a href="https://github.com/sandboxly/arbor-studio/releases/latest/download/arbor_studio-linux-x86_64.tar.gz"><span class="files__os">Linux</span><span class="files__name">arbor_studio-linux-x86_64.tar.gz</span><span class="files__size">6.2 MB</span></a><span class="files__note">x86-64, X11 or Wayland</span></li>
-    </ul>
-    <div class="dl__side">
-      <p>Or build it yourself. You need Rust:</p>
-      <pre class="cmd"><code>git clone https://github.com/sandboxly/arbor-studio
-cd arbor-studio
-cargo build --release</code></pre>
-      <p>The help has 22 pages with pictures, from a first tree to the full parameter reference. <kbd>F1</kbd> in the app opens it. <a class="more" href="docs/">Read the docs →</a></p>
+<!-- ============================================================ 05 download -->
+<section class="section section--dl" id="download">
+  <div class="wrap">
+    <div class="dl ab-grid">
+      <div class="dl__intro">
+        <p class="label eyebrow"><span class="n">05</span>Download</p>
+        <h2 class="h1">v0.1.0 for macOS, Windows and Linux.</h2>
+        <a class="ab-btn ab-btn--primary ab-btn--lg js-download" href="https://github.com/sandboxly/arbor-studio/releases/latest">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 2v9M4 7l4 4 4-4M2.5 13.5h11"/></svg>
+          <span class="js-download-label">Download v0.1.0</span>
+        </a>
+        <p class="small">The help has 22 pages with pictures, from a first tree to the full parameter reference. <kbd>F1</kbd> in the app opens it. <a href="docs/">Read the docs →</a></p>
+      </div>
+      <div class="dl__files">
+        <ul class="files">
+          <li data-os="mac"><a href="https://github.com/sandboxly/arbor-studio/releases/latest/download/ArborStudio-macos-universal.zip"><span class="files__os">macOS 11 or later</span><span class="files__note">Apple silicon and Intel</span><span class="files__name">ArborStudio-macos-universal.zip</span><span class="files__size">12.4 MB</span></a></li>
+          <li data-os="win"><a href="https://github.com/sandboxly/arbor-studio/releases/latest/download/arbor_studio-windows-x86_64.zip"><span class="files__os">Windows 10 or later</span><span class="files__note">64-bit, no installer</span><span class="files__name">arbor_studio-windows-x86_64.zip</span><span class="files__size">4.8 MB</span></a></li>
+          <li data-os="linux"><a href="https://github.com/sandboxly/arbor-studio/releases/latest/download/arbor_studio-linux-x86_64.tar.gz"><span class="files__os">Linux</span><span class="files__note">x86-64, X11 or Wayland</span><span class="files__name">arbor_studio-linux-x86_64.tar.gz</span><span class="files__size">6.2 MB</span></a></li>
+        </ul>
+        <div class="term">
+          <div class="term__bar"><span>Or build it yourself. You need Rust:</span></div>
+<pre class="cmd"><code><span class="c-tool">$</span> git clone https://github.com/sandboxly/arbor-studio
+<span class="c-tool">$</span> cd arbor-studio
+<span class="c-tool">$</span> cargo build --release</code></pre>
+        </div>
+      </div>
     </div>
   </div>
-  <p class="notes" id="m1"><sup>1</sup> Measured with the v0.1.0 release build on an Apple M2 Max, median of 20 runs for the oak above and of 20 seeds per preset in the table, timed through the MCP server. LOD0 includes growing the skeleton and building the mesh; all 5 levels includes rendering the billboard atlas.</p>
 </section>
 
 </main>
 
 <footer class="foot">
-  <div class="wrap foot__row">
-    <span class="brand brand--sm">ArborStudio 0.1.0</span>
-    <span class="foot__fact">MIT licence. Written in Rust.</span>
-    <nav aria-label="Footer">
-      <a href="docs/">Docs</a>
-      <a href="https://github.com/sandboxly/arbor-studio">Source</a>
-      <a href="https://github.com/sandboxly/arbor-studio/issues">Issues</a>
-      <a href="https://github.com/sandboxly/arbor-studio/releases">Releases</a>
-    </nav>
+  <div class="wrap">
+    <p class="notes" id="m1"><sup>1</sup> Measured with the v0.1.0 release build on an Apple M2 Max, median of 20 runs for the oak above and of 20 seeds per preset in the table, timed through the MCP server. LOD0 includes growing the skeleton and building the mesh; all 5 levels includes rendering the billboard atlas.</p>
+    <div class="foot__row">
+      <span class="brand brand--sm">ArborStudio 0.1.0</span>
+      <span class="foot__fact">MIT licence. Written in Rust.</span>
+      <nav aria-label="Footer">
+        <a href="docs/">Docs</a>
+        <a href="https://github.com/sandboxly/arbor-studio">Source</a>
+        <a href="https://github.com/sandboxly/arbor-studio/issues">Issues</a>
+        <a href="https://github.com/sandboxly/arbor-studio/releases">Releases</a>
+      </nav>
+    </div>
   </div>
 </footer>
 
@@ -257,11 +337,22 @@ cargo build --release</code></pre>
   var size = row.querySelector(".files__size").textContent;
   var href = row.querySelector("a").getAttribute("href");
   document.querySelectorAll(".js-download").forEach(function (a) {
-    a.textContent = "Download for " + label + " (" + size + ")";
+    a.querySelector(".js-download-label").textContent = "Download for " + label + " (" + size + ")";
     a.setAttribute("href", href);
   });
   row.classList.add("is-yours");
 })();
+// Copy buttons for commands.
+document.querySelectorAll(".copy").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(btn.getAttribute("data-copy")).then(function () {
+      var s = btn.querySelector(".copy__state");
+      s.textContent = "Copied";
+      setTimeout(function () { s.textContent = "Copy"; }, 1600);
+    });
+  });
+});
 </script>
 </body>
 </html>
