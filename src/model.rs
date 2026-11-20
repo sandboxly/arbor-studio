@@ -724,17 +724,77 @@ pub struct Document {
     pub growth: Growth,
 }
 
-/// One named moment of the growth animation (0 = nothing above ground, 1 = the mature tree).
+/// One moment of the growth animation (0 = nothing above ground, 1 = the mature tree), with an
+/// optional name and optional shape settings per generator.
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct GrowthStage {
+    /// Optional; unnamed stages are called "Stage 1", "Stage 2", ... by their place.
     pub name: String,
     pub at: f32,
+    /// How far each generator's parts are at this stage, where set; the rest follow the
+    /// automatic growth.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub generators: Vec<StageShape>,
 }
 
 impl Default for GrowthStage {
     fn default() -> Self {
-        GrowthStage { name: "Stage".into(), at: 1.0 }
+        GrowthStage { name: String::new(), at: 1.0, generators: vec![] }
+    }
+}
+
+impl GrowthStage {
+    pub fn named(name: &str, at: f32) -> Self {
+        GrowthStage { name: name.into(), at, generators: vec![] }
+    }
+
+    /// The settings for generator `gen` at this stage, if any.
+    pub fn shape(&self, gen: u32) -> Option<&StageShape> {
+        self.generators.iter().find(|s| s.gen == gen)
+    }
+
+    /// The settings for generator `gen`, added if missing.
+    pub fn shape_mut(&mut self, gen: u32) -> &mut StageShape {
+        if let Some(i) = self.generators.iter().position(|s| s.gen == gen) {
+            return &mut self.generators[i];
+        }
+        self.generators.push(StageShape { gen, ..Default::default() });
+        self.generators.last_mut().unwrap()
+    }
+}
+
+/// The shape of one generator's parts at a growth stage, relative to the mature tree (1 = as
+/// designed). Unset values follow the automatic growth.
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Default)]
+#[serde(default)]
+pub struct StageShape {
+    /// Generator id.
+    pub gen: u32,
+    /// Stems: how far they have grown out, as a share of their total mature length (0..1).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub length: Option<f32>,
+    /// Stems: thickness relative to what the automatic growth gives at this stage (0.05..2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thickness: Option<f32>,
+    /// Leaves: share of the leaves that are out (0..1).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub leaves: Option<f32>,
+    /// Leaves: size relative to what the automatic growth gives at this stage (0.05..2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub leaf_size: Option<f32>,
+}
+
+impl StageShape {
+    pub fn is_empty(&self) -> bool {
+        self.length.is_none() && self.thickness.is_none() && self.leaves.is_none() && self.leaf_size.is_none()
+    }
+
+    pub fn clamp(&mut self) {
+        self.length = self.length.map(|v| v.clamp(0.0, 1.0));
+        self.thickness = self.thickness.map(|v| v.clamp(0.05, 2.0));
+        self.leaves = self.leaves.map(|v| v.clamp(0.0, 1.0));
+        self.leaf_size = self.leaf_size.map(|v| v.clamp(0.05, 2.0));
     }
 }
 
@@ -762,10 +822,10 @@ impl Default for Growth {
         Growth {
             export: false,
             stages: vec![
-                GrowthStage { name: "Sprout".into(), at: 0.12 },
-                GrowthStage { name: "Sapling".into(), at: 0.38 },
-                GrowthStage { name: "Young".into(), at: 0.68 },
-                GrowthStage { name: "Mature".into(), at: 1.0 },
+                GrowthStage::named("Sprout", 0.12),
+                GrowthStage::named("Sapling", 0.38),
+                GrowthStage::named("Young", 0.68),
+                GrowthStage::named("Mature", 1.0),
             ],
             duration: 12.0,
             keyframes: 16,
@@ -777,14 +837,28 @@ impl Default for Growth {
 impl Growth {
     pub const MAX_STAGES: usize = 8;
 
+    /// The stage's name, or "Stage <n>" (by its place in growing order) when it has none.
+    pub fn label(&self, i: usize) -> String {
+        match self.stages.get(i) {
+            Some(st) if !st.name.trim().is_empty() => st.name.trim().to_string(),
+            _ => format!("Stage {}", i + 1),
+        }
+    }
+
+    /// Index of the stage at growth `g`, if one sits there.
+    pub fn stage_at(&self, g: f32) -> Option<usize> {
+        self.stages.iter().position(|s| (s.at - g).abs() < 0.002)
+    }
+
     pub fn clamp(&mut self) {
         self.stages.truncate(Self::MAX_STAGES);
         for st in &mut self.stages {
             st.at = st.at.clamp(0.01, 1.0);
             st.name = st.name.trim().chars().take(40).collect();
-            if st.name.is_empty() {
-                st.name = "Stage".into();
+            for g in &mut st.generators {
+                g.clamp();
             }
+            st.generators.retain(|g| !g.is_empty());
         }
         self.stages.sort_by(|a, b| a.at.total_cmp(&b.at));
         self.duration = self.duration.clamp(0.5, 600.0);
@@ -1159,6 +1233,10 @@ impl Document {
     pub fn clamp_all(&mut self) {
         self.settings.clamp();
         self.growth.clamp();
+        let ids: Vec<u32> = self.generators.iter().map(|g| g.id).collect();
+        for st in &mut self.growth.stages {
+            st.generators.retain(|g| ids.contains(&g.gen));
+        }
         self.pruning.clamp();
         self.tidy_nodes();
         for f in &mut self.forces {
@@ -1633,7 +1711,11 @@ pub const SETTINGS_REFERENCE: &[(&str, &str, &str)] = &[
     ("budget.levels", "[LOD0, LOD1, LOD2, LOD3], 0..5000000", "Most triangles per level when set per level; 0 = no limit for that level."),
     ("budget.fit", "on/off", "On: a level over its budget gets fewer sides, rings and (larger) leaves until it fits. Off: levels keep their usual detail and the ones over budget are reported."),
     ("growth.export", "on/off", "Exports carry the growth animation: GLB gets morph targets with a Grow clip and one clip per stage, OBJ one file per stage, JSON the growth timing of every stem and leaf."),
-    ("growth.stages", "[{name, at 0.01..1}], up to 8", "Named moments of the growth (0 = nothing above ground, 1 = the mature tree), for example Sprout 0.12, Sapling 0.38, Young 0.68, Mature 1."),
+    ("growth.stages", "[{name, at 0.01..1, generators}], up to 8", "Moments of the growth (0 = nothing above ground, 1 = the mature tree), for example Sprout 0.12, Sapling 0.38, Young 0.68, Mature 1. Names are optional; unnamed stages are called Stage 1, Stage 2, ... by their place."),
+    ("growth.stages.length", "0..1 or auto", "Per stage and stem generator: share of the stems' total mature length grown out at this stage. Auto follows the automatic growth."),
+    ("growth.stages.thickness", "0.05..2 (1 = auto)", "Per stage and stem generator: thickness relative to the automatic growth. A branch never gets thicker than the stem it comes out of."),
+    ("growth.stages.leaves", "0..1 or auto", "Per stage and Leaves generator: share of the leaves that are out at this stage."),
+    ("growth.stages.leaf_size", "0.05..2 (1 = auto)", "Per stage and Leaves generator: leaf size relative to the automatic growth."),
     ("growth.duration", "0.5..600 s", "Seconds the whole growth animation takes."),
     ("growth.keyframes", "4..48", "Shapes the animation is sampled at (morph targets). More is smoother and makes larger files."),
     ("growth.seedling_leaves", "on/off", "A few leaves on the young shoot until the first side branches carry their own."),

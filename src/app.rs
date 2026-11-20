@@ -86,6 +86,8 @@ pub struct ArborApp {
     pending_atlas: Option<std::sync::Arc<image::RgbaImage>>,
     /// Growth preview: moves the shown mesh's vertices (made when first needed).
     grower: Option<crate::growth::Grower>,
+    /// How far each generator is along the automatic growth, for the Growth section.
+    growth_auto: Option<crate::growth::AutoTable>,
     /// The shown mesh at the previewed growth.
     grown: Option<(f32, Mesh)>,
 }
@@ -174,6 +176,7 @@ impl ArborApp {
             bb_tex: None,
             pending_atlas: None,
             grower: None,
+            growth_auto: None,
             grown: None,
         }
     }
@@ -198,6 +201,7 @@ impl ArborApp {
             self.built = Some((sh.doc.clone(), lod));
             self.grower = None;
             self.grown = None;
+            self.growth_auto = None;
         }
         if sh.frame_camera {
             sh.frame_camera = false;
@@ -739,7 +743,10 @@ impl eframe::App for ArborApp {
                 if sh.view.node_mode {
                     node_ui(ui, &mut sh, &self.skeleton);
                 }
-                properties_ui(ui, &mut sh, &self.stats, &mut self.editing_material);
+                if self.growth_auto.is_none() {
+                    self.growth_auto = Some(crate::growth::AutoTable::new(&self.skeleton, &crate::growth::Timing::new(&self.skeleton)));
+                }
+                properties_ui(ui, &mut sh, &self.stats, &mut self.editing_material, self.growth_auto.as_ref());
                 if let Some(g) = ui.data_mut(|d| d.remove_temp::<u32>(egui::Id::new("pick_leaf_mesh"))) {
                     actions.push(Action::PickLeafMesh(g));
                 }
@@ -1042,7 +1049,7 @@ fn add_buttons(ui: &mut Ui, sh: &mut Shared) {
     }
 }
 
-fn properties_ui(ui: &mut Ui, sh: &mut Shared, stats: &Stats, editing_material: &mut Option<u32>) {
+fn properties_ui(ui: &mut Ui, sh: &mut Shared, stats: &Stats, editing_material: &mut Option<u32>, growth_auto: Option<&crate::growth::AutoTable>) {
     section_title(ui, "PROPERTIES");
     let mats: Vec<(u32, String)> = sh.doc.materials.iter().map(|m| (m.id, m.name.clone())).collect();
     if let Some(id) = sh.selected {
@@ -1335,7 +1342,7 @@ fn properties_ui(ui: &mut Ui, sh: &mut Shared, stats: &Stats, editing_material: 
         ui.add_space(6.0);
         budget_ui(ui, sh);
     });
-    growth_ui(ui, sh);
+    growth_ui(ui, sh, growth_auto);
     // room below the last section, so its last rows scroll fully into view
     ui.add_space(16.0);
     sh.doc.settings.clamp();
@@ -1358,12 +1365,12 @@ fn growth_label(g: &crate::model::Growth, at: f32) -> String {
     if at >= 1.0 {
         return String::new();
     }
-    let stage = g.stages.iter().find(|s| (s.at - at).abs() < 0.002).map(|s| format!(" ({})", s.name)).unwrap_or_default();
+    let stage = g.stage_at(at).map(|i| format!(" ({})", g.label(i))).unwrap_or_default();
     format!(" · Growth {:.0}%{stage}", at * 100.0)
 }
 
-/// Growth animation: preview, stages and export settings.
-fn growth_ui(ui: &mut Ui, sh: &mut Shared) {
+/// Growth animation: preview, stages with their shape per generator, and export settings.
+fn growth_ui(ui: &mut Ui, sh: &mut Shared, auto: Option<&crate::growth::AutoTable>) {
     egui::CollapsingHeader::new("Growth").default_open(false).open(force_open("Growth")).show(ui, |ui| {
         ui.horizontal(|ui| {
             let label = if sh.view.growth_playing { "⏸ Pause" } else { "▶ Grow" };
@@ -1375,53 +1382,57 @@ fn growth_ui(ui: &mut Ui, sh: &mut Shared) {
             }
             ui.label(RichText::new(format!("{:.0}%", sh.view.growth * 100.0)).color(HEADER));
         });
-        ui.horizontal_wrapped(|ui| {
-            for st in &sh.doc.growth.stages {
-                let on = (sh.view.growth - st.at).abs() < 0.002;
-                if ui.selectable_label(on, &st.name).on_hover_text(format!("Show the tree at {} ({:.0}% of the growth)", st.name, st.at * 100.0)).clicked() {
-                    sh.view.growth = st.at;
-                    sh.view.growth_playing = false;
-                }
-            }
-        });
-        ui.add_space(6.0);
+        ui.add_space(4.0);
         section_title(ui, "Stages");
-        let g = &mut sh.doc.growth;
-        let mut remove = None;
+        // the stage being edited is the one the preview stands on
         let mut jump = None;
-        egui::Grid::new("growth_stages").num_columns(3).show(ui, |ui| {
-            let n = g.stages.len();
-            for (i, st) in g.stages.iter_mut().enumerate() {
-                ui.add_sized([86.0, 20.0], egui::TextEdit::singleline(&mut st.name)).on_hover_text(help_for("growth.stages"));
-                let r = ui.add(egui::Slider::new(&mut st.at, 0.01..=1.0).fixed_decimals(2)).on_hover_text(help_for("growth.stages"));
-                if r.changed() {
-                    jump = Some(st.at);
+        let mut add = false;
+        {
+            let g = &sh.doc.growth;
+            let sel = g.stage_at(sh.view.growth);
+            ui.horizontal_wrapped(|ui| {
+                for i in 0..g.stages.len() {
+                    let st = &g.stages[i];
+                    let label = g.label(i);
+                    if ui.selectable_label(sel == Some(i), &label).on_hover_text(format!("Show and edit the tree at {label} ({:.0}% of the growth)", st.at * 100.0)).clicked() {
+                        jump = Some(st.at);
+                    }
                 }
-                if n > 1 && ui.small_button("🗑").on_hover_text("Remove this stage").clicked() {
-                    remove = Some(i);
+                if g.stages.len() < crate::model::Growth::MAX_STAGES && ui.small_button("+ Stage").on_hover_text("Add a stage at the growth shown in the viewport (or in the largest gap between stages)").clicked() {
+                    add = true;
                 }
-                ui.end_row();
-            }
-        });
-        if let Some(i) = remove {
-            g.stages.remove(i);
+            });
+        }
+        if add {
+            let g = &mut sh.doc.growth;
+            let here = sh.view.growth;
+            let at = if g.stage_at(here).is_none() && here >= 0.01 {
+                here
+            } else {
+                let mut pts: Vec<f32> = g.stages.iter().map(|s| s.at).collect();
+                pts.push(0.0);
+                pts.push(1.0);
+                pts.sort_by(f32::total_cmp);
+                let w = pts.windows(2).max_by(|a, b| (a[1] - a[0]).total_cmp(&(b[1] - b[0]))).unwrap();
+                ((w[0] + w[1]) * 0.5 * 100.0).round() / 100.0
+            };
+            g.stages.push(crate::model::GrowthStage { name: String::new(), at, generators: vec![] });
+            g.stages.sort_by(|a, b| a.at.total_cmp(&b.at));
+            jump = Some(at);
         }
         if let Some(at) = jump {
             sh.view.growth = at;
             sh.view.growth_playing = false;
         }
-        let g = &mut sh.doc.growth;
-        if g.stages.len() < crate::model::Growth::MAX_STAGES && ui.small_button("+ Stage").on_hover_text("Add a stage halfway between the last two").clicked() {
-            let n = g.stages.len();
-            let at = match n {
-                0 => 1.0,
-                1 => g.stages[0].at * 0.5,
-                _ => 0.5 * (g.stages[n - 2].at + g.stages[n - 1].at),
-            };
-            g.stages.push(crate::model::GrowthStage { name: format!("Stage {}", n + 1), at });
-            g.stages.sort_by(|a, b| a.at.total_cmp(&b.at));
+        let sel = sh.doc.growth.stage_at(sh.view.growth);
+        match sel {
+            None => {
+                ui.label(RichText::new("Pick a stage to edit it, or move the preview and click + Stage to add one there.").size(11.0).color(HEADER));
+            }
+            Some(i) => stage_ui(ui, sh, i, auto),
         }
         ui.add_space(6.0);
+        let g = &mut sh.doc.growth;
         egui::Grid::new("growth_settings").num_columns(2).show(ui, |ui| {
             prow(ui, "Duration", "growth.duration", |ui| ui.add(egui::Slider::new(&mut g.duration, 0.5..=120.0).suffix(" s").logarithmic(true)));
             prow(ui, "Keyframes", "growth.keyframes", |ui| ui.add(egui::Slider::new(&mut g.keyframes, 4..=48)));
@@ -1440,6 +1451,108 @@ fn growth_ui(ui: &mut Ui, sh: &mut Shared) {
     });
 }
 
+/// One growth stage: its name, place and the shape of every generator's parts there.
+fn stage_ui(ui: &mut Ui, sh: &mut Shared, i: usize, auto: Option<&crate::growth::AutoTable>) {
+    let order = sh.doc.ordered();
+    let gens: Vec<(u32, usize, String, GenKind)> = order
+        .iter()
+        .filter_map(|&(id, depth)| sh.doc.get(id).map(|g| (id, depth, g.name.clone(), g.kind)))
+        .collect();
+    let g = &mut sh.doc.growth;
+    let n = g.stages.len();
+    let hint = format!("Stage {}", i + 1);
+    let mut remove = false;
+    let mut moved = None;
+    ui.add_space(2.0);
+    egui::Frame::group(ui.style()).inner_margin(6.0).show(ui, |ui| {
+        egui::Grid::new("growth_stage").num_columns(2).show(ui, |ui| {
+            ui.label("Name").on_hover_text(help_for("growth.stages"));
+            ui.horizontal(|ui| {
+                ui.add_sized([120.0, 20.0], egui::TextEdit::singleline(&mut g.stages[i].name).hint_text(hint)).on_hover_text("Optional; unnamed stages are called by their place");
+                if n > 1 && ui.small_button("🗑 Remove").on_hover_text("Remove this stage").clicked() {
+                    remove = true;
+                }
+            });
+            ui.end_row();
+            ui.label("At").on_hover_text(help_for("growth.stages"));
+            let st = &mut g.stages[i];
+            if ui.add(egui::Slider::new(&mut st.at, 0.01..=1.0).fixed_decimals(2)).on_hover_text("Where in the growth this stage is: 0 = nothing above ground, 1 = the mature tree").changed() {
+                moved = Some(st.at);
+            }
+            ui.end_row();
+        });
+        let at = g.stages[i].at;
+        if at >= 0.999 {
+            ui.label(RichText::new("This stage is the mature tree, exactly as designed. Change it with the generator settings above.").size(11.0).color(HEADER));
+            return;
+        }
+        ui.add_space(4.0);
+        ui.label(RichText::new("Shape at this stage").strong()).on_hover_text("How far each generator's parts are at this stage. Values marked auto follow the automatic growth; drag a slider to set your own, ↺ goes back to auto.");
+        egui::Grid::new("growth_stage_shape").num_columns(4).spacing([6.0, 3.0]).show(ui, |ui| {
+            for (id, depth, name, kind) in &gens {
+                let leaves = *kind == GenKind::Leaves;
+                let automatic = |gg: f32| auto.and_then(|a| if leaves { a.leaves(*id, gg) } else { a.length(*id, gg) });
+                let Some(auto_amount) = automatic(at).or(if auto.is_none() { Some(at) } else { None }) else { continue };
+                let st = &mut g.stages[i];
+                let cur = st.shape(*id).cloned().unwrap_or_default();
+                // (label, help key, set value, automatic value, range, as percent)
+                let rows: [(&str, &str, Option<f32>, f32, std::ops::RangeInclusive<f32>, bool); 2] = if leaves {
+                    [("Leaves", "growth.stages.leaves", cur.leaves, auto_amount, 0.0..=1.0, true), ("Leaf size", "growth.stages.leaf_size", cur.leaf_size, 1.0, 0.05..=2.0, false)]
+                } else {
+                    [("Length", "growth.stages.length", cur.length, auto_amount, 0.0..=1.0, true), ("Thickness", "growth.stages.thickness", cur.thickness, 1.0, 0.05..=2.0, false)]
+                };
+                for (r, (label, key, set, auto_v, range, pct)) in rows.into_iter().enumerate() {
+                    if r == 0 {
+                        ui.label(RichText::new(format!("{}{}", "  ".repeat(*depth), name)).color(kind_color(*kind)));
+                    } else {
+                        ui.label("");
+                    }
+                    ui.label(label).on_hover_text(help_for(key));
+                    let mut v = set.unwrap_or(auto_v);
+                    let slider = egui::Slider::new(&mut v, range).custom_formatter(move |x, _| if pct { format!("{:.0}%", x * 100.0) } else { format!("×{x:.2}") });
+                    let resp = ui.scope(|ui| {
+                        if set.is_none() {
+                            ui.visuals_mut().override_text_color = Some(HEADER);
+                        }
+                        ui.add(slider)
+                    }).inner.on_hover_text(help_for(key));
+                    let mut new = None;
+                    if resp.changed() {
+                        new = Some(Some(v));
+                    }
+                    if set.is_some() {
+                        if ui.small_button("↺").on_hover_text("Back to the automatic growth").clicked() {
+                            new = Some(None);
+                        }
+                    } else {
+                        ui.label(RichText::new("auto").size(11.0).color(HEADER));
+                    }
+                    if let Some(nv) = new {
+                        let sh = st.shape_mut(*id);
+                        match (leaves, r) {
+                            (false, 0) => sh.length = nv,
+                            (false, _) => sh.thickness = nv,
+                            (true, 0) => sh.leaves = nv,
+                            (true, _) => sh.leaf_size = nv,
+                        }
+                        sh.clamp();
+                        if sh.is_empty() {
+                            st.generators.retain(|s| s.gen != *id);
+                        }
+                    }
+                    ui.end_row();
+                }
+            }
+        });
+    });
+    if remove {
+        g.stages.remove(i);
+    } else if let Some(at) = moved {
+        g.stages.sort_by(|a, b| a.at.total_cmp(&b.at));
+        sh.view.growth = at;
+        sh.view.growth_playing = false;
+    }
+}
 /// Triangle budget controls and the check of all four mesh levels.
 fn budget_ui(ui: &mut Ui, sh: &mut Shared) {
     let b = &mut sh.doc.budget;

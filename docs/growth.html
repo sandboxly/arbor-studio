@@ -11,7 +11,7 @@
 <nav id="nav"></nav>
 <main>
 <h1>Growth animation</h1>
-<p class="lead">A tree can grow in your game: from a sprout to the mature tree you designed, through named stages such as Sprout, Sapling, Young and Mature. ArborStudio animates the growth on the tree's own mesh and exports it as morph targets with one animation clip per stage, which Godot, Unity and Unreal play without a plugin.</p>
+<p class="lead">A tree can grow in your game: from a sprout to the mature tree you designed, through stages such as Sprout, Sapling, Young and Mature. You choose how many stages there are, where they sit and, per stage, how long, thick and leafy each part of the tree is. ArborStudio animates the growth on the tree's own mesh and exports it as morph targets with one animation clip per stage, which Godot, Unity and Unreal play without a plugin.</p>
 
 <div class="gallery wide">
 <figure><img src="images/growth-012.jpg" alt="The oak preset as a sprout: a short shoot with a few leaves"><figcaption>Sprout (0.12)</figcaption></figure>
@@ -36,12 +36,30 @@
 
 <h2>Previewing the growth</h2>
 <p>Click <strong>▶ Grow</strong> in the toolbar to play the growth in the viewport. The <strong>Growth</strong> section at the end of the Properties panel has the same button, a slider to scrub through the growth, and one button per stage to jump to it. The viewport header shows the point of the growth and the stage, for example <em>Growth 38% (Sapling)</em>. Wind plays during the growth too.</p>
-<figure><img src="images/ui-growth.jpg" alt="The Growth section: Grow button and slider at 38 percent, stage buttons Sprout, Sapling, Young and Mature, a row per stage with its name, a slider and a delete button, then Duration 12 seconds, Keyframes 16, Seedling leaves on and the Export checkbox"><figcaption>The Growth section, showing the Sapling stage.</figcaption></figure>
+<figure><img src="images/ui-growth.jpg" alt="The Growth section: Grow button and slider at 38 percent, stage buttons Sprout, Sapling, Young, Mature and + Stage. Below, the Sapling stage: its name, a Remove button, its place at 0.38, and Shape at this stage with Length and Thickness sliders for Trunk, Roots, Side roots, Main branches and Twigs, and Leaves and Leaf size for Leaves. Trunk length is set to 40 percent, leaves to 50 percent and leaf size to 0.8; the rest show auto. Then Duration, Keyframes, Seedling leaves and Export."><figcaption>The Growth section with the Sapling stage selected: a taller trunk and half the leaves out, the rest automatic.</figcaption></figure>
+
+<h2>Stages</h2>
+<p>Click a stage's button to show the tree there and edit the stage below the buttons:</p>
+<ul>
+<li><strong>+ Stage</strong> adds a stage where the preview slider stands (or in the middle of the largest gap when a stage is already there). Move the slider first to add a stage at a chosen point. Up to 8 stages.</li>
+<li><strong>Name</strong> is optional. A stage without a name is called by its place, for example <em>Stage 2</em>; that label is also its clip and file name in exports.</li>
+<li><strong>At</strong> moves the stage along the growth; <strong>Remove</strong> deletes it.</li>
+</ul>
+<h3>Shape at this stage</h3>
+<p>Each stage lists the generators of your tree, like the Generation panel. Every value starts as <em>auto</em>: what the automatic growth gives there, shown greyed. Drag a slider to set your own value; <strong>↺</strong> returns it to auto.</p>
+<table>
+<tr><th>Control</th><th>For</th><th>Range</th><th>Meaning</th></tr>
+<tr><td>Length</td><td>Trunk, Branches, Roots</td><td>0–100%</td><td>How far the stems of this generator have grown out, as a share of their total mature length. 40% on the trunk at the Sapling stage makes a tall, slender sapling.</td></tr>
+<tr><td>Thickness</td><td>Trunk, Branches, Roots</td><td>×0.05–×2</td><td>Thickness relative to the automatic growth at this stage. A branch never gets thicker than the stem it grows out of.</td></tr>
+<tr><td>Leaves</td><td>Leaves</td><td>0–100%</td><td>The share of the leaves that are out. 0% gives bare branches at this stage.</td></tr>
+<tr><td>Leaf size</td><td>Leaves</td><td>×0.05–×2</td><td>Leaf size relative to the automatic growth at this stage.</td></tr>
+</table>
+<p>Between stages the tree moves smoothly from one shape to the next. The stage at 1 is always the mature tree as you designed it, so it has no shape controls. Seedling leaves are not affected by the leaf controls.</p>
 
 <h2>Settings</h2>
 <table>
 <tr><th>Setting</th><th>Range</th><th>Meaning</th></tr>
-<tr><td>Stages</td><td>up to 8, each 0.01–1</td><td>Named moments of the growth, in growing order. Moving a stage's slider shows the tree there. The last stage is normally the mature tree at 1.</td></tr>
+<tr><td>Stages</td><td>up to 8, each 0.01–1</td><td>Moments of the growth, in growing order, each with an optional name and its shape per generator (see Stages above). The last stage is normally the mature tree at 1.</td></tr>
 <tr><td>Duration</td><td>0.5–600 s</td><td>How long the whole growth takes in the exported animation and the preview.</td></tr>
 <tr><td>Keyframes</td><td>4–48</td><td>How many shapes the growth is sampled at. Every stage always gets one. More keyframes play more smoothly and make larger files.</td></tr>
 <tr><td>Seedling leaves</td><td>on, off</td><td>A few leaves on the young shoot until the side branches carry their own.</td></tr>
@@ -70,8 +88,10 @@
 <p>Regrowing a tree (after it was cut down, for example) is the same animation played again from the start.</p>
 
 <h2>Growth for agents</h2>
-<p><code>set_growth</code> changes the stages, duration, keyframes, seedling leaves and the export default, and returns the keyframes and the clips with their lengths in seconds. <code>render_preview</code> and <code>set_view</code> take <code>growth</code> (0–1) or <code>growth_stage</code> (a stage name); <code>set_view</code> also takes <code>growth_playing</code>. <code>export_tree</code> and <code>export_variations</code> take <code>include_growth</code>.</p>
-<pre><code>set_growth {"stages": [{"name": "Sprout", "at": 0.1}, {"name": "Sapling", "at": 0.35}, {"name": "Grown", "at": 1}], "duration": 20}
+<p><code>set_growth</code> changes the stages (with their shape per generator: <code>length</code>, <code>thickness</code>, <code>leaves</code>, <code>leaf_size</code>, or null for auto), duration, keyframes, seedling leaves and the export default. It returns every stage with each generator's value there (set or automatic), the keyframes and the clips with their lengths in seconds. <code>render_preview</code> and <code>set_view</code> take <code>growth</code> (0–1) or <code>growth_stage</code> (a stage name or label such as <em>Stage 2</em>); <code>set_view</code> also takes <code>growth_playing</code>. <code>export_tree</code> and <code>export_variations</code> take <code>include_growth</code>.</p>
+<pre><code>set_growth {"stages": [{"name": "Sprout", "at": 0.1},
+  {"name": "Sapling", "at": 0.35, "generators": [{"id": 1, "length": 0.4}, {"id": 6, "leaves": 0.5}]},
+  {"at": 0.7}, {"name": "Grown", "at": 1}], "duration": 20}
 render_preview {"growth_stage": "Sapling"}
 export_tree {"path": "/path/to/Assets/oak.glb", "include_lods": true, "include_growth": true}</code></pre>
 </main>
