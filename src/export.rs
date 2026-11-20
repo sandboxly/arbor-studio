@@ -6,7 +6,7 @@
 //! Wind data: GLB stores per-vertex sway weights in TEXCOORD_1 (UV2):
 //! u = branch sway (0 at the ground .. 1 at crown tips), v = leaf flutter (0..1).
 
-use crate::grow::{build_mesh, grow, Mesh, Stats};
+use crate::grow::{grow, Mesh, Stats};
 use crate::model::Document;
 use serde_json::json;
 use std::io::Write;
@@ -36,6 +36,16 @@ impl Format {
 pub struct ExportResult {
     pub files: Vec<PathBuf>,
     pub lods: Vec<Stats>,
+    /// Each exported mesh level against its triangle budget.
+    pub budget: Vec<crate::budget::LevelFit>,
+}
+
+impl ExportResult {
+    /// Levels that went out over their triangle budget, as one sentence (None: all fit).
+    pub fn budget_warning(&self, fitting: bool) -> Option<String> {
+        let over: Vec<String> = self.budget.iter().filter(|f| f.over).map(|f| f.message(fitting)).collect();
+        (!over.is_empty()).then(|| format!("Over the triangle budget: {}", over.join(" ")))
+    }
 }
 
 fn safe_name(s: &str) -> String {
@@ -64,10 +74,13 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
     let levels: Vec<u32> = if with_lods { vec![0, 1, 2, 3] } else { vec![0] };
     let mut meshes = Vec::new();
     let mut stats = Vec::new();
+    let mut fits = Vec::new();
+    // every level is reduced from the same full tree, and fitted to its triangle budget
+    let full = grow(doc, 0);
     for &l in &levels {
-        let sk = grow(doc, l);
-        let m = build_mesh(doc, &sk, l);
+        let (sk, m, fit) = crate::budget::fit_level(doc, &full, l);
         stats.push(m.stats(&sk));
+        fits.push(fit);
         meshes.push((l, m, sk));
     }
     let name = safe_name(&doc.name);
@@ -116,12 +129,12 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
             vec![path.to_path_buf()]
         }
     };
-    Ok(ExportResult { files, lods: stats })
+    Ok(ExportResult { files, lods: stats, budget: fits })
 }
 
 /// Export `count` individuals of the same species (seeds `first_seed`, `first_seed + 1`, ...)
 /// into `dir` as `<tree>_v01.<ext>`, `<tree>_v02.<ext>`, ... Mesh names carry the same suffix.
-pub fn export_variations(doc: &Document, dir: &Path, count: u32, first_seed: u32, format: Format, with_lods: bool, with_billboard: bool) -> Result<Vec<(u32, Vec<PathBuf>)>, String> {
+pub fn export_variations(doc: &Document, dir: &Path, count: u32, first_seed: u32, format: Format, with_lods: bool, with_billboard: bool) -> Result<Vec<(u32, Vec<PathBuf>, Option<String>)>, String> {
     let count = count.clamp(1, 64);
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create folder {}: {e}", dir.display()))?;
     let ext = match format {
@@ -139,7 +152,8 @@ pub fn export_variations(doc: &Document, dir: &Path, count: u32, first_seed: u32
         d.name = format!("{base}_v{:02}", i + 1);
         let path = dir.join(format!("{}.{ext}", d.name));
         let r = export(&d, &path, format, with_lods, with_billboard)?;
-        out.push((d.settings.seed, r.files));
+        let warning = if d.budget.enabled { r.budget_warning(d.budget.fit) } else { None };
+        out.push((d.settings.seed, r.files, warning));
     }
     Ok(out)
 }

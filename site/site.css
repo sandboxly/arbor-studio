@@ -101,6 +101,7 @@ sup a { text-decoration: none; font: 500 11px/1 var(--font-mono); }
 .facts { display: grid; gap: var(--space-2); }
 .facts dt { font: var(--text-label); letter-spacing: .08em; text-transform: uppercase; color: var(--forest-300); margin-top: var(--space-3); }
 .facts dt:first-child { margin-top: 0; }
+.facts dt .ab-badge { margin-left: 6px; height: 18px; font-size: 10px; vertical-align: 1px; }
 .facts dd { font: var(--text-body-sm); color: var(--ink-200); }
 
 /* controls: a real panel screenshot next to text */

@@ -60,7 +60,7 @@ The window's **Agent → Connect a coding agent…** shows these with copy butto
 
 get_tree, get_parameter_reference, list_presets, load_preset, new_tree, add_generator, update_generator,
 remove_generator, set_curve, list_nodes, edit_node, clear_node_edits, add_force, update_force, remove_force, set_pruning,
-set_collision, list_materials, add_material, update_material, remove_material, assign_material, update_settings, randomize_seed, select_generator, set_view, get_stats, render_preview,
+set_collision, set_triangle_budget, check_triangle_budget, list_materials, add_material, update_material, remove_material, assign_material, update_settings, randomize_seed, select_generator, set_view, get_stats, render_preview,
 capture_window, export_tree, export_variations, save_project, open_project, undo, redo.
 
 ## Releases (maintainers)

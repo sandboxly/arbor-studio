@@ -6,10 +6,10 @@
 <title>ArborStudio: game tree editor with an MCP server</title>
 <meta name="description" content="Desktop editor for game-ready trees. GLB or OBJ with four LODs, a billboard and per-vertex wind weights. Every editor operation is an MCP tool, so your agent can grow the variants. Free, MIT.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="ArborStudio: game-ready trees your agent can grow too">
-<meta property="og:description" content="GLB and OBJ with four LODs, a billboard and wind weights. 35 MCP tools. Free and open source, MIT.">
+<meta property="og:title" content="ArborStudio: game-ready trees, ready for your favorite AI agent">
+<meta property="og:description" content="GLB and OBJ with four LODs, a billboard and wind weights. 37 MCP tools. Free and open source, MIT.">
 <meta property="og:image" content="https://sandboxly.github.io/arbor-studio/images/og.png">
-<meta property="og:image:alt" content="ArborStudio v0.1.0: Game-ready trees. Your agent can grow them too. Next to the text, a hand-authored oak in the editor's viewport.">
+<meta property="og:image:alt" content="ArborStudio v0.1.0: Game-ready trees. Ready for your favorite AI agent. Next to the text, a hand-authored oak in the editor's viewport.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="docs/images/app-icon.png">
 <link rel="stylesheet" href="site.css">
@@ -36,7 +36,7 @@
 <section class="hero">
   <div class="hero__text">
     <p class="label eyebrow">Tree editor for games · v0.1.0</p>
-    <h1 class="display">Game-ready trees. Your agent can grow them too.</h1>
+    <h1 class="display">Game-ready trees. Ready for your favorite AI agent.</h1>
     <p class="sub">ArborStudio is a desktop editor that grows trees from trunk, branch, root and leaf generators and exports them as GLB or OBJ with four LODs, a billboard and wind weights. Every operation in the editor is also an MCP tool, so Claude Code or another MCP client can make the twelve variants you need while you do something else.</p>
     <p class="for">For game developers and environment artists who need many distinct trees and would rather script them than click out each one.</p>
     <div class="cta">
@@ -124,6 +124,8 @@
       <dd>Colour textures, normal maps and alpha-cutout leaf cards.</dd>
       <dt>Formats</dt>
       <dd>GLB, OBJ with MTL, or JSON with every stem as points and radii for your own tools. Meshes are named <code>Oak_LOD0</code> to <code>Oak_LOD4</code>.</dd>
+      <dt>Triangle budgets <span class="ab-badge ab-badge--gizmo">Next release</span></dt>
+      <dd>Enter one maximum and LOD1 to LOD3 get a half, a quarter and an eighth of it, or set each level. A level over budget loses sides, rings and leaves until it fits. If it can't, it is flagged in amber, and <code>check_triangle_budget</code> tells your agent.</dd>
       <dt>Collision</dt>
       <dd>Convex hulls, named <code>UCX_</code> for Unreal or <code>-convcolonly</code> for Godot if you pick it.</dd>
       <dt>Engines</dt>
@@ -172,7 +174,7 @@
   <table class="compare">
     <thead><tr><th scope="col"><span class="sr">Aspect</span></th><th scope="col">ArborStudio</th><th scope="col">SpeedTree</th></tr></thead>
     <tbody>
-      <tr><th scope="row">Agent access</th><td class="win">MCP server with 35 tools, over HTTP or stdio, with or without a window</td><td>No such interface</td></tr>
+      <tr><th scope="row">Agent access</th><td class="win">MCP server with 37 tools, over HTTP or stdio, with or without a window</td><td>No such interface</td></tr>
       <tr><th scope="row">Price</th><td class="win">Free, no seat limits</td><td>Paid licence</td></tr>
       <tr><th scope="row">Source</th><td class="win">MIT. Read and change the generator.</td><td>Closed</td></tr>
       <tr><th scope="row">Features</th><td>Smaller set, grows from requests</td><td class="win">Larger and more mature</td></tr>

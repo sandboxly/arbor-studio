@@ -15,6 +15,8 @@ const ACCENT: Color32 = Color32::from_rgb(108, 178, 84);
 const PANEL: Color32 = Color32::from_rgb(40, 42, 46);
 const PANEL_DARK: Color32 = Color32::from_rgb(31, 33, 36);
 const HEADER: Color32 = Color32::from_rgb(160, 166, 174);
+/// Warnings, such as a level of detail over its triangle budget.
+const WARN: Color32 = Color32::from_rgb(236, 178, 72);
 
 enum Action {
     Open,
@@ -45,6 +47,8 @@ pub struct ArborApp {
     skeleton: Skeleton,
     built: Option<(Document, u32)>,
     stats: Stats,
+    /// The shown mesh level against its triangle budget.
+    fit: Option<crate::budget::LevelFit>,
     pick: PickData,
     time: f32,
     frames: u32,
@@ -136,6 +140,7 @@ impl ArborApp {
             skeleton: Skeleton::default(),
             built: None,
             stats: Stats::default(),
+            fit: None,
             pick: PickData::default(),
             time: 0.0,
             frames: 0,
@@ -183,6 +188,7 @@ impl ArborApp {
                 self.pending_atlas = Some(atlas);
             }
             self.stats = self.mesh.stats(&self.skeleton);
+            self.fit = lm.fit;
             self.built = Some((sh.doc.clone(), lod));
         }
         if sh.frame_camera {
@@ -865,13 +871,17 @@ impl eframe::App for ArborApp {
                     }
                 });
             });
-            painter.text(
-                rect.right_top() + egui::vec2(-12.0, 10.0),
-                egui::Align2::RIGHT_TOP,
-                format!("{}  ·  {} tris", sh.doc.name, self.stats.triangles),
-                egui::FontId::proportional(12.5),
-                Color32::from_gray(230),
-            );
+            let tris = crate::budget::group(self.stats.triangles as u32);
+            let (label, colour) = match self.fit.as_ref().and_then(|f| f.budget.map(|b| (f, b))) {
+                Some((f, b)) if f.over => (format!("{}  ·  ⚠ {tris} / {} tris, over budget", sh.doc.name, crate::budget::group(b)), WARN),
+                Some((_, b)) => (format!("{}  ·  {tris} / {} tris", sh.doc.name, crate::budget::group(b)), Color32::from_gray(230)),
+                None => (format!("{}  ·  {tris} tris", sh.doc.name), Color32::from_gray(230)),
+            };
+            let r = painter.text(rect.right_top() + egui::vec2(-12.0, 10.0), egui::Align2::RIGHT_TOP, label, egui::FontId::proportional(12.5), colour);
+            if let Some(f) = self.fit.as_ref().filter(|f| f.budget.is_some()) {
+                let hover = ui.interact(r.expand(3.0), ui.id().with("budget_hint"), egui::Sense::hover());
+                hover.on_hover_text(format!("{}\nTriangle budgets: Tree › Level of detail.", f.message(sh.doc.budget.fit)));
+            }
             painter.text(
                 rect.right_bottom() + egui::vec2(-12.0, -10.0),
                 egui::Align2::RIGHT_BOTTOM,
@@ -1288,10 +1298,91 @@ fn properties_ui(ui: &mut Ui, sh: &mut Shared, stats: &Stats, editing_material: 
             }
             ui.radio_value(&mut sh.view.lod, crate::billboard::BILLBOARD_LOD, "Billboard");
         });
-        ui.label(RichText::new(format!("{} triangles at LOD{}", stats.triangles, sh.view.lod)).color(HEADER));
+        ui.label(RichText::new(format!("{} triangles at LOD{}", crate::budget::group(stats.triangles as u32), sh.view.lod)).color(HEADER));
         ui.label(RichText::new("Exports can include all levels, named _LOD0…_LOD4 (the billboard is LOD4) for engine LOD groups.").size(11.0).color(HEADER));
+        ui.add_space(6.0);
+        budget_ui(ui, sh);
     });
     sh.doc.settings.clamp();
+}
+
+/// Triangle budget controls and the check of all four mesh levels.
+fn budget_ui(ui: &mut Ui, sh: &mut Shared) {
+    let b = &mut sh.doc.budget;
+    ui.checkbox(&mut b.enabled, "Triangle budget").on_hover_text(help_for("budget.enabled"));
+    if !b.enabled {
+        return;
+    }
+    egui::Grid::new("budget_grid").num_columns(2).spacing([8.0, 4.0]).show(ui, |ui| {
+        ui.label("Budgets").on_hover_text(help_for("budget.auto"));
+        ui.horizontal(|ui| {
+            ui.radio_value(&mut b.auto, true, "From a maximum");
+            ui.radio_value(&mut b.auto, false, "Per level");
+        });
+        ui.end_row();
+        if b.auto {
+            ui.label("Maximum (LOD0)").on_hover_text(help_for("budget.max"));
+            ui.add(egui::DragValue::new(&mut b.max).range(16..=crate::model::TriangleBudget::LIMIT).speed(100.0).suffix(" tris"));
+            ui.end_row();
+            let d = b.derived();
+            ui.label("");
+            ui.label(RichText::new(format!("LOD1 {}  ·  LOD2 {}  ·  LOD3 {}", crate::budget::group(d[1]), crate::budget::group(d[2]), crate::budget::group(d[3]))).size(11.0).color(HEADER));
+            ui.end_row();
+        } else {
+            for l in 0..4 {
+                ui.label(format!("LOD{l}")).on_hover_text(help_for("budget.levels"));
+                ui.add(egui::DragValue::new(&mut b.levels[l]).range(0..=crate::model::TriangleBudget::LIMIT).speed(100.0).custom_formatter(|v, _| if v == 0.0 { "no limit".into() } else { format!("{} tris", v as u32) }));
+                ui.end_row();
+            }
+        }
+        ui.label("Fit");
+        ui.checkbox(&mut b.fit, "Reduce detail to fit").on_hover_text(help_for("budget.fit"));
+        ui.end_row();
+    });
+    let doc = sh.doc.clone();
+    let (report, fresh) = budget_report(ui.ctx(), &doc);
+    ui.add_space(4.0);
+    if report.is_empty() {
+        ui.label(RichText::new("Checking the levels…").size(11.0).color(HEADER));
+        return;
+    }
+    for f in &report {
+        let colour = if f.over { WARN } else if !fresh { Color32::from_gray(120) } else { HEADER };
+        let icon = if f.over { "⚠ " } else { "" };
+        ui.label(RichText::new(format!("{icon}{}", f.message(doc.budget.fit))).size(11.0).color(colour));
+    }
+    if !fresh {
+        ui.label(RichText::new("Checking the levels…").size(11.0).color(HEADER));
+    }
+}
+
+/// The budget check of all four levels, run off the interface thread: growing and meshing
+/// every level of a large tree takes a moment. Returns the latest result and whether it is for
+/// the current tree; one check runs at a time and the next starts when the tree changed.
+fn budget_report(ctx: &egui::Context, doc: &Document) -> (Vec<crate::budget::LevelFit>, bool) {
+    struct State {
+        done_for: Option<Document>,
+        result: Vec<crate::budget::LevelFit>,
+        running: bool,
+    }
+    static STATE: Mutex<State> = Mutex::new(State { done_for: None, result: Vec::new(), running: false });
+    let mut st = STATE.lock().unwrap();
+    if st.done_for.as_ref() == Some(doc) {
+        return (st.result.clone(), true);
+    }
+    if !st.running {
+        st.running = true;
+        let (doc, ctx) = (doc.clone(), ctx.clone());
+        std::thread::spawn(move || {
+            let r = crate::budget::report(&doc);
+            let mut st = STATE.lock().unwrap();
+            st.done_for = Some(doc);
+            st.result = r;
+            st.running = false;
+            ctx.request_repaint();
+        });
+    }
+    (st.result.clone(), false)
 }
 
 /// Sections the documentation script asked to open (each opens once).
@@ -1601,6 +1692,10 @@ impl ArborApp {
                     match export::export_variations(&doc, &dir, self.variation_count, doc.settings.seed, fmt, self.export_lods, self.export_billboard) {
                         Ok(v) => {
                             self.status = format!("Exported {} variations to {}", v.len(), dir.display());
+                            let over = v.iter().filter(|(_, _, w)| w.is_some()).count();
+                            if over > 0 {
+                                self.status = format!("{}. {over} of them are over the triangle budget (Tree › Level of detail shows the levels).", self.status);
+                            }
                             self.shared.lock().unwrap().log(Source::You, self.status.clone());
                         }
                         Err(e) => self.status = e,
@@ -1614,6 +1709,9 @@ impl ArborApp {
         match export::export(doc, p, fmt, lods, bb) {
             Ok(r) => {
                 self.status = format!("Exported {}", r.files.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join(", "));
+                if let Some(w) = r.budget_warning(doc.budget.fit) {
+                    self.status = format!("{}. {w}", self.status);
+                }
                 self.shared.lock().unwrap().log(Source::You, self.status.clone());
             }
             Err(e) => self.status = e,

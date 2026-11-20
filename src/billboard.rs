@@ -27,16 +27,17 @@ pub struct LodMesh {
     pub skeleton: Skeleton,
     pub mesh: Mesh,
     pub atlas: Option<Arc<image::RgbaImage>>,
+    /// How a mesh level relates to its triangle budget (None for the billboard).
+    pub fit: Option<crate::budget::LevelFit>,
 }
 
 pub fn lod_mesh(doc: &Document, lod: u32) -> LodMesh {
     if lod >= BILLBOARD_LOD {
         let bb = build(doc);
-        LodMesh { skeleton: Skeleton::default(), mesh: bb.mesh, atlas: Some(bb.atlas) }
+        LodMesh { skeleton: Skeleton::default(), mesh: bb.mesh, atlas: Some(bb.atlas), fit: None }
     } else {
-        let skeleton = grow(doc, lod);
-        let mesh = build_mesh(doc, &skeleton, lod);
-        LodMesh { skeleton, mesh, atlas: None }
+        let (skeleton, mesh, fit) = crate::budget::level_mesh(doc, lod);
+        LodMesh { skeleton, mesh, atlas: None, fit: Some(fit) }
     }
 }
 

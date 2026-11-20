@@ -24,7 +24,7 @@ const HELP_PAGES = [
     ["node-editing.html", "Editing single branches", "node branch delete length thickness rotate pick"],
   ]],
   ["Output", [
-    ["lod.html", "Levels of detail", "lod billboard atlas reduction silhouette"],
+    ["lod.html", "Levels of detail", "lod billboard atlas reduction silhouette triangle budget polygon count warning"],
     ["export.html", "Exporting", "export glb gltf obj json unity unreal godot variations engine"],
     ["projects.html", "Projects and files", "save open recent undo redo project arbor.json"],
     ["agents.html", "Coding agents (MCP)", "mcp agent claude tools automation headless"],

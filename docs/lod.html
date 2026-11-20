@@ -45,6 +45,26 @@
 </div>
 <p>The detail of LOD0 is set by each generator's <strong>Sides</strong> and <strong>Segments</strong> and by the leaf counts. Lower levels follow from these values, so a tree with more detail at LOD0 also has more detail at the lower levels.</p>
 
+<h2 id="budget">Triangle budgets</h2>
+<p>A triangle budget is the most triangles a level may have. Set one when the levels have to fit a performance target, for example 40,000 triangles for the closest level of a tree that appears many times in a scene. The budgets are in the <strong>Level of detail</strong> section of the tree settings and are saved with the project.</p>
+<figure class="narrow"><img src="images/ui-budget.jpg" alt="The Level of detail section with Triangle budget on, a maximum of 40,000 triangles and the check of the four levels; LOD3 is marked over budget"></figure>
+<dl class="params">
+<dt>Triangle budget</dt>
+<dd>Turns the budgets on. The billboard is always 16 triangles and has no budget.</dd>
+<dt>From a maximum</dt>
+<dd>You enter one number, the budget of LOD0. Each next level gets half of the one before: with a maximum of 40,000, LOD1 gets 20,000, LOD2 10,000 and LOD3 5,000. The derived values are shown below the field.</dd>
+<dt>Per level</dt>
+<dd>You enter a budget for each of LOD0 to LOD3. 0 means no limit for that level.</dd>
+<dt>Reduce detail to fit</dt>
+<dd>On: a level over its budget gets fewer sides around its stems, fewer rings along them and fewer, larger leaves, until it fits. ArborStudio keeps as much detail as the budget allows. Off: every level keeps its usual detail, and the levels over budget are only reported.</dd>
+</dl>
+<p>Below the settings, each level is listed with its triangles and its budget, and with the number it had before it was reduced. The check runs in the background, so the list may take a moment to update after a change.</p>
+
+<h3>Warnings</h3>
+<p>A level that is over its budget is marked with ⚠ in amber, in the list and at the top right of the viewport while that level is shown:</p>
+<figure class="narrow"><img src="images/budget-header.jpg" alt="Viewport header: Pine, warning sign, 9,292 / 5,000 tris, over budget"></figure>
+<p>With <strong>Reduce detail to fit</strong> on, a level can still be over budget: reducing keeps every branch and leaves at least a few sides on each stem, so a tree with many branches has a lower limit. Lower the counts of the generators (branches, twigs, leaves) or their <strong>Sides</strong>, or raise the budget. When you export a level that is over budget, the status bar and the agent activity say so.</p>
+
 <h2>Billboard</h2>
 <p>The billboard is the tree rendered from eight sides into one image, an atlas of 4 × 2 pictures. In the export it is shown on four crossed cards with both faces, a few triangles in total. Use it for the farthest distance and for large forests.</p>
 <p>The atlas is saved as a PNG file with a transparent background next to the export, named <code>&lt;file&gt;_billboard.png</code>.</p>
@@ -61,6 +81,11 @@
 
 <h2>Levels for agents</h2>
 <p><code>get_stats</code> with <code>all_lods: true</code> returns the triangle and vertex counts of every level. <code>set_view</code> with <code>lod</code> shows a level in the viewport, and <code>render_preview</code> with <code>lod</code> renders it.</p>
+<p><code>set_triangle_budget</code> sets the budgets: <code>max</code> derives all four from one maximum, <code>levels</code> sets each one, and <code>fit</code> switches the reduction on or off. <code>check_triangle_budget</code> returns every level with its budget, its triangles, its triangles before reduction and whether it is over budget, plus <code>within_budget</code> for the whole tree. <code>export_tree</code> and <code>export_variations</code> add <code>within_budget</code> and a warning when a level went out over budget.</p>
+<pre><code>set_triangle_budget {"max": 40000}
+check_triangle_budget {}
+  → within_budget: false
+    LOD3: 9,292 of 5,000 triangles, over budget even at the least detail allowed.</code></pre>
 </main>
 </body>
 </html>

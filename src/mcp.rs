@@ -324,6 +324,16 @@ pub fn tool_list() -> Vec<Value> {
             "naming": {"type": "string", "enum": ["neutral", "unreal", "godot"]},
             "show": {"type": "boolean", "description": "Draw the capsules in the window"}
         }), &[]),
+        tool("set_triangle_budget", "Set triangle budget", "Triangle budgets for the mesh levels of detail LOD0 to LOD3 (the billboard, LOD4, is always 16 triangles). Give max to derive all four from one maximum (LOD0 = max, LOD1 = max/2, LOD2 = max/4, LOD3 = max/8), or levels to set each one (0 = no limit). With fit on (default), a level over its budget gets fewer sides, rings and larger leaves until it fits; with fit off, levels keep their usual detail and are only reported. Only the given fields change; giving max or levels turns budgets on. Returns the budget and the check of every level, like check_triangle_budget.", json!({
+            "enabled": {"type": "boolean"},
+            "max": {"type": "integer", "minimum": 16, "maximum": 5000000, "description": "Maximum for LOD0; the other levels are derived from it"},
+            "levels": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 5000000}, "minItems": 4, "maxItems": 4, "description": "Budgets for LOD0..LOD3 (0 = no limit)"},
+            "auto": {"type": "boolean", "description": "true: derive from max; false: use levels (set automatically when max or levels is given)"},
+            "fit": {"type": "boolean", "description": "Reduce detail until each level fits (default true)"}
+        }), &[]),
+        tool("check_triangle_budget", "Check triangle budget", "Check the current tree against its triangle budgets: for each mesh level (LOD0..LOD3, or only `lod`) the budget, the triangles it has, the triangles at its usual detail, whether detail was reduced to fit and whether it is over budget. within_budget is true when no level is over. Works when budgets are off too (then there is no budget to be over).", json!({
+            "lod": {"type": "integer", "minimum": 0, "maximum": 3, "description": "Check one level only"}
+        }), &[]),
         tool("set_pruning", "Set pruning", "Trim branches and leaves to a volume (topiary, hedges, fitting a tree into a space). Branches stop at the surface; trunks are only cut at the top; roots are never pruned. fit_to_tree places a volume slightly smaller than the current crown.", json!({
             "enabled": {"type": "boolean"},
             "shape": {"type": "string", "enum": ["box", "ellipsoid"]},
@@ -406,6 +416,30 @@ fn arg_str<'a>(a: &'a Value, k: &str) -> Option<&'a str> {
     a.get(k).and_then(|v| v.as_str())
 }
 
+/// The tree's levels against their triangle budgets, for set/check_triangle_budget.
+fn budget_check(doc: &Document, lod: Option<u32>) -> Value {
+    let levels: Vec<crate::budget::LevelFit> = match lod {
+        Some(l) => vec![crate::budget::level_mesh(doc, l).2],
+        None => crate::budget::report(doc),
+    };
+    let rows: Vec<Value> = levels
+        .iter()
+        .map(|f| {
+            json!({
+                "lod": f.lod, "budget": f.budget, "triangles": f.triangles, "usual_triangles": f.usual_triangles,
+                "reduced": f.reduced, "over": f.over, "reduction": f.reduction, "message": f.message(doc.budget.fit)
+            })
+        })
+        .collect();
+    json!({
+        "budget": doc.budget,
+        "budgets_in_effect": doc.budget.enabled.then(|| doc.budget.derived()),
+        "within_budget": levels.iter().all(|f| !f.over),
+        "levels": rows,
+        "billboard": "LOD4 is always 16 triangles and has no budget"
+    })
+}
+
 fn stats_for(doc: &Document, lod: u32) -> Value {
     let l = crate::billboard::lod_mesh(doc, lod);
     json!(l.mesh.stats(&l.skeleton))
@@ -481,7 +515,7 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             Ok(pretty(&tree_json(&sh)))
         }
         "new_tree" => {
-            let mut doc = Document { name: arg_str(a, "name").unwrap_or("New tree").to_string(), settings: TreeSettings::default(), generators: vec![], next_id: 1, materials: vec![], forces: vec![], pruning: Pruning::default(), nodes: vec![], collision: Default::default() };
+            let mut doc = Document { name: arg_str(a, "name").unwrap_or("New tree").to_string(), settings: TreeSettings::default(), generators: vec![], next_id: 1, materials: vec![], forces: vec![], pruning: Pruning::default(), nodes: vec![], collision: Default::default(), budget: Default::default() };
             let t = doc.add(GenKind::Trunk, None, Some("Trunk".into()))?;
             let b = doc.add(GenKind::Branches, Some(t), Some("Branches".into()))?;
             doc.add(GenKind::Leaves, Some(b), Some("Leaves".into()))?;
@@ -671,6 +705,44 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             }
             sh.commit();
             Ok(text(format!("removed force {id}")))
+        }
+        "set_triangle_budget" => {
+            let mut sh = lock();
+            let mut doc = sh.doc.clone();
+            let b = &mut doc.budget;
+            if let Some(v) = a.get("max").and_then(|v| v.as_u64()) {
+                b.max = v.min(u32::MAX as u64) as u32;
+                b.auto = true;
+                b.enabled = true;
+            }
+            if let Some(v) = a.get("levels").and_then(|v| v.as_array()) {
+                let l: Vec<u32> = v.iter().filter_map(|x| x.as_u64()).map(|x| x.min(u32::MAX as u64) as u32).collect();
+                if l.len() != 4 {
+                    return Err("levels needs four numbers: LOD0, LOD1, LOD2, LOD3".into());
+                }
+                b.levels.copy_from_slice(&l);
+                b.auto = false;
+                b.enabled = true;
+            }
+            if let Some(v) = a.get("auto").and_then(|v| v.as_bool()) {
+                b.auto = v;
+            }
+            if let Some(v) = a.get("fit").and_then(|v| v.as_bool()) {
+                b.fit = v;
+            }
+            if let Some(v) = a.get("enabled").and_then(|v| v.as_bool()) {
+                b.enabled = v;
+            }
+            b.clamp();
+            sh.doc = doc.clone();
+            sh.commit();
+            drop(sh);
+            Ok(pretty(&budget_check(&doc, None)))
+        }
+        "check_triangle_budget" => {
+            let doc = lock().doc.clone();
+            let lod = arg_u32(a, "lod").map(|l| l.min(3));
+            Ok(pretty(&budget_check(&doc, lod)))
         }
         "set_collision" => {
             let mut sh = lock();
@@ -872,8 +944,7 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             }
             if a.get("frame").and_then(|v| v.as_bool()).unwrap_or(false) {
                 let lod = sh.view.lod;
-                let sk = grow(&sh.doc, lod);
-                let m = build_mesh(&sh.doc, &sk, lod);
+                let m = crate::billboard::lod_mesh(&sh.doc, lod).mesh;
                 sh.view.camera.frame(m.height, m.radius);
             }
             Ok(pretty(&json!(sh.view)))
@@ -968,7 +1039,14 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             let r = export::export(&doc, &path, fmt, lods, bb)?;
             let files: Vec<String> = r.files.iter().map(|f| f.display().to_string()).collect();
             lock().log(Source::App, format!("exported {}", files.join(", ")));
-            Ok(pretty(&json!({"files": files, "lods": r.lods})))
+            let mut out = json!({"files": files, "lods": r.lods});
+            if doc.budget.enabled {
+                out["within_budget"] = json!(r.budget.iter().all(|f| !f.over));
+                if let Some(w) = r.budget_warning(doc.budget.fit) {
+                    out["budget_warning"] = json!(w);
+                }
+            }
+            Ok(pretty(&out))
         }
         "export_variations" => {
             let dir = expand(arg_str(a, "folder").ok_or("folder is required")?);
@@ -986,8 +1064,21 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             let first = arg_u32(a, "first_seed").unwrap_or(doc.settings.seed);
             let v = export::export_variations(&doc, &dir, count, first, fmt, lods, bb)?;
             lock().log(Source::App, format!("exported {} variations to {}", v.len(), dir.display()));
-            let list: Vec<Value> = v.iter().map(|(s, f)| json!({"seed": s, "files": f})).collect();
-            Ok(pretty(&json!({"variations": list})))
+            let list: Vec<Value> = v
+                .iter()
+                .map(|(s, f, w)| {
+                    let mut e = json!({"seed": s, "files": f});
+                    if let Some(w) = w {
+                        e["budget_warning"] = json!(w);
+                    }
+                    e
+                })
+                .collect();
+            let mut out = json!({"variations": list});
+            if doc.budget.enabled {
+                out["within_budget"] = json!(v.iter().all(|(_, _, w)| w.is_none()));
+            }
+            Ok(pretty(&out))
         }
         "save_project" => {
             let mut sh = lock();

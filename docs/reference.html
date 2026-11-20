@@ -94,6 +94,11 @@
 <tr><td>Wind: Direction</td><td><code>wind.direction</code></td><td>0°–360°</td><td>Direction the wind blows towards.</td></tr>
 <tr><td>Wind: Gustiness</td><td><code>wind.gustiness</code></td><td>0–1</td><td>Irregularity of the wind.</td></tr>
 <tr><td>Wind: Speed</td><td><code>wind.speed</code></td><td>0.05–5</td><td>Speed of the animation.</td></tr>
+<tr><td>Triangle budget</td><td><code>budget.enabled</code></td><td>on, off</td><td>Budgets for LOD0 to LOD3. See <a href="lod.html#budget">Triangle budgets</a>.</td></tr>
+<tr><td>From a maximum, Per level</td><td><code>budget.auto</code></td><td>on, off</td><td>On: the budgets follow from <code>budget.max</code> (LOD0 = maximum, each next level half). Off: <code>budget.levels</code>.</td></tr>
+<tr><td>Maximum (LOD0)</td><td><code>budget.max</code></td><td>16–5,000,000</td><td>Most triangles for LOD0 when the budgets are derived.</td></tr>
+<tr><td>LOD0 to LOD3</td><td><code>budget.levels</code></td><td>0–5,000,000 each</td><td>Most triangles per level; 0 = no limit.</td></tr>
+<tr><td>Reduce detail to fit</td><td><code>budget.fit</code></td><td>on, off</td><td>On: levels over budget get less detail until they fit. Off: they are only reported.</td></tr>
 </table>
 
 <h2 id="materials">Materials</h2>

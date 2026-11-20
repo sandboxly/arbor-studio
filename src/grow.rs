@@ -95,6 +95,7 @@ pub struct Skeleton {
 const MAX_STEMS: usize = 30_000;
 const MAX_LEAVES: usize = 60_000;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Lod {
     pub sides: f32,
     pub segments: f32,
@@ -110,6 +111,20 @@ pub fn lod(level: u32) -> Lod {
         // leaves grow by 1 / sqrt(share kept), so the crown keeps its leaf area
         _ => Lod { sides: 0.25, segments: 0.3, leaves: 0.15, leaf_size: 2.58 },
     }
+}
+
+/// The least detail a triangle budget may reduce a level to.
+const FLOOR: Lod = Lod { sides: 0.12, segments: 0.15, leaves: 0.04, leaf_size: 5.0 };
+
+/// Detail between a level's usual amount (`s` = 0) and the least detail allowed (`s` = 1), for
+/// fitting a level into a triangle budget. Kept leaves grow by 1 / sqrt(share kept), so the
+/// crown keeps its leaf area.
+pub fn lod_blend(level: u32, s: f32) -> Lod {
+    let a = lod(level.min(3));
+    let s = s.clamp(0.0, 1.0);
+    let mix = |x: f32, y: f32| x + (y - x) * s;
+    let leaves = mix(a.leaves, FLOOR.leaves);
+    Lod { sides: mix(a.sides, FLOOR.sides), segments: mix(a.segments, FLOOR.segments), leaves, leaf_size: 1.0 / leaves.sqrt() }
 }
 
 /// Sides around a stem: (full detail, at this LOD). Trunks keep at least five sides at low
@@ -136,7 +151,7 @@ fn polygon_width(n: usize) -> f32 {
 /// shape it least go first), fewer sides around it (radius widened so it keeps its apparent
 /// thickness) and fewer, larger leaves picked evenly from the full set (each grows around its
 /// own centre, so the crown keeps its outline and its coverage).
-fn reduce_detail(doc: &Document, sk: &mut Skeleton, lodf: &Lod) {
+pub fn reduce_detail(doc: &Document, sk: &mut Skeleton, lodf: &Lod) {
     let defaults = GenParams::default();
     for si in 0..sk.stems.len() {
         let st = &sk.stems[si];
@@ -1462,6 +1477,11 @@ impl Mesh {
 }
 
 pub fn build_mesh(doc: &Document, sk: &Skeleton, level: u32) -> Mesh {
+    build_mesh_with(doc, sk, &lod(level), level)
+}
+
+/// The mesh of a skeleton reduced with `lodf`; `level` sets the ambient occlusion resolution.
+pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) -> Mesh {
     // Roots leave the trunk at its very base, often pointing down. So that every root has bark to
     // grow out of, trunks with roots get a short extension below their base (underground). The
     // skeleton itself is unchanged, so nothing growing on the trunk moves.
@@ -1473,7 +1493,7 @@ pub fn build_mesh(doc: &Document, sk: &Skeleton, level: u32) -> Mesh {
     } else {
         (sk, vec![0.0; sk.stems.len()])
     };
-    let lodf = lod(level);
+    let lodf = *lodf;
     let mut m = Mesh::default();
     let height = sk.stems.iter().flat_map(|s| s.points.iter()).chain(sk.leaves.iter().map(|l| &l.pos)).fold(0.1f32, |a, p| a.max(p.y));
     let radius = sk

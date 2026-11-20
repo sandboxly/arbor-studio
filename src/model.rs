@@ -718,6 +718,62 @@ pub struct Document {
     pub nodes: Vec<NodeEdit>,
     /// Collision objects generated for game-engine physics.
     pub collision: Collision,
+    /// Triangle budgets for the mesh levels of detail.
+    pub budget: TriangleBudget,
+}
+
+/// Most triangles each mesh level of detail (LOD0 to LOD3) may have. The billboard (LOD4) is
+/// always 16 triangles and has no budget.
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct TriangleBudget {
+    pub enabled: bool,
+    /// Derive the four levels from `max`: LOD0 gets the maximum, each next level half of the one before.
+    pub auto: bool,
+    /// The maximum for LOD0 when `auto` is on.
+    pub max: u32,
+    /// Budgets for LOD0 to LOD3 when `auto` is off (0 = no limit for that level).
+    pub levels: [u32; 4],
+    /// Reduce detail until each level fits. Off: levels keep their usual detail and the ones
+    /// over budget are only reported.
+    pub fit: bool,
+}
+
+impl Default for TriangleBudget {
+    fn default() -> Self {
+        TriangleBudget { enabled: false, auto: true, max: 50_000, levels: [50_000, 25_000, 12_500, 6_250], fit: true }
+    }
+}
+
+impl TriangleBudget {
+    /// Share of the maximum each level gets when the budgets are derived from it.
+    pub const RATIOS: [f32; 4] = [1.0, 0.5, 0.25, 0.125];
+    pub const LIMIT: u32 = 5_000_000;
+
+    /// The budget of a level of detail, if budgets are on and the level has one.
+    pub fn level(&self, lod: u32) -> Option<u32> {
+        if !self.enabled || lod > 3 {
+            return None;
+        }
+        let b = self.derived()[lod as usize];
+        (b > 0).then_some(b)
+    }
+
+    /// The four budgets in effect (derived from `max` when `auto` is on).
+    pub fn derived(&self) -> [u32; 4] {
+        if self.auto {
+            Self::RATIOS.map(|r| (self.max as f32 * r).round() as u32)
+        } else {
+            self.levels
+        }
+    }
+
+    pub fn clamp(&mut self) {
+        self.max = self.max.clamp(16, Self::LIMIT);
+        for l in &mut self.levels {
+            *l = (*l).min(Self::LIMIT);
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug, Default)]
@@ -1072,7 +1128,7 @@ struct B {
 
 impl B {
     fn new(name: &str, settings: TreeSettings) -> Self {
-        B { doc: Document { name: name.into(), settings, generators: vec![], next_id: 1, materials: vec![], forces: vec![], pruning: Pruning::default(), nodes: vec![], collision: Collision::default() } }
+        B { doc: Document { name: name.into(), settings, generators: vec![], next_id: 1, materials: vec![], forces: vec![], pruning: Pruning::default(), nodes: vec![], collision: Collision::default(), budget: TriangleBudget::default() } }
     }
     fn add(&mut self, kind: GenKind, parent: Option<u32>, name: &str, f: impl FnOnce(&mut GenParams)) -> u32 {
         let id = self.doc.add(kind, parent, Some(name.into())).unwrap();
@@ -1500,6 +1556,11 @@ pub const SETTINGS_REFERENCE: &[(&str, &str, &str)] = &[
     ("wind.direction", "0..360 deg", "Direction the wind blows towards, around the vertical axis."),
     ("wind.gustiness", "0..1", "Irregular gusts."),
     ("wind.speed", "0.05..5", "Animation speed."),
+    ("budget.enabled", "on/off", "Triangle budgets for LOD0 to LOD3. Levels over their budget get less detail (or are reported); the billboard is always 16 triangles."),
+    ("budget.auto", "on/off", "On: derive the budgets from one maximum (LOD0 = maximum, LOD1 = 1/2, LOD2 = 1/4, LOD3 = 1/8). Off: set each level yourself."),
+    ("budget.max", "16..5000000", "Most triangles for LOD0 when the budgets are derived from a maximum."),
+    ("budget.levels", "[LOD0, LOD1, LOD2, LOD3], 0..5000000", "Most triangles per level when set per level; 0 = no limit for that level."),
+    ("budget.fit", "on/off", "On: a level over its budget gets fewer sides, rings and (larger) leaves until it fits. Off: levels keep their usual detail and the ones over budget are reported."),
 ];
 
 /// (field, range, meaning) for materials — shown over MCP.
