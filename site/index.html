@@ -7,9 +7,9 @@
 <meta name="description" content="Desktop editor for game-ready trees. GLB or OBJ with four LODs, a billboard and per-vertex wind weights. Every editor operation is an MCP tool, so your agent can grow the variants. Free, MIT.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="ArborStudio: game-ready trees. Ready for your favorite AI agent.">
-<meta property="og:description" content="GLB and OBJ with four LODs, a billboard and wind weights. 35 MCP tools. Free and open source, MIT.">
+<meta property="og:description" content="GLB and OBJ with four LODs, a billboard and wind weights. Growth animation. 38 MCP tools. Free and open source, MIT.">
 <meta property="og:image" content="https://sandboxly.github.io/arbor-studio/images/og.png">
-<meta property="og:image:alt" content="ArborStudio v0.1.0: game-ready trees. Next to the text, a hand-authored oak in the editor's viewport.">
+<meta property="og:image:alt" content="ArborStudio v0.2.0: game-ready trees. Next to the text, a hand-authored oak in the editor's viewport.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0c0f0e">
 <link rel="icon" href="docs/images/app-icon.png">
@@ -22,10 +22,11 @@
 <header class="top">
   <div class="wrap top__row">
     <a class="brand" href="./">ArborStudio</a>
-    <span class="ab-badge ab-badge--accent top__ver"><span class="ab-badge__dot"></span>v0.1.0</span>
+    <span class="ab-badge ab-badge--accent top__ver"><span class="ab-badge__dot"></span>v0.2.0</span>
     <nav class="top__links" aria-label="Page sections">
       <a href="#agent">Agent</a>
       <a href="#output">Output</a>
+      <a href="#growth">Growth</a>
       <a href="#generators">Generators</a>
       <a href="#compare">vs SpeedTree</a>
       <a href="docs/">Docs</a>
@@ -44,7 +45,7 @@
   <div class="wrap">
     <div class="hero__head">
       <div class="hero__title">
-        <p class="label eyebrow">Tree editor for games · v0.1.0</p>
+        <p class="label eyebrow">Tree editor for games · v0.2.0</p>
         <h1 class="display"><span class="nowrap">Game-ready</span> trees. <span class="display__accent">Ready for your favorite AI&nbsp;agent.</span></h1>
       </div>
       <div class="hero__aside">
@@ -53,7 +54,7 @@
         <div class="cta">
           <a class="ab-btn ab-btn--primary ab-btn--lg js-download" href="#download">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 2v9M4 7l4 4 4-4M2.5 13.5h11"/></svg>
-            <span class="js-download-label">Download v0.1.0</span>
+            <span class="js-download-label">Download v0.2.0</span>
           </a>
           <a class="ab-btn ab-btn--secondary ab-btn--lg" href="https://github.com/sandboxly/arbor-studio">Source on GitHub</a>
         </div>
@@ -76,7 +77,7 @@
         <span class="stat"><span class="stat__num">744</span><span class="label">Stems</span></span>
         <span class="stat"><span class="stat__num">15,390</span><span class="label">Leaves</span></span>
         <span class="stat"><span class="stat__num">119,996</span><span class="label">Triangles at LOD0</span></span>
-        <span class="stat stat--accent"><span class="stat__num">96 ms</span><span class="label">To grow it<sup><a href="#m1" id="r1">1</a></sup></span></span>
+        <span class="stat stat--accent"><span class="stat__num">95 ms</span><span class="label">To grow it<sup><a href="#m1" id="r1">1</a></sup></span></span>
       </figcaption>
     </figure>
 
@@ -189,14 +190,57 @@
   </div>
 </section>
 
-<!-- ============================================================ 03 generators -->
+<!-- ============================================================ 03 growth -->
+<section class="section" id="growth">
+  <div class="wrap">
+    <header class="head">
+      <div>
+        <p class="label eyebrow"><span class="n">03</span>New in v0.2.0: growth animation</p>
+        <h2 class="h1">The tree grows in your game, from a shoot to the crown you designed.</h2>
+      </div>
+      <p class="lead">Every branch grows out along its final path while the trunk is still getting taller, and leaves come with the young shoots, so the crown fills in all at once instead of from the bottom up. The bark closes over branches that haven't started yet.</p>
+    </header>
+
+    <div class="grow">
+      <figure class="frame grow__cell grow__cell--tall">
+        <picture>
+          <source media="(prefers-reduced-motion: reduce)" srcset="images/growth-oak-still.jpg">
+          <source type="image/webp" srcset="images/growth-oak.webp">
+          <img src="images/growth-oak.gif" width="480" height="600" loading="lazy" alt="Animation: the oak from the top of this page grows from a thin shoot with a few leaves into a tall tree with a full, rounded crown and spreading roots, while the camera turns slowly around it.">
+        </picture>
+        <figcaption>The oak at the top of this page, all 744 stems, from a shoot to the mature tree.</figcaption>
+      </figure>
+      <figure class="frame grow__cell grow__cell--wide">
+        <picture>
+          <source media="(prefers-reduced-motion: reduce)" srcset="images/growth-crown-still.jpg">
+          <source type="image/webp" srcset="images/growth-crown.webp">
+          <img src="images/growth-crown.gif" width="560" height="420" loading="lazy" alt="Animation, closer to the same oak: branches push out of the trunk with leaves at their tips, fork into twigs and thicken, and the crown grows denser until it is full.">
+        </picture>
+        <figcaption>Closer to the crown: branches come out of closed bark, carry leaves from the start and thicken as they grow.</figcaption>
+      </figure>
+    </div>
+
+    <dl class="sheet">
+      <div class="sheet__row"><dt class="label">Per generator</dt>
+      <dd>Speed, start size, start angle, length and radius curves, and when parts start: with their parent, all together, or with a random offset.</dd></div>
+      <div class="sheet__row"><dt class="label">Stages</dt>
+      <dd>Up to eight named stages, such as Sprout, Sapling and Mature. Click one to see and edit the tree at that point.</dd></div>
+      <div class="sheet__row"><dt class="label">GLB</dt>
+      <dd>Morph targets on every LOD, a <code>Grow</code> clip and one clip per stage. Godot and Blender play them without a plugin.</dd></div>
+      <div class="sheet__row"><dt class="label">Agents</dt>
+      <dd><code>set_growth</code> sets the stages; <code>render_preview</code> shows any stage; the export tools take <code>include_growth</code>.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<!-- ============================================================ 04 generators -->
 <section class="section" id="generators">
   <div class="wrap gen">
     <figure class="frame gen__panel">
       <img src="docs/images/ui-props-branches.jpg" width="390" height="842" loading="lazy" alt="The Properties panel for a branch generator, with sliders in three groups. Generation: Count per parent, Start, End, Phyllotaxis. Spine: Length, Crown profile, Angle, Gravity, Wiggle, Kink. Skin: Radius, Taper, Branch welding, Broken branches, Flutes, Bark lumps.">
     </figure>
     <div class="gen__body">
-      <p class="label eyebrow"><span class="n">03</span>Every part has its own controls</p>
+      <p class="label eyebrow"><span class="n">04</span>Every part has its own controls</p>
       <h2 class="h1">A stack of generators, each with its own sliders.</h2>
       <p class="lead">Trunk, branches, twigs, roots and leaves are separate generators. Each one has its own settings, and most of them can follow a curve along the parent: longer branches low in the crown, steeper ones at the top.</p>
 
@@ -217,10 +261,10 @@
         <table>
           <thead><tr><th scope="col">Preset</th><th scope="col">Triangles</th><th scope="col">LOD0</th><th scope="col">All 5 levels</th><th scope="col"><span class="sr">Relative time</span></th></tr></thead>
           <tbody>
-            <tr><th scope="row">Oak</th><td>21k</td><td>17 ms</td><td>103 ms</td><td class="timing__bar"><span style="--t: .255"></span></td></tr>
-            <tr><th scope="row">Birch</th><td>36k</td><td>24 ms</td><td>112 ms</td><td class="timing__bar"><span style="--t: .277"></span></td></tr>
-            <tr><th scope="row">Willow</th><td>41k</td><td>42 ms</td><td>223 ms</td><td class="timing__bar"><span style="--t: .552"></span></td></tr>
-            <tr><th scope="row">Pine</th><td>75k</td><td>96 ms</td><td>404 ms</td><td class="timing__bar"><span style="--t: 1"></span></td></tr>
+            <tr><th scope="row">Oak</th><td>21k</td><td>16 ms</td><td>101 ms</td><td class="timing__bar"><span style="--t: 0.254"></span></td></tr>
+            <tr><th scope="row">Birch</th><td>36k</td><td>24 ms</td><td>110 ms</td><td class="timing__bar"><span style="--t: 0.277"></span></td></tr>
+            <tr><th scope="row">Willow</th><td>41k</td><td>38 ms</td><td>208 ms</td><td class="timing__bar"><span style="--t: 0.524"></span></td></tr>
+            <tr><th scope="row">Pine</th><td>75k</td><td>94 ms</td><td>397 ms</td><td class="timing__bar"><span style="--t: 1"></span></td></tr>
           </tbody>
         </table>
         <p class="small">Short enough that the viewport keeps up while you drag a slider.</p>
@@ -229,12 +273,12 @@
   </div>
 </section>
 
-<!-- ============================================================ 04 compare -->
+<!-- ============================================================ 05 compare -->
 <section class="section" id="compare">
   <div class="wrap">
     <header class="head">
       <div>
-        <p class="label eyebrow"><span class="n">04</span>ArborStudio and SpeedTree</p>
+        <p class="label eyebrow"><span class="n">05</span>ArborStudio and SpeedTree</p>
         <h2 class="h1">SpeedTree does more. Here is where ArborStudio differs.</h2>
       </div>
       <p class="lead">SpeedTree is the reference for game vegetation and has far more features. ArborStudio is younger and smaller, and it adds features when people ask for them.</p>
@@ -244,7 +288,7 @@
       <table class="compare">
         <thead><tr><th scope="col"><span class="sr">Aspect</span></th><th scope="col" class="compare__us">ArborStudio</th><th scope="col">SpeedTree</th></tr></thead>
         <tbody>
-          <tr><th scope="row">Agent access</th><td class="compare__us win">MCP server with 35 tools, over HTTP or stdio, with or without a window</td><td>No such interface</td></tr>
+          <tr><th scope="row">Agent access</th><td class="compare__us win">MCP server with 38 tools, over HTTP or stdio, with or without a window</td><td>No such interface</td></tr>
           <tr><th scope="row">Price</th><td class="compare__us win">Free, no seat limits</td><td>Paid licence</td></tr>
           <tr><th scope="row">Source</th><td class="compare__us win">MIT. Read and change the generator.</td><td>Closed</td></tr>
           <tr><th scope="row">Features</th><td class="compare__us">Smaller set, grows from requests</td><td class="win">Larger and more mature</td></tr>
@@ -263,10 +307,11 @@
         </ul>
       </div>
       <div class="ab-panel ab-panel--dashed">
-        <h3 class="h3"><span class="ab-badge ab-badge--gizmo">Known</span> Rough edges in v0.1.0</h3>
+        <h3 class="h3"><span class="ab-badge ab-badge--gizmo">Known</span> Rough edges in v0.2.0</h3>
         <ul class="dash">
           <li>The macOS build isn't notarised yet. macOS asks you once to allow it under System Settings › Privacy &amp; Security.</li>
           <li>Variations ignore hand edits to single branches.</li>
+          <li>Where many branches are welded close together, a growing tree can show small slivers in the bark for a moment.</li>
         </ul>
       </div>
     </div>
@@ -274,16 +319,16 @@
   </div>
 </section>
 
-<!-- ============================================================ 05 download -->
+<!-- ============================================================ 06 download -->
 <section class="section section--dl" id="download">
   <div class="wrap">
     <div class="dl ab-grid">
       <div class="dl__intro">
-        <p class="label eyebrow"><span class="n">05</span>Download</p>
-        <h2 class="h1">v0.1.0 for macOS, Windows and Linux.</h2>
+        <p class="label eyebrow"><span class="n">06</span>Download</p>
+        <h2 class="h1">v0.2.0 for macOS, Windows and Linux.</h2>
         <a class="ab-btn ab-btn--primary ab-btn--lg js-download" href="https://github.com/sandboxly/arbor-studio/releases/latest">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 2v9M4 7l4 4 4-4M2.5 13.5h11"/></svg>
-          <span class="js-download-label">Download v0.1.0</span>
+          <span class="js-download-label">Download v0.2.0</span>
         </a>
         <p class="small">The help has 23 pages with pictures, from a first tree to the full parameter reference. <kbd>F1</kbd> in the app opens it. <a href="docs/">Read the docs →</a></p>
       </div>
@@ -308,9 +353,9 @@
 
 <footer class="foot">
   <div class="wrap">
-    <p class="notes" id="m1"><sup>1</sup> Measured with the v0.1.0 release build on an Apple M2 Max, median of 20 runs for the oak above and of 20 seeds per preset in the table, timed through the MCP server. LOD0 includes growing the skeleton and building the mesh; all 5 levels includes rendering the billboard atlas.</p>
+    <p class="notes" id="m1"><sup>1</sup> Measured with the v0.2.0 build on an Apple M2 Max, median of 20 runs for the oak above and of 20 seeds per preset in the table, timed through the MCP server. LOD0 includes growing the skeleton and building the mesh; all 5 levels includes rendering the billboard atlas.</p>
     <div class="foot__row">
-      <span class="brand brand--sm">ArborStudio 0.1.0</span>
+      <span class="brand brand--sm">ArborStudio 0.2.0</span>
       <span class="foot__fact">MIT licence. Written in Rust.</span>
       <nav aria-label="Footer">
         <a href="docs/">Docs</a>

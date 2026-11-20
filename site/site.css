@@ -155,7 +155,12 @@ sup a { text-decoration: none; font: 500 10px/1 var(--font-mono); letter-spacing
 .sheet dt { color: var(--forest-300); padding-top: 3px; }
 .sheet dd { font: var(--text-body-sm); color: var(--ink-200); }
 
-/* ======================================================================= 03 generators */
+/* ======================================================================= 03 growth: two animations, equal height */
+.grow { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 5fr); gap: var(--space-6); align-items: start; }
+.grow__cell { margin: 0; }
+.grow__cell img { width: 100%; height: auto; display: block; }
+
+/* ======================================================================= 04 generators */
 .gen { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--space-16); align-items: start; }
 .gen__panel { position: sticky; top: 80px; }
 .gen__body { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -178,7 +183,7 @@ sup a { text-decoration: none; font: 500 10px/1 var(--font-mono); letter-spacing
 .birches__note { margin-top: var(--space-3); }
 .timing .small { margin-top: var(--space-3); }
 
-/* ======================================================================= 04 compare */
+/* ======================================================================= 05 compare */
 .vs { border: 1px solid var(--line-200); border-radius: var(--radius-md); overflow: hidden; }
 .compare { width: 100%; border-collapse: collapse; }
 .compare th, .compare td { text-align: left; padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--line-100); vertical-align: top; }
@@ -196,7 +201,7 @@ sup a { text-decoration: none; font: 500 10px/1 var(--font-mono); letter-spacing
 .dash li { position: relative; margin-top: var(--space-2); padding-left: var(--space-6); }
 .dash li::before { content: "—"; position: absolute; left: 0; color: var(--forest-500); font-family: var(--font-mono); }
 
-/* ======================================================================= 05 download */
+/* ======================================================================= 06 download */
 .dl { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-12); padding: var(--space-12); border: 1px solid var(--line-200); border-radius: var(--radius-lg); }
 .dl__intro { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-6); }
 .dl__intro .h1 { margin-top: calc(-1 * var(--space-3)); }
@@ -262,6 +267,8 @@ sup a { text-decoration: none; font: 500 10px/1 var(--font-mono); letter-spacing
   .compare tbody th { width: 28%; }
   .compare td { width: 36%; }
   .fit { grid-template-columns: minmax(0, 1fr); }
+  .grow { grid-template-columns: minmax(0, 1fr); }
+  .grow__cell--tall { max-width: 420px; }
   .dl { padding: var(--space-6); }
   .files a { padding: var(--space-4); }
   .files__note { grid-column: 1 / -1; grid-row: 3; text-align: left; }

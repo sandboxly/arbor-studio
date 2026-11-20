@@ -11,7 +11,7 @@ set -eu
 
 BIN="$1"
 OUT="$2"
-VERSION="${3:-0.1.0}"
+VERSION="${3:-0.2.0}"
 BUNDLE_ID="${MACOS_BUNDLE_ID:-io.github.arbor-studio}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 APP="$OUT/ArborStudio.app"

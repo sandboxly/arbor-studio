@@ -1,7 +1,7 @@
 # ArborStudio landing page: copy
 
 All page text, section by section. The markup in `index.html` follows this file.
-Numbers marked (measured) were measured on 2026-11-20 with the v0.1.0 release build on an Apple M2 Max
+Numbers marked (measured) were measured on 2026-11-20 with the v0.2.0 build on an Apple M2 Max
 (12 cores), median of 20 seeds, through the MCP server over stdio. Numbers marked (from code) come from
 the source or the docs in this repository.
 
@@ -10,11 +10,11 @@ the source or the docs in this repository.
 - Title: ArborStudio: game tree editor with an MCP server
 - Description: Desktop editor for game-ready trees. GLB or OBJ with four LODs, a billboard and per-vertex
   wind weights. Every editor operation is an MCP tool, so your agent can grow the variants. Free, MIT.
-- OG image text: "Game-ready trees. Ready for your favorite AI agent." / "GLB · OBJ · 4 LODs + billboard · wind weights · 35 MCP tools"
+- OG image text: "Game-ready trees. Ready for your favorite AI agent." / "GLB · OBJ · 4 LODs + billboard · wind weights · growth animation · 38 MCP tools"
 
 ## Hero
 
-- Eyebrow: Tree editor for games · v0.1.0
+- Eyebrow: Tree editor for games · v0.2.0
 - H1: Game-ready trees. Ready for your favorite AI agent.
 - Subhead: ArborStudio is a desktop editor that grows trees from trunk, branch, root and leaf generators and
   exports them as GLB or OBJ with four LODs, a billboard and wind weights. Every operation in the editor is
@@ -22,11 +22,11 @@ the source or the docs in this repository.
   do something else.
 - For line: For game developers and environment artists who need many distinct trees and would rather
   script them than click out each one.
-- Primary CTA: Download for macOS (13.5 MB) — the label follows the visitor's system: Windows (4.2 MB), Linux (6.2 MB). (from release v0.1.0)
+- Primary CTA: Download for macOS (13.5 MB) — the label follows the visitor's system: Windows (4.2 MB), Linux (6.2 MB). (from release v0.2.0)
 - Next to CTA: Free and open source. MIT licence. Source on GitHub.
 - Secondary (text link): Set up the MCP server →
 - Screenshot: a hand-authored oak supplied by the person (home-folder path in the log and status bar shortened to the file name).
-- Screenshot caption: An oak authored in ArborStudio: 744 stems, 15,390 leaves, 119,996 triangles at LOD0, grown in 96 ms. (measured, median of 20 runs)
+- Screenshot caption: An oak authored in ArborStudio: 744 stems, 15,390 leaves, 119,996 triangles at LOD0, grown in 95 ms. (measured, median of 20 runs)
 
 ## 1. An agent session, start to finish
 
@@ -62,7 +62,21 @@ the source or the docs in this repository.
 - Collision hulls, named for Unreal (UCX_) or Godot (-convcolonly) if you pick it.
 - Engines: The docs describe the import into Unity, Unreal and Godot.
 
-## 3. Every part has its own controls
+## 3. Growth animation (new in v0.2.0)
+
+- Eyebrow: New in v0.2.0: growth animation
+- H2: The tree grows in your game, from a shoot to the crown you designed.
+- Lead: Every branch grows out along its final path while the trunk is still getting taller, and leaves
+  come with the young shoots, so the crown fills in all at once instead of from the bottom up. The bark
+  closes over branches that haven't started yet.
+- Animation 1 (tall): the person's oak from the hero, 744 stems, growth 0 to 1, camera turning 50°.
+  Rendered with render_preview at 72 points of the growth. WebP, GIF fallback, still for reduced motion.
+- Animation 2 (wide): closer to the crown, growth 0.3 to 1, camera pulling back as the crown widens.
+- Facts: Per generator (speed, start size, start angle, length and radius curves, when parts start) ·
+  Stages (up to eight, named) · GLB (morph targets on every LOD, a Grow clip and one clip per stage; Godot
+  and Blender play them without a plugin) · Agents (set_growth, render_preview, include_growth).
+
+## 4. Every part has its own controls
 
 - H2: Real parameters, per generator.
 - Lead: A tree is a stack of generators: trunk, branches, twigs, roots, leaves. Each one has its own set of
@@ -70,32 +84,33 @@ the source or the docs in this repository.
 - Parameter names (from the editor): Count per parent, Start, End, Phyllotaxis, Length (× parent),
   Crown profile, Angle, Gravity, Wiggle, Kink, Radius (× parent), Taper, Branch welding, Broken branches,
   Flutes, Bark lumps, Leaf shape, Leaf fold, Age, Autumn, Fallen leaves, Ambient occlusion.
-- Timing table (measured, LOD0 / all five levels incl. billboard): Oak 21k tris 17 ms / 103 ms ·
-  Birch 36k 24 ms / 112 ms · Willow 41k 42 ms / 223 ms · Pine 75k 96 ms / 404 ms.
+- Timing table (measured, LOD0 / all five levels incl. billboard): Oak 21k tris 16 ms / 101 ms ·
+  Birch 36k 24 ms / 110 ms · Willow 41k 38 ms / 208 ms · Pine 75k 94 ms / 397 ms.
 - Note: Fast enough that the viewport follows a slider.
 
-## 4. ArborStudio and SpeedTree
+## 5. ArborStudio and SpeedTree
 
 - H2: SpeedTree does more. Here is what ArborStudio does differently.
 - Lead: SpeedTree is the reference for game vegetation and has far more features. ArborStudio is
   younger and smaller. It adds features when people ask for them in the issue tracker.
 - Table:
-  - Agent access: ArborStudio: MCP server, 35 tools | SpeedTree: no such interface
+  - Agent access: ArborStudio: MCP server, 38 tools | SpeedTree: no such interface
   - Price: ArborStudio: free | SpeedTree: paid licence
   - Source: ArborStudio: MIT, read and change the generator | SpeedTree: closed
   - Feature set: ArborStudio: smaller, grows from requests | SpeedTree: larger and more mature
 - Link: Request a feature on GitHub →
 
-## 5. Not for you if
+## 6. Not for you if
 
 - You need a hand-sculpted hero tree for a cinematic. You need SpeedTree's full
   feature set today. You work in a film or VFX pipeline.
 - Rough edges (from code): The macOS build is not notarised yet, so macOS asks you once to allow it under
   System Settings › Privacy & Security. Variations ignore hand edits to single branches.
+  Where many branches are welded close together, a growing tree can show small slivers in the bark for a moment.
 
-## 6. Download
+## 7. Download
 
-- H2: Download v0.1.0.
+- H2: v0.2.0 for macOS, Windows and Linux.
 - Files: macOS 11 or later, Apple silicon and Intel: ArborStudio-macos-universal.dmg, 13.5 MB ·
   Windows 10 or later, 64-bit: arbor_studio-windows-x86_64.msi, 4.2 MB ·
   Linux x86-64, X11 or Wayland: arbor_studio-linux-x86_64.tar.gz, 6.2 MB.
@@ -106,7 +121,7 @@ the source or the docs in this repository.
 
 ## Footer
 
-- ArborStudio 0.1.0 · MIT licence · Source · Issues · Docs · Written in Rust.
+- ArborStudio 0.2.0 · MIT licence · Source · Issues · Docs · Written in Rust.
 
 ## Open items (left off the page until they exist)
 
