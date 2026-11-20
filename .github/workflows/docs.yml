@@ -31,6 +31,7 @@ jobs:
           mkdir _site
           cp -R site/. _site/
           cp -R docs _site/docs
+          rm -f _site/copy.md
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
