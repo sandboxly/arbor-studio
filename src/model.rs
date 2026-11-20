@@ -262,7 +262,10 @@ impl GrowthCurve {
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum GrowthSync {
-    /// Parent for branches and leaves, Parent's start and end for roots.
+    /// Stems grow with their parent: start where it reaches them and finish with it (sooner
+    /// at a higher speed), so the whole tree grows at once. Leaves come out with the growing
+    /// shoots and ride their tips until their twig has grown to them, so there are leaves at
+    /// every stage.
     #[default]
     Auto,
     /// Start % of the way through the parent's growth (never before the parent reaches it).
@@ -1781,13 +1784,13 @@ pub const PARAM_REFERENCE: &[(&str, &str, &str, &str)] = &[
     ("weld", "branches", "0..1", "Welding: the branch base swells into a collar that blends into the parent instead of a hard joint."),
     ("curves", "all", "{key: {points: [[x,y],...]}}", "Shaping curves, see curve_reference / set_curve."),
     ("growth", "all", "{speed, speed_curve, radius_curve, start_size, start_angle, orientation_time, sync, start_pct, offset, offset_variation}", "How this generator's stems or leaves grow in the growth animation; see the growth.* rows."),
-    ("growth.speed", "all", "0.05..10", "Speed scale. Stems grow out along their final path at this many times the trunk's pace (a stem as long as the trunk takes 1/speed of the trunk's growth time); leaves unfold in 0.15/speed of it."),
+    ("growth.speed", "all", "0.05..10", "Speed scale. With sync auto a branch takes 1/speed of the time its parent has left when it starts (x1 = finishes with the parent). With the other syncs stems grow at this many times the trunk's pace (a stem as long as the trunk takes 1/speed of the trunk's growth time). Leaves unfold in 0.15/speed of the trunk's time."),
     ("growth.speed_curve", "all", "linear, ease_in, ease_out, s_curve", "How the length (leaves: the size) grows over the part's own growth: steady, slow start, slow end, or slow-fast-slow."),
     ("growth.radius_curve", "trunk, branches, roots", "linear, ease_in, ease_out, s_curve", "How the radius grows over the stem's own growth. A branch is never thicker than its parent where it comes out."),
     ("growth.start_size", "all", "0..1", "Share of its final size a stem or leaf has as soon as it appears (0 = grows from nothing)."),
     ("growth.start_angle", "all", "0..1", "Stems: share of the final angle to the parent at the start (below 1 they fold out of the parent). Leaves: share of the final orientation (below 1 they turn into place from lying along the twig)."),
     ("growth.orientation_time", "leaves", "0.1..5", "How long leaves take to turn into place, relative to unfolding (1 = together)."),
-    ("growth.sync", "branches, roots, leaves", "auto, parent, siblings, parent_start_end, in_place", "When a part starts: parent = Start % through the parent's growth; siblings = all of this generator together; parent_start_end = start and finish with the parent (roots); in_place = exactly when the parent reaches its spot; auto = parent (roots: parent_start_end). Nothing starts before its parent reaches it."),
+    ("growth.sync", "branches, roots, leaves", "auto, parent, siblings, parent_start_end, in_place", "When a part starts. auto (default): stems grow with their parent (start where it reaches them, finish with it, so the whole tree grows at once); leaves come out with the growing shoots (most with their twig, some with the branch below, a few with the young trunk) and ride the growing tips until their twig reaches them, so there are leaves at every stage. parent = Start % through the parent's growth; siblings = all of this generator together; parent_start_end = start and finish with the parent; in_place = exactly when the parent reaches its spot. Stems never start before their parent reaches them."),
     ("growth.start_pct", "branches, roots, leaves", "0..1", "With sync parent or siblings: 0 = start as early as possible, 1 = as late."),
     ("growth.offset", "branches, roots, leaves", "0..3", "Delay added to every start, in shares of the trunk's growth time."),
     ("growth.offset_variation", "branches, roots, leaves", "0..3", "Random extra delay of up to this much per stem or leaf, so neighbours do not all start together."),

@@ -78,13 +78,13 @@
 <p>How the generator's parts grow in the <a href="growth.html">growth animation</a>. Names are under <code>growth</code> in the parameters.</p>
 <table class="ref">
 <tr><th>Label</th><th>Name</th><th>For</th><th>Range</th><th>Effect</th></tr>
-<tr><td>Speed</td><td><code>growth.speed</code></td><td>all</td><td>0.05–10</td><td>Growth speed relative to the trunk's pace.</td></tr>
+<tr><td>Speed</td><td><code>growth.speed</code></td><td>all</td><td>0.05–10</td><td>Growth speed: with sync auto, ×1 finishes with the parent; otherwise relative to the trunk's pace.</td></tr>
 <tr><td>Length curve / Size curve</td><td><code>growth.speed_curve</code></td><td>all</td><td>linear, ease_in, ease_out, s_curve</td><td>How the length (leaves: size) grows over the part's own growth.</td></tr>
 <tr><td>Radius curve</td><td><code>growth.radius_curve</code></td><td>trunk, branches, roots</td><td>linear, ease_in, ease_out, s_curve</td><td>How the radius grows.</td></tr>
 <tr><td>Start size</td><td><code>growth.start_size</code></td><td>all</td><td>0–1</td><td>Size when a part appears.</td></tr>
 <tr><td>Start angle / Start orientation</td><td><code>growth.start_angle</code></td><td>branches, roots, leaves</td><td>0–1</td><td>Share of the final angle (leaves: orientation) at the start; below 1 parts fold out or turn into place.</td></tr>
 <tr><td>Orientation time</td><td><code>growth.orientation_time</code></td><td>leaves</td><td>0.1–5</td><td>How long leaves take to turn into place, relative to unfolding.</td></tr>
-<tr><td>Sync with</td><td><code>growth.sync</code></td><td>branches, roots, leaves</td><td>auto, parent, siblings, parent_start_end, in_place</td><td>What a part's start follows.</td></tr>
+<tr><td>Sync with</td><td><code>growth.sync</code></td><td>branches, roots, leaves</td><td>auto, parent, siblings, parent_start_end, in_place</td><td>What a part's start follows. auto (default): the whole tree grows at once and leaves come out with the growing shoots.</td></tr>
 <tr><td>Start %</td><td><code>growth.start_pct</code></td><td>branches, roots, leaves</td><td>0–1</td><td>With parent or siblings: early (0) to late (1).</td></tr>
 <tr><td>Offset</td><td><code>growth.offset</code></td><td>branches, roots, leaves</td><td>0–3</td><td>Delay added to every start, in shares of the trunk's growth time.</td></tr>
 <tr><td>Offset variation</td><td><code>growth.offset_variation</code></td><td>branches, roots, leaves</td><td>0–3</td><td>Random extra delay per part.</td></tr>

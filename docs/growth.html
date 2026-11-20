@@ -14,10 +14,10 @@
 <p class="lead">A tree can grow in your game: from nothing to the mature tree you designed, through stages such as Sprout, Sapling, Young and Mature. Like dedicated tree modelling tools, ArborStudio grows every branch out along its final path at its own speed, thickens it as it grows, and starts each branch, twig and leaf when its parent reaches it. You tune this per generator. The growth is animated on the tree's own mesh and exported as morph targets with one animation clip per stage, which Godot, Unity and Unreal play without a plugin.</p>
 
 <div class="gallery wide">
-<figure><img src="images/growth-012.jpg" alt="The oak preset at 12 percent: a short young trunk tapering to a point"><figcaption>Sprout (0.12)</figcaption></figure>
-<figure><img src="images/growth-025.jpg" alt="The oak at a quarter of its growth: a taller trunk with the first branches coming out"><figcaption>0.25</figcaption></figure>
-<figure><img src="images/growth-038.jpg" alt="The oak at 38 percent: the lower branches have grown out with twigs and the first leaves"><figcaption>Sapling (0.38)</figcaption></figure>
-<figure><img src="images/growth-068.jpg" alt="The oak at 68 percent: a young tree with a leafy crown, the top still growing"><figcaption>Young (0.68)</figcaption></figure>
+<figure><img src="images/growth-012.jpg" alt="The oak preset at 12 percent: a short young shoot with a few leaves at its tip, standing on a small root flare"><figcaption>Sprout (0.12)</figcaption></figure>
+<figure><img src="images/growth-025.jpg" alt="The oak at a quarter of its growth: a taller young trunk with leaves at its growing tip"><figcaption>0.25</figcaption></figure>
+<figure><img src="images/growth-038.jpg" alt="The oak at 38 percent: a slim young tree, the first branches coming out with leaves at their tips"><figcaption>Sapling (0.38)</figcaption></figure>
+<figure><img src="images/growth-068.jpg" alt="The oak at 68 percent: a young tree whose whole crown has grown out, with leaves throughout, still sparser than the mature tree"><figcaption>Young (0.68)</figcaption></figure>
 <figure><img src="images/growth-100.jpg" alt="The mature oak"><figcaption>Mature (1.0)</figcaption></figure>
 </div>
 <p>The Oak preset at five points of its growth, all from the same camera, with the default growth settings.</p>
@@ -25,12 +25,13 @@
 <h2>How a tree grows</h2>
 <p>Growth runs from <strong>0</strong> (nothing above the ground) to <strong>1</strong> (the tree as designed). On the way:</p>
 <ul>
-<li>Every stem (trunk, branch, twig, root) grows out along its final path, from its base to its tip. Nothing slides or shrinks: the part that has grown is where it is in the mature tree. A stem as long as the trunk takes as long as the trunk at the same speed, so long branches take longer than short twigs.</li>
+<li>Every stem (trunk, branch, twig, root) grows out along its final path, from its base to its tip. Nothing slides or shrinks: the part that has grown is where it is in the mature tree.</li>
+<li>The whole tree grows at once, the way every shoot of a real tree grows a little each year: a branch starts as soon as its parent has grown past it and keeps growing until its parent is done, so the crown widens while the tree gets taller.</li>
 <li>Its radius grows while it grows out, and the stem's own taper is spread over the part that has grown, so a young shoot is slim and ends in a short point. A branch is never thicker, relative to its final size, than its parent where it comes out.</li>
-<li>A branch starts when its parent has grown past the point it comes out of (with the joint around it). It can start later: <strong>Sync with</strong> and <strong>Start %</strong> set when, and <strong>Offset</strong> with a random <strong>Offset variation</strong> spreads neighbours out. Nothing ever starts before its parent has reached it.</li>
-<li>Where a branch is joined to its parent (<a href="joints.html">Branch joints</a>), the joint stays on the parent's bark and opens only as far as the branch is thick, so it is closed before the branch starts and smooth while it grows.</li>
-<li>Leaves unfold from their stalk once their twig has reached them, at their own speed; they can also turn into place.</li>
-<li>Roots start and finish together with the trunk, so the young trunk stands on its roots.</li>
+<li><strong>Sync with</strong>, <strong>Start %</strong> and <strong>Offset</strong> with a random <strong>Offset variation</strong> can make parts start later instead. Nothing ever starts before its parent has reached it.</li>
+<li>Where a branch is joined to its parent (<a href="joints.html">Branch joints</a>), the opening in the parent's bark closes over the bark (it never cuts into the wood) and opens only as far as the branch is thick, so the bark stays closed before the branch starts and while it grows. A twig that comes out right at the base of a branch moves with that branch's joint.</li>
+<li>Leaves come out with the growing shoots: most when their twig starts, some with the branch below it and a few with the young trunk. Until their twig has grown to their place they ride the nearest growing tip, so even a seedling has leaves and the crown gets denser as it grows instead of filling in from the bottom up. They can also turn into place.</li>
+<li>Roots keep the trunk's proportions where they join it, so the young trunk stands on its root flare.</li>
 </ul>
 <p>The whole growth is scaled so it ends at 1 when the last part is done. The mesh never changes its triangles; only its points move. At 1 it is exactly the tree you export without growth. This is what lets engines play the growth as morph targets (also called blend shapes or shape keys).</p>
 <p><strong>Age</strong> in <a href="tree-settings.html">Tree settings</a> is different: it grows a new, younger tree with fewer branches, as a separate model. The growth animation always ends at the tree you designed.</p>
@@ -40,13 +41,13 @@
 <figure><img src="images/ui-gen-growth.jpg" alt="The Growth group of the Main branches generator: Speed times 1.00, Length curve Linear, Radius curve Linear, Start size 0 percent, Start angle 100 percent, Sync with Auto, Start % 0 percent, Offset 0.00 and Offset variation 0.10"><figcaption>The Growth group of a branches generator.</figcaption></figure>
 <table>
 <tr><th>Setting</th><th>For</th><th>Range</th><th>Meaning</th></tr>
-<tr><td>Speed</td><td>all</td><td>×0.05–×10</td><td>How fast this generator's parts grow, relative to the trunk's pace. At ×1 a branch as long as the trunk takes as long as the trunk. Leaves unfold in about a seventh of the trunk's time at ×1.</td></tr>
+<tr><td>Speed</td><td>all</td><td>×0.05–×10</td><td>How fast this generator's parts grow. With Sync Auto, ×1 finishes together with the parent and ×2 in half the time it has left. With the other syncs it is relative to the trunk's pace: at ×1 a branch as long as the trunk takes as long as the trunk. Leaves unfold in about a seventh of the trunk's time at ×1.</td></tr>
 <tr><td>Length curve (leaves: Size curve)</td><td>all</td><td>Linear, Ease in, Ease out, S-curve</td><td>How the length (or the leaf size) grows over the part's own growth: steadily, slow at first, slow at the end, or slow-fast-slow.</td></tr>
 <tr><td>Radius curve</td><td>trunk, branches, roots</td><td>Linear, Ease in, Ease out, S-curve</td><td>How the radius grows. <em>Ease in</em> keeps young stems slim for longer.</td></tr>
 <tr><td>Start size</td><td>all</td><td>0–100%</td><td>The size a part has as soon as it appears. 0 grows it from nothing; higher values make parts pop in partly grown.</td></tr>
 <tr><td>Start angle (leaves: Start orientation)</td><td>branches, roots, leaves</td><td>0–100%</td><td>Below 100%, branches start folded towards their parent and fold out as they grow; leaves start lying along their twig and turn into place.</td></tr>
 <tr><td>Orientation time</td><td>leaves</td><td>×0.1–×5</td><td>How long leaves take to turn into place, relative to unfolding.</td></tr>
-<tr><td>Sync with</td><td>branches, roots, leaves</td><td>Auto, Parent, Siblings, Parent's start and end, In place</td><td><em>Parent</em>: start Start % of the way through the parent's growth. <em>Siblings</em>: all of this generator's parts start together, Start % between as early and as late as all of them can. <em>Parent's start and end</em>: start and finish with the parent. <em>In place</em>: exactly when the parent reaches the spot. <em>Auto</em> is Parent, and Parent's start and end for roots.</td></tr>
+<tr><td>Sync with</td><td>branches, roots, leaves</td><td>Auto, Parent, Siblings, Parent's start and end, In place</td><td><em>Auto</em> (default): branches grow with their parent, starting where it reaches them and finishing with it; leaves come out with the growing shoots, as described above. <em>Parent</em>: start Start % of the way through the parent's growth. <em>Siblings</em>: all of this generator's parts start together, Start % between as early and as late as all of them can. <em>Parent's start and end</em>: start and finish with the parent. <em>In place</em>: exactly when the parent reaches the spot.</td></tr>
 <tr><td>Start %</td><td>with Parent or Siblings</td><td>0–100%</td><td>0 starts as early as possible, 100% as late.</td></tr>
 <tr><td>Offset</td><td>branches, roots, leaves</td><td>0–3</td><td>A delay added to every start, in shares of the trunk's growth time.</td></tr>
 <tr><td>Offset variation</td><td>branches, roots, leaves</td><td>0–3</td><td>A random extra delay of up to this much per part, so neighbours do not all start at once.</td></tr>

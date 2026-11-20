@@ -161,7 +161,7 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
             if let (Some((timing, _)), Some(info)) = (&growth, &growth_info) {
                 let mut g = info.clone();
                 g["timing"] = json!(timing);
-                g["note"] = json!("Growth g runs from 0 (nothing above ground) to 1 (this tree). Stem i grows from timing.stem_start[i] for timing.stem_time[i]: it grows out along its final path from its base (the part inside its parent first), its radius grows with it (the generator's growth.radius_curve), and the growing tip is a short cone. Leaf i unfolds from timing.leaf_start[i] for timing.leaf_time[i]. Each generator's growth settings are in document.generators[].params.growth. Use the GLB morph targets to get the shapes exactly.");
+                g["note"] = json!("Growth g runs from 0 (nothing above ground) to 1 (this tree). Stem i grows from timing.stem_start[i] for timing.stem_time[i]: it grows out along its final path from its base (the part inside its parent first), its radius grows with it (the generator's growth.radius_curve), and the growing tip is a short cone. Leaf i unfolds from timing.leaf_start[i] for timing.leaf_time[i]; until its stem has grown to it, it rides that stem's growing tip (or where the stem will come out). Each generator's growth settings are in document.generators[].params.growth. Use the GLB morph targets to get the shapes exactly.");
                 v["growth"] = g;
             }
             std::fs::write(path, serde_json::to_string_pretty(&v).unwrap()).map_err(|e| format!("cannot write {}: {e}", path.display()))?;

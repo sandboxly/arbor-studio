@@ -1403,7 +1403,6 @@ fn gen_growth_ui(ui: &mut Ui, g: &mut crate::model::GenGrowth, kind: GenKind) {
                 });
                 let uses_pct = match g.sync {
                     GrowthSync::Parent | GrowthSync::Siblings => true,
-                    GrowthSync::Auto => kind != GenKind::Roots,
                     _ => false,
                 };
                 if uses_pct {
