@@ -326,7 +326,9 @@ enum Bind {
     /// Part of the joint where branch `child` comes out of stem `s` (the opening's rim in the
     /// parent's bark and the branch's rings inside the parent), at arc fraction `t` of the
     /// parent whose axis passes `c` there.
-    Joint { s: u32, t: f32, c: Vec3, child: u32 },
+    /// `ct`, `cc`: for the branch's own rings, their arc fraction and axis point on the branch
+    /// (its growing tip shapes them too); -1 for the rim.
+    Joint { s: u32, t: f32, c: Vec3, child: u32, ct: f32, cc: Vec3 },
     /// Part of leaf `l`.
     Leaf { l: u32 },
 }
@@ -435,7 +437,9 @@ impl StemInfo {
         let behind = (st.len - at) * self.length;
         let cone = if radius_m > 1e-6 { (behind / (TIP_SLOPE * radius_m)).clamp(0.0, 1.0) } else { 1.0 };
         let cone = cone * (2.0 - cone);
-        let done = st.x.powi(4);
+        // only once it has (nearly) all its length; blending earlier leaves a blunt, sawn-off end
+        let left = ((1.0 - st.len) * self.length / (TIP_SLOPE * self.final_radius(1.0).max(radius_m))).clamp(0.0, 1.0);
+        let done = (1.0 - left).powi(2);
         (at, r * (cone + (1.0 - cone) * done))
     }
 
@@ -453,10 +457,9 @@ impl StemInfo {
 /// One stem at one point of the growth.
 #[derive(Clone, Copy)]
 struct State {
-    /// Grown length (arc fraction), radius factor, and how far through its own growth.
+    /// Grown length (arc fraction) and radius factor.
     len: f32,
     radius: f32,
-    x: f32,
     /// Where its base is, and how it is turned.
     origin: Vec3,
     rot: Quat,
@@ -497,6 +500,10 @@ struct Opening {
     anchor: Vec3,
     at: f32,
     ac: Vec3,
+    /// How far the rim may close at most (0 = to a point): where openings sit side by side,
+    /// closing both further would pull the bark between them inside out; the branch's own base
+    /// covers the rest.
+    k_min: f32,
 }
 
 /// Moves the vertices of one mesh (built from `sk`) to any point of the growth.
@@ -605,10 +612,11 @@ impl Grower {
             }
         }
         let mut claimed = vec![false; m.pos.len()];
-        let on_parent = |child: usize, q: Vec3| -> Option<Bind> {
+        let on_parent = |child: usize, q: Vec3, own: Option<(f32, Vec3)>| -> Option<Bind> {
             let p = sk.stems[child].parent?;
             let (t, c) = locate(&sk.stems[p], q);
-            Some(Bind::Joint { s: p as u32, t, c, child: child as u32 })
+            let (ct, cc) = own.unwrap_or((-1.0, Vec3::ZERO));
+            Some(Bind::Joint { s: p as u32, t, c, child: child as u32, ct, cc })
         };
         for &(v, child) in &m.joint_rim {
             let (v, child) = (v as usize, child as usize);
@@ -617,7 +625,7 @@ impl Grower {
             }
             if let (Bind::Stem { s, .. }, Some(p)) = (bind[v], sk.stems[child].parent) {
                 if s as usize == p {
-                    if let Some(b) = on_parent(child, m.pos[v]) {
+                    if let Some(b) = on_parent(child, m.pos[v], None) {
                         bind[v] = b;
                         claimed[v] = true;
                     }
@@ -625,12 +633,35 @@ impl Grower {
             }
         }
         for v in 0..m.pos.len() {
-            if let Bind::Stem { s, t, .. } = bind[v] {
+            if let Bind::Stem { s, t, c } = bind[v] {
                 let s = s as usize;
                 if sk.stems[s].parent.is_some() && t < joints[s] + 1e-6 {
-                    if let Some(b) = on_parent(s, m.pos[v]) {
+                    if let Some(b) = on_parent(s, m.pos[v], Some((t, c))) {
                         bind[v] = b;
                     }
+                }
+            }
+        }
+        // copies of one point (texture seams, the stitch strip's own copy of the rim) must move
+        // as one, or the bark cracks open between them: a joint binding wins (the lowest
+        // branch's, so it is the same for every copy)
+        {
+            let mut groups: HashMap<(i64, i64, i64), Vec<usize>> = HashMap::new();
+            for (v, b) in bind.iter().enumerate() {
+                if matches!(b, Bind::Stem { .. } | Bind::Joint { .. }) {
+                    let q = m.pos[v] * 2e4;
+                    groups.entry((q.x.round() as i64, q.y.round() as i64, q.z.round() as i64)).or_default().push(v);
+                }
+            }
+            for vs in groups.values().filter(|vs| vs.len() > 1) {
+                let rank = |b: &Bind| match *b {
+                    Bind::Joint { child, .. } => (0, child),
+                    Bind::Stem { s, .. } => (1, s),
+                    _ => (2, 0),
+                };
+                let best = vs.iter().map(|&v| bind[v]).min_by_key(rank).unwrap();
+                for &v in vs {
+                    bind[v] = best;
                 }
             }
         }
@@ -647,9 +678,66 @@ impl Grower {
                 let out = (mid - c).try_normalize().unwrap_or_else(|| axes[p].tangent(t).any_orthonormal_vector());
                 let centre = c + out * d;
                 let (at, ac) = locate(&sk.stems[p], anchor);
-                Some(Opening { centre, t, c, d, anchor, at, ac })
+                Some(Opening { centre, t, c, d, anchor, at, ac, k_min: 0.0 })
             })
             .collect();
+        // how far each rim may close: try closing every opening alike and see which bark
+        // triangles around rims turn over
+        let mut openings = openings;
+        {
+            let mut k_min = vec![0.0f32; sk.stems.len()];
+            for tri in &m.tris[..m.leaf_tri_start.min(m.tris.len())] {
+                let mut parent = None;
+                let mut kids: Vec<usize> = vec![];
+                let mut ok = true;
+                for &v in tri {
+                    let (s, child) = match bind[v as usize] {
+                        Bind::Stem { s, .. } => (s, None),
+                        Bind::Joint { s, child, ct, .. } if ct < 0.0 => (s, Some(child as usize)),
+                        _ => {
+                            ok = false;
+                            break;
+                        }
+                    };
+                    if *parent.get_or_insert(s) != s {
+                        ok = false;
+                    }
+                    if let Some(ch) = child {
+                        kids.push(ch);
+                    }
+                }
+                if !ok || kids.is_empty() {
+                    continue;
+                }
+                let p = parent.unwrap() as usize;
+                let at = |v: u32, k: f32| -> Vec3 {
+                    match bind[v as usize] {
+                        Bind::Joint { t, c, child, .. } => match &openings[child as usize] {
+                            Some(o) => Grower::bark_shrink(&axes[p], o, k, t, c, m.pos[v as usize]).2,
+                            None => m.pos[v as usize],
+                        },
+                        _ => m.pos[v as usize],
+                    }
+                };
+                let [a, b, c] = *tri;
+                let n1 = (m.pos[b as usize] - m.pos[a as usize]).cross(m.pos[c as usize] - m.pos[a as usize]);
+                for step in 0..10 {
+                    let k = step as f32 * 0.1;
+                    let (pa, pb, pc) = (at(a, k), at(b, k), at(c, k));
+                    let n = (pb - pa).cross(pc - pa);
+                    if n.length() > 2e-3 && n.dot(n1) < 0.0 {
+                        for &ch in &kids {
+                            k_min[ch] = k_min[ch].max(k + 0.1);
+                        }
+                    }
+                }
+            }
+            for (i, o) in openings.iter_mut().enumerate() {
+                if let Some(o) = o {
+                    o.k_min = k_min[i].min(1.0);
+                }
+            }
+        }
         let stems: Vec<StemInfo> = sk
             .stems
             .iter()
@@ -706,7 +794,7 @@ impl Grower {
                 }
             };
             let st = match si.parent {
-                None => State { len, radius, x: x.unwrap_or(0.0), origin: si.base, rot: Quat::IDENTITY },
+                None => State { len, radius, origin: si.base, rot: Quat::IDENTITY },
                 Some((p, a, c)) => {
                     let ps = state(p, g, gr, out);
                     let pr = gr.stems[p].factor(&ps, gr.openings[i].map_or(a, |o| o.t)).1;
@@ -721,7 +809,7 @@ impl Grower {
                     let origin = match gr.openings[i] {
                         Some(o) => {
                             let done: &[Option<State>] = out;
-                            let on = gr.close(&|j| done[j].unwrap_or(ps), p, &o, radius, o.at, o.ac, o.anchor);
+                            let on = gr.close(&|j| done[j].unwrap_or(ps), p, &o, radius, true, o.at, o.ac, o.anchor);
                             on - rot * (o.anchor - si.base)
                         }
                         None => {
@@ -729,7 +817,7 @@ impl Grower {
                             ps.origin + ps.rot * (on - gr.stems[p].base)
                         }
                     };
-                    State { len, radius, x: x.unwrap_or(0.0), origin, rot }
+                    State { len, radius, origin, rot }
                 }
             };
             out[i] = Some(st);
@@ -743,24 +831,39 @@ impl Grower {
     /// the parent's bark as it is now, closed towards the opening's centre while the branch is
     /// thinner (relative to its final size) than the parent there.
     /// Returns where it is now.
-    fn close(&self, states: &dyn Fn(usize) -> State, p: usize, o: &Opening, cr: f32, t: f32, c: Vec3, q: Vec3) -> Vec3 {
+    #[allow(clippy::too_many_arguments)]
+    fn close(&self, states: &dyn Fn(usize) -> State, p: usize, o: &Opening, cr: f32, own: bool, t: f32, c: Vec3, q: Vec3) -> Vec3 {
         let par = &self.stems[p];
         let ps = states(p);
         let pr = par.factor(&ps, o.t).1;
         let k = if pr > 1e-6 { (cr / pr).clamp(0.0, 1.0) } else { 0.0 };
+        let k = if own { k } else { k.max(o.k_min) };
         if k >= 1.0 {
             return self.on_stem(states, p, t, c, q);
         }
-        // close along the parent, around it and in depth by k (so it slides over the bark
-        // instead of cutting through the wood), then take the parent's growth
+        // the branch's own joint shrinks evenly towards the opening (a smaller copy of its
+        // base) ...
+        if own {
+            let q2 = o.centre + (q - o.centre) * k;
+            let (t2, c2) = locate_on(&par.axis.points, q2);
+            return self.on_stem(states, p, t2, c2, q2);
+        }
+        // ... while the parent's bark closes over it; then the parent's growth
+        let (t2, c2, q2) = Grower::bark_shrink(&par.axis, o, k, t, c, q);
+        self.on_stem(states, p, t2, c2, q2)
+    }
+
+    /// Point `q` of the parent's final bark (axis point `c` at arc fraction `t`) with opening
+    /// `o` closed to `k`: along the parent, around it and in depth by k, so it slides over the
+    /// bark instead of cutting through the wood. Returns (arc fraction, axis point, point).
+    fn bark_shrink(axis: &Axis, o: &Opening, k: f32, t: f32, c: Vec3, q: Vec3) -> (f32, Vec3, Vec3) {
         let out = (o.centre - o.c).normalize_or(Vec3::X);
         let d = q.distance(c);
         let dir = if d > 1e-6 { (q - c) / d } else { out };
         let t2 = o.t + (t - o.t) * k;
-        let c2 = par.axis.at(t2);
+        let c2 = axis.at(t2);
         let dir2 = Quat::IDENTITY.slerp(Quat::from_rotation_arc(out, dir), k) * out;
-        let q2 = c2 + dir2 * (o.d + (d - o.d) * k);
-        self.on_stem(states, p, t2, c2, q2)
+        (t2, c2, c2 + dir2 * (o.d + (d - o.d) * k))
     }
 
     /// Where point `q` of stem `s`'s final bark (axis point `c` at arc fraction `t`) is now. Its
@@ -771,10 +874,27 @@ impl Grower {
         if let (Some((p, ..)), Some(o)) = (info.parent, self.openings[s]) {
             if t <= info.joint + 1e-6 {
                 let (tp, cp) = locate_on(&self.stems[p].axis.points, q);
-                return self.close(states, p, &o, states(s).radius, tp, cp, q);
+                return self.close(states, p, &o, states(s).radius, true, tp, cp, q);
             }
         }
         self.place(s, &states(s), t, c, q)
+    }
+
+    /// How much of its own (shrunken) thickness branch `ch`'s joint ring at arc fraction `ct`
+    /// keeps: its growing tip is a short cone, measured in the joint's shrunken size up to the
+    /// joint's end and in full size beyond.
+    fn joint_tip(&self, states: &[State], p: usize, o: &Opening, ch: usize, ct: f32) -> f32 {
+        let info = &self.stems[ch];
+        let cs = &states[ch];
+        let pr = self.stems[p].factor(&states[p], o.t).1;
+        let k = if pr > 1e-6 { (cs.radius / pr).clamp(0.0, 1.0) } else { 0.0 };
+        let behind = (k * (info.joint - ct).max(0.0) + (cs.len - info.joint).max(0.0)) * info.length;
+        let rad = info.final_radius(ct) * k;
+        if rad <= 1e-6 {
+            return 1.0;
+        }
+        let cone = (behind / (TIP_SLOPE * rad)).clamp(0.0, 1.0);
+        cone * (2.0 - cone)
     }
 
     /// Point `q` of stem `s` (axis point `c` at arc fraction `t`) at its state.
@@ -797,10 +917,15 @@ impl Grower {
             let p = match *b {
                 Bind::Fixed => p0 * tree,
                 Bind::Stem { s, t, c } => self.place(s as usize, &states[s as usize], t, c, p0),
-                Bind::Joint { s, t, c, child } => {
-                    let s = s as usize;
-                    match self.openings[child as usize] {
-                        Some(o) => self.close(&|j| states[j], s, &o, states[child as usize].radius, t, c, p0),
+                Bind::Joint { s, t, c, child, ct, cc } => {
+                    let (s, ch) = (s as usize, child as usize);
+                    match self.openings[ch] {
+                        Some(o) => {
+                            // the branch's own joint rings end in its growing tip too, so a long
+                            // welded base does not show as a stump with a flat end
+                            let q = if ct >= 0.0 { cc + (p0 - cc) * self.joint_tip(&states, s, &o, ch, ct) } else { p0 };
+                            self.close(&|j| states[j], s, &o, states[ch].radius, ct >= 0.0, t, c, q)
+                        }
                         None => self.place(s, &states[s], t, c, p0),
                     }
                 }
@@ -959,28 +1084,89 @@ mod tests {
     }
 
     /// Bark seen from behind is not drawn, so a triangle that turns inside out while the tree
-    /// grows shows as a hole. Joints must stay closed: at most small slivers.
-    #[test]
-    fn joints_stay_closed_while_growing() {
-        for name in ["Oak", "Pine", "Birch"] {
-            let doc = preset(name).unwrap();
-            let sk = grow(&doc, 0);
-            let m = build_mesh(&doc, &sk, 0);
-            let gr = Grower::new(&doc, &sk, &m, &Timing::new(&doc, &sk));
-            let (mut count, mut worst) = (0usize, 0.0f32);
-            for gi in 1..20 {
-                let p = gr.positions(gi as f32 * 0.05);
-                for t in &m.tris[..m.leaf_tri_start] {
-                    let [a, b, c] = t.map(|i| i as usize);
-                    let n = (p[b] - p[a]).cross(p[c] - p[a]);
-                    let n1 = (m.pos[b] - m.pos[a]).cross(m.pos[c] - m.pos[a]);
-                    if n.length() * 0.5 > 1e-6 && n.dot(n1) < 0.0 {
-                        count += 1;
-                        worst = worst.max(n.length() * 0.5);
-                    }
+    /// grows shows as a hole, and so does a crack where copies of one point move apart.
+    /// (`flips`: per growth step, inside-out triangles and the largest one's area in m².)
+    fn holes(doc: &Document) -> (Vec<(usize, f32)>, f32) {
+        let sk = grow(doc, 0);
+        let m = build_mesh(doc, &sk, 0);
+        let gr = Grower::new(doc, &sk, &m, &Timing::new(doc, &sk));
+        let mut same: HashMap<(i64, i64, i64), Vec<usize>> = HashMap::new();
+        for t in &m.tris[..m.leaf_tri_start] {
+            for &v in t {
+                let q = m.pos[v as usize] * 2e4;
+                let e = same.entry((q.x.round() as i64, q.y.round() as i64, q.z.round() as i64)).or_default();
+                if !e.contains(&(v as usize)) {
+                    e.push(v as usize);
                 }
             }
+        }
+        let (mut flips, mut crack) = (vec![], 0.0f32);
+        for gi in 1..20 {
+            let p = gr.positions(gi as f32 * 0.05);
+            let (mut count, mut worst) = (0usize, 0.0f32);
+            for t in &m.tris[..m.leaf_tri_start] {
+                let [a, b, c] = t.map(|i| i as usize);
+                let n = (p[b] - p[a]).cross(p[c] - p[a]);
+                let n1 = (m.pos[b] - m.pos[a]).cross(m.pos[c] - m.pos[a]);
+                if n.length() * 0.5 > 1e-6 && n.dot(n1) < 0.0 {
+                    count += 1;
+                    worst = worst.max(n.length() * 0.5);
+                }
+            }
+            flips.push((count, worst));
+            for vs in same.values() {
+                for &v in &vs[1..] {
+                    crack = crack.max(p[v].distance(p[vs[0]]));
+                }
+            }
+        }
+        (flips, crack)
+    }
+
+    fn tot_area(doc: &Document) -> f32 {
+        let sk = grow(doc, 0);
+        let m = build_mesh(doc, &sk, 0);
+        let gr = Grower::new(doc, &sk, &m, &Timing::new(doc, &sk));
+        let mut tot = 0.0;
+        for gi in 1..20 {
+            let p = gr.positions(gi as f32 * 0.05);
+            for t in &m.tris[..m.leaf_tri_start] {
+                let [a, b, c] = t.map(|i| i as usize);
+                let n = (p[b] - p[a]).cross(p[c] - p[a]);
+                let n1 = (m.pos[b] - m.pos[a]).cross(m.pos[c] - m.pos[a]);
+                if n.dot(n1) < 0.0 {
+                    tot += n.length() * 0.5;
+                }
+            }
+        }
+        tot
+    }
+
+    #[test]
+    fn bark_stays_closed_while_growing() {
+        for name in ["Oak", "Pine", "Birch"] {
+            let (flips, crack) = holes(&preset(name).unwrap());
+            let count: usize = flips.iter().map(|f| f.0).sum();
+            let worst = flips.iter().map(|f| f.1).fold(0.0f32, f32::max);
+            assert!(crack < 1e-4, "{name}: copies of a point {crack} m apart");
             assert!(worst < 0.006 && count < 250, "{name}: {count} triangles inside out, the largest {worst} m²");
+        }
+    }
+
+    /// `ARBOR_DOC=path cargo test holes_in_a_document -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn holes_in_a_document() {
+        let names: Vec<String> = match std::env::var("ARBOR_DOC") {
+            Ok(f) => vec![f],
+            Err(_) => vec!["Oak".into(), "Pine".into(), "Birch".into()],
+        };
+        for name in names {
+            let doc = preset(&name).unwrap_or_else(|| crate::state::load_project(std::path::Path::new(&name)).unwrap());
+            let (flips, crack) = holes(&doc);
+            let flips: Vec<(usize, f32)> = flips.iter().map(|f| (f.0, (f.1 * 1e4).round() / 1e4)).collect();
+            println!("{name}: crack {crack:.5} flips {flips:?}");
+            println!("   total flipped area over all steps {:.4} m²", tot_area(&doc));
         }
     }
 
