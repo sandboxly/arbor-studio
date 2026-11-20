@@ -44,8 +44,7 @@ the source or the docs in this repository.
   - export_variations {"count": 12, "format": "glb", "include_lods": true, "include_billboard": true} → 24 files (1,434 ms)
 - Result caption: Birch_v01.glb to Birch_v12.glb, seeds 1 to 12. Each file holds LOD0 to LOD3 and a
   billboard, plus a 4 × 2 billboard atlas PNG.
-- Note: The agent here was a script driving the MCP server, not a chat client. [TODO: screen recording of a
-  real agent session (prompt → MCP calls → trees in the viewport), and which clients were tested]
+- Note: The agent here was a script driving the MCP server, not a chat client.
 - CTA (middle): Download for macOS (12.4 MB) · Set up the MCP server →
 
 ## 2. What ends up in the file
@@ -61,7 +60,7 @@ the source or the docs in this repository.
 - Materials: colour textures, normal maps, alpha-cutout leaf cards.
 - Formats: GLB, OBJ with MTL, and JSON with the full branch skeleton for your own tools.
 - Collision hulls, named for Unreal (UCX_) or Godot (-convcolonly) if you pick it.
-- Engines: The docs describe the import into Unity, Unreal and Godot. [TODO: engines tested, with versions]
+- Engines: The docs describe the import into Unity, Unreal and Godot.
 
 ## 3. Every part has its own controls
 
@@ -73,8 +72,7 @@ the source or the docs in this repository.
   Flutes, Bark lumps, Leaf shape, Leaf fold, Age, Autumn, Fallen leaves, Ambient occlusion.
 - Timing table (measured, LOD0 / all five levels incl. billboard): Oak 21k tris 17 ms / 103 ms ·
   Birch 36k 24 ms / 112 ms · Willow 41k 42 ms / 223 ms · Pine 75k 96 ms / 404 ms.
-- Note: Fast enough that the viewport follows a slider. [TODO: 10 to 20 s loop of a tree regenerating as a slider moves]
-- [TODO: wind animation loop]
+- Note: Fast enough that the viewport follows a slider.
 
 ## 4. ArborStudio and SpeedTree
 
@@ -90,21 +88,12 @@ the source or the docs in this repository.
 
 ## 5. Not for you if
 
-- [TODO: confirm this list] You need a hand-sculpted hero tree for a cinematic. You need SpeedTree's full
+- You need a hand-sculpted hero tree for a cinematic. You need SpeedTree's full
   feature set today. You work in a film or VFX pipeline.
 - Rough edges (from code): The macOS build is not notarised yet, so macOS asks you once to allow it under
   System Settings › Privacy & Security. Variations ignore hand edits to single branches.
 
-## 6. Pain quotes
-
-- [TODO: 5 to 10 real quotes from game developers about making trees, SpeedTree licensing and hand-modelled
-  vegetation. Use one as a pull quote if a strong one turns up.]
-
-## 7. Founder note
-
-- [TODO: founder note, 2 to 4 sentences, first person, signed with a real name]
-
-## 8. Download
+## 6. Download
 
 - H2: Download v0.1.0.
 - Files: macOS 11 or later, Apple silicon and Intel: ArborStudio-macos-universal.zip, 12.4 MB ·
@@ -119,13 +108,13 @@ the source or the docs in this repository.
 
 - ArborStudio 0.1.0 · MIT licence · Source · Issues · Docs · Written in Rust.
 
-## Open items ([TODO] on the page)
+## Open items (left off the page until they exist)
 
 1. Screen recording of a real agent session, and the MCP clients tested.
 2. Engines tested, with versions.
 3. Regeneration loop (slider moving, tree updating).
 4. Wind animation loop.
 5. Who it is not for: confirm the list.
-6. Pain quotes.
-7. Founder note.
+6. Pain quotes (5 to 10 from game developers; one as a pull quote).
+7. Founder note (2 to 4 sentences, first person, signed).
 8. Proof (stars, users, quotes): section left out until it exists.

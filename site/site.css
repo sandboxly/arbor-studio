@@ -35,14 +35,6 @@ h1, h2, h3, p, figure, blockquote, dl, dd { margin: 0; }
 .skip:focus { top: 12px; }
 .wrap { max-width: 1200px; margin: 0 auto; padding-left: var(--space-16); padding-right: var(--space-16); }
 
-/* placeholders for content that does not exist yet: dashed = planned, amber = needs attention */
-.todo {
-  margin-top: var(--space-4); padding: var(--space-3) var(--space-4);
-  border: 1px dashed var(--gizmo); border-radius: var(--radius-sm);
-  font: var(--text-code); color: var(--gizmo); max-width: 80ch;
-}
-.todo-inline { font: var(--text-code); color: var(--gizmo); }
-
 
 /* ======================================================================= top bar */
 .top { position: sticky; top: 0; z-index: 10; background: rgba(12, 15, 14, 0.86); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line-100); }
@@ -183,6 +175,7 @@ sup a { text-decoration: none; font: 500 10px/1 var(--font-mono); letter-spacing
 .timing thead th { font: var(--text-label); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-300); }
 .timing__bar { width: 34%; }
 .timing__bar span { display: block; height: 6px; width: calc(var(--t) * 100%); background: var(--forest-500); border-radius: var(--radius-xs); }
+.birches__note { margin-top: var(--space-3); }
 .timing .small { margin-top: var(--space-3); }
 
 /* ======================================================================= 04 compare */
