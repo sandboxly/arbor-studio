@@ -25,7 +25,8 @@ the source or the docs in this repository.
 - Primary CTA: Download for macOS (12.4 MB) — the label follows the visitor's system: Windows (4.8 MB), Linux (6.2 MB). (from release v0.1.0)
 - Next to CTA: Free and open source. MIT licence. Source on GitHub.
 - Secondary (text link): Set up the MCP server →
-- Screenshot caption: The Oak preset: 20,668 triangles at LOD0, grown in 17 ms. (measured)
+- Screenshot: a hand-authored oak supplied by the person (home-folder path in the log and status bar shortened to the file name).
+- Screenshot caption: An oak authored in ArborStudio: 744 stems, 15,390 leaves, 119,996 triangles at LOD0, grown in 96 ms. (measured, median of 20 runs)
 
 ## 1. An agent session, start to finish
 

@@ -9,7 +9,7 @@
 <meta property="og:title" content="ArborStudio: game-ready trees your agent can grow too">
 <meta property="og:description" content="GLB and OBJ with four LODs, a billboard and wind weights. 35 MCP tools. Free and open source, MIT.">
 <meta property="og:image" content="https://sandboxly.github.io/arbor-studio/images/og.png">
-<meta property="og:image:alt" content="ArborStudio v0.1.0: Game-ready trees. Your agent can grow them too. Next to the text, an oak in the editor's viewport in evening light.">
+<meta property="og:image:alt" content="ArborStudio v0.1.0: Game-ready trees. Your agent can grow them too. Next to the text, a hand-authored oak in the editor's viewport.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="docs/images/app-icon.png">
 <link rel="stylesheet" href="site.css">
@@ -46,11 +46,11 @@
     <p><a class="more" href="docs/agents.html">Set up the MCP server →</a></p>
   </div>
   <figure class="hero__shot">
-    <div class="frame">
-      <div class="frame__bar" aria-hidden="true"><i></i><i></i><i></i></div>
-      <img src="images/editor-oak.jpg" width="1440" height="900" alt="The ArborStudio editor: the generator stack on the left (trunk, roots, main branches, twigs, leaves), an oak in evening light in the viewport, and the settings of the selected branch generator on the right, such as Count per parent, Phyllotaxis, Gravity and Taper.">
-    </div>
-    <figcaption>The Oak preset: 20,668 triangles at LOD0, grown in 17 ms.<sup><a href="#m1" id="r1">1</a></sup></figcaption>
+    <picture>
+      <source type="image/webp" srcset="images/editor-oak-1000.webp 1000w, images/editor-oak.webp 1860w" sizes="(max-width: 1080px) 100vw, 1100px">
+      <img src="images/editor-oak.jpg" width="1860" height="1192" fetchpriority="high" alt="The ArborStudio editor with a hand-authored oak: a full, rounded crown on a thick trunk with spreading surface roots, lit at noon. The trunk generator is selected; an orange ellipsoid outlines the crown, and the right panel shows its settings, such as Height 21.0 m, Gravity, Taper and Buttress flare.">
+    </picture>
+    <figcaption>An oak authored in ArborStudio: 744 stems, 15,390 leaves, 119,996 triangles at LOD0, grown in 96 ms.<sup><a href="#m1" id="r1">1</a></sup></figcaption>
   </figure>
 </section>
 
@@ -227,7 +227,7 @@ cargo build --release</code></pre>
       <p>The help has 22 pages with pictures, from a first tree to the full parameter reference. <kbd>F1</kbd> in the app opens it. <a class="more" href="docs/">Read the docs →</a></p>
     </div>
   </div>
-  <p class="notes" id="m1"><sup>1</sup> Measured with the v0.1.0 release build on an Apple M2 Max, median of 20 seeds per preset, timed through the MCP server. LOD0 includes growing the skeleton and building the mesh; all 5 levels includes rendering the billboard atlas.</p>
+  <p class="notes" id="m1"><sup>1</sup> Measured with the v0.1.0 release build on an Apple M2 Max, median of 20 runs for the oak above and of 20 seeds per preset in the table, timed through the MCP server. LOD0 includes growing the skeleton and building the mesh; all 5 levels includes rendering the billboard atlas.</p>
 </section>
 
 </main>
