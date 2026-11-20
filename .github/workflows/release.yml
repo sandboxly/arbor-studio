@@ -1,7 +1,7 @@
-# Pushing a version tag (for example v0.1.0) builds Arbor Studio for Linux, macOS and Windows and
+# Pushing a version tag (for example v0.1.0) builds ArborStudio for Linux, macOS and Windows and
 # attaches the downloads to a GitHub release of that name.
 #
-# macOS: one "Arbor Studio.app" that runs on Apple silicon and Intel Macs. It is signed and
+# macOS: one "ArborStudio.app" that runs on Apple silicon and Intel Macs. It is signed and
 # notarised by Apple when these repository secrets exist (Settings > Secrets and variables >
 # Actions); without them the app is still built, with an ad-hoc signature (users then confirm it
 # once under System Settings > Privacy & Security):

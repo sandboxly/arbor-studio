@@ -1,5 +1,5 @@
 #!/bin/sh
-# Wraps the arbor_studio program into a double-clickable "Arbor Studio.app".
+# Wraps the arbor_studio program into a double-clickable "ArborStudio.app".
 #
 #   macos/bundle.sh <program> <output folder> [version]
 #
