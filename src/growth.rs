@@ -2,23 +2,29 @@
 //!
 //! The topology never changes, so an engine can play the growth as morph targets (blend
 //! shapes) between a handful of sampled shapes. Growth `g` runs from 0 (nothing above the
-//! ground) to 1 (the mature tree as designed). It follows how tree modelling tools commonly
-//! animate growth:
+//! ground) to 1 (the mature tree as designed). It follows how trees develop:
 //!
-//! * every stem grows out along its final path, from its base to its tip, at a speed (its
-//!   generator's speed scale times the trunk's pace), so a longer branch takes longer; the part
-//!   not grown yet is gathered at the growing tip, which tapers to a point;
-//! * its radius grows over the stem's own growth (a radius curve), and a branch is never
-//!   thicker than its parent where it comes out;
-//! * by default the whole tree grows at once: a branch starts where its parent has grown past
-//!   it and finishes with the parent; leaves come out with the growing shoots and ride the
-//!   nearest growing tip until their twig reaches them, so there are leaves at every stage;
+//! * a tree grows as a whole: every season each bud on the tree makes a new shoot, so all
+//!   orders (trunk, branches, twigs) grow at the same time, and a young tree looks like a
+//!   small tree, not like a bare pole that sprouts branches later (Palubicki et al., "Self-
+//!   organizing tree models", SIGGRAPH 2009). Its lower branches are the ones a real tree later
+//!   sheds as its bole lengthens; with a fixed set of branches, the crown keeps its share of the
+//!   tree's height instead: every stem has its final shape at a size that grows, and what
+//!   grows on it stays at the same place along it;
+//! * a stem's size relative to its parent follows a growth function from its bud break
+//!   (Prusinkiewicz et al., "Animation of plant development", SIGGRAPH 1993); buds low on a
+//!   parent break first, twigs a little after their branch;
+//! * stems thicken all their life and young trees are slender: the radius grows faster than
+//!   the size (to the power 1.3; elastic similarity predicts 1.5 for diameter against height),
+//!   times the radius curve, and a branch is never thicker than its parent where it comes out;
+//! * leaves come out with the young shoots and keep coming over the whole growth, so even a
+//!   seedling has leaves and the crown gets denser as it grows;
 //! * other syncs start a part Start % of the way through the parent's growth, together with
-//!   its siblings, or exactly when the parent reaches its spot, but never before the parent has
-//!   grown that far; an offset with a random variation spreads neighbours out;
+//!   its siblings, or when the parent has grown to its spot; an offset with a random variation
+//!   spreads neighbours out;
 //! * branches can fold out of their parent and leaves turn into place (start angle);
-//! * parts stay where they are in the mature tree: nothing slides or scales around, so joints
-//!   stay closed (the opening in a parent's bark is as wide as the branch is thick).
+//! * where a branch comes out, the opening in the parent's bark is only as wide as the branch
+//!   is thick, so joints stay closed.
 //!
 //! The settings are per generator (`GenParams::growth`); the whole growth is normalised so it
 //! ends at 1 when the last part is done.
@@ -31,6 +37,17 @@ use std::collections::HashMap;
 
 /// A leaf unfolds in this share of the trunk's growth time at speed 1.
 const LEAF_TIME: f32 = 0.15;
+/// With Auto, a branch's bud breaks this long (share of the trunk's growth time) after its
+/// parent's, less for buds low on the parent; plus up to STAGGER at random.
+const BUD_DELAY: f32 = 0.06;
+const STAGGER: f32 = 0.1;
+/// With Auto, a branch reaches its full size relative to its parent in this share of the
+/// trunk's growth time at speed 1 (from then on it grows with the parent).
+const REL_TIME: f32 = 0.25;
+/// Young stems are slender: the radius grows with the size to the power 1 + SLENDER.
+const SLENDER: f32 = 0.3;
+/// With Auto, new leaves keep coming out until this point of the growth.
+const LEAF_END: f32 = 0.85;
 /// A branch starts once its parent has grown this many times its base radius past where it
 /// comes out, so its joint collar is never above the parent's growing tip.
 const JOINT_REACH: f32 = 2.5;
@@ -171,6 +188,8 @@ impl Timing {
                 order.push(st.gen);
             }
         }
+        // where each stem comes out along its parent (0 = base, 1 = tip)
+        let apos: Vec<f32> = sk.stems.iter().map(|st| st.parent.map_or(0.0, |p| locate(&sk.stems[p], st.points[0]).0)).collect();
         let mut done = vec![false; n];
         for gen in &order {
             let mine: Vec<usize> = (0..n).filter(|&i| sk.stems[i].gen == *gen).collect();
@@ -195,18 +214,18 @@ impl Timing {
                     let pl = place(i);
                     let (mut s, mut d) = (pl, time[i]);
                     if let (true, Some(p)) = (sk.stems[i].fork, sk.stems[i].parent) {
-                        // a fork's leader carries on the stem it splits from: it starts when the
-                        // stem reaches the fork and finishes with it
-                        s = pl.max(start[p]);
-                        d = (start[p] + time[p] - s).max(0.1 * time[i]);
+                        // a split's leader is part of the stem it splits from: it grows with it
+                        // (always its full share of it, see `states`)
+                        s = start[p];
+                        d = time[p];
                     } else if let Some(p) = sk.stems[i].parent {
                         match sync {
-                            // grow with the parent: start where it reaches them and take the
-                            // parent's remaining time (divided by the speed), so the whole tree
-                            // grows at once, the way every shoot of a real tree grows each year
+                            // the whole tree grows at once: a bud breaks a little after its
+                            // parent's (low buds first, roots with the trunk) and the shoot
+                            // reaches its share of the parent's size in REL_TIME / speed
                             GrowthSync::Auto => {
-                                s = pl.max(start[p]);
-                                d = ((start[p] + time[p] - s) / g.speed).max(0.25 * time[i]);
+                                s = if sk.stems[i].root { start[p] } else { start[p] + BUD_DELAY * (0.35 + 0.65 * apos[i]) + STAGGER * hash01(3 * i as u32 + 7) };
+                                d = REL_TIME / g.speed;
                             }
                             GrowthSync::Parent => s = pl.max(start[p] + g.start_pct * time[p]),
                             GrowthSync::InPlace => s = pl,
@@ -250,9 +269,10 @@ impl Timing {
             if l.stem < n {
                 let p = l.stem;
                 match g.sync {
-                    // come out with the growing shoots: most when their twig starts, some with
-                    // the branch below it and a few with the young trunk; until their twig has
-                    // grown to their place they ride the nearest growing tip
+                    // come out with the young shoots and keep coming over the whole growth, so
+                    // the crown gets denser: a few with the young trunk, some with the branch
+                    // below their twig, most once their twig has broken bud; until their twig
+                    // is out they sit where it will come out
                     GrowthSync::Auto => {
                         let h = hash01(7919 * i as u32 + 3);
                         let mut chain = vec![p];
@@ -260,7 +280,9 @@ impl Timing {
                             chain.push(q);
                         }
                         let up = if h < SEEDLING_LEAVES / nl.max(1) as f32 { chain.len() - 1 } else if h < EARLY_LEAVES { 1.min(chain.len() - 1) } else { 0 };
-                        s = start[chain[up]];
+                        let s0 = start[chain[up]] + 0.02;
+                        let h2 = hash01(7919 * i as u32 + 11);
+                        s = if up + 1 == chain.len() && chain.len() > 1 { s0 + 0.04 * h2 } else { s0 + h2 * h2 * (LEAF_END - s0).max(0.0) };
                     }
                     GrowthSync::Parent => s = pl.max(start[p] + g.start_pct * time[p]),
                     GrowthSync::InPlace => s = pl,
@@ -301,7 +323,7 @@ impl Timing {
 const EARLY_LEAVES: f32 = 0.15;
 /// With Auto, about this many leaves come out with the young trunk, so even a seedling has
 /// leaves.
-const SEEDLING_LEAVES: f32 = 6.0;
+const SEEDLING_LEAVES: f32 = 14.0;
 
 /// The growth points the animation is sampled at: an even spread plus every stage, always
 /// including 0 and 1.
@@ -410,6 +432,8 @@ struct StemInfo {
     joint: f32,
     /// A root: grows with its parent, so its joint keeps the parent's proportions.
     root: bool,
+    /// A leader of a split: part of its parent, always its full share of it.
+    fork: bool,
     g: GenGrowth,
 }
 
@@ -462,17 +486,21 @@ impl StemInfo {
 /// One stem at one point of the growth.
 #[derive(Clone, Copy)]
 struct State {
-    /// Grown length (arc fraction) and radius factor.
+    /// Grown length (arc fraction) and radius factor (of the stem at its present size).
     len: f32,
     radius: f32,
-    /// Where its base is, and how it is turned.
+    /// Where its base is, how it is turned and how large it is (1 = its final size).
     origin: Vec3,
     rot: Quat,
+    scale: f32,
+    /// How thick it is relative to its final thickness, compared with its parent's frame
+    /// (opens the parent's bark for it).
+    open: f32,
 }
 
 impl State {
     /// Where the part of the final stem at arc fraction `t` is now, as an arc fraction along
-    /// the final path: the grown part keeps its place, the rest waits at the growing tip.
+    /// the stem (before scaling): a grown stem is whole, one that has not started is closed.
     fn map(&self, t: f32) -> f32 {
         t.clamp(0.0, self.len.max(0.0))
     }
@@ -760,7 +788,7 @@ impl Grower {
                     }
                     None => (None, (Vec3::X, 0.0)),
                 };
-                StemInfo { axis: Axis::new(st), base, parent, fold, radii: st.radii.clone(), length: polyline_length(st), joint: joints[i], root: st.root, g: settings(doc, st.gen).0 }
+                StemInfo { axis: Axis::new(st), base, parent, fold, radii: st.radii.clone(), length: polyline_length(st), joint: joints[i], root: st.root, fork: st.fork, g: settings(doc, st.gen).0 }
             })
             .collect();
         let leaves = sk
@@ -789,40 +817,47 @@ impl Grower {
             let si = &gr.stems[i];
             let gs = &si.g;
             let x = Timing::progress(gr.timing.stem_start[i], gr.timing.stem_time[i], g);
-            let (len, mut radius, fold) = match x {
-                // not started: everything past the joint waits where it comes out
-                None => (if si.parent.is_some() { si.joint } else { 0.0 }, 0.0, gs.start_angle),
+            // its size relative to its parent, its radius curve and how far it has folded out
+            let (f, rc, fold) = match x {
+                // not out yet: gathered where it will come out
+                None => (0.0, 0.0, gs.start_angle),
+                Some(_) if si.fork => (1.0, 1.0, 1.0),
                 Some(x) => {
                     let ss = gs.start_size;
-                    let grown = ss + (1.0 - ss) * gs.speed_curve.at(x);
-                    (si.joint + (1.0 - si.joint) * grown, ss + (1.0 - ss) * gs.radius_curve.at(x), gs.start_angle + (1.0 - gs.start_angle) * gs.speed_curve.at(x))
+                    (ss + (1.0 - ss) * gs.speed_curve.at(x), ss + (1.0 - ss) * gs.radius_curve.at(x), gs.start_angle + (1.0 - gs.start_angle) * gs.speed_curve.at(x))
                 }
             };
+            let len = if f > 0.0 { 1.0 } else if si.parent.is_some() { si.joint } else { 0.0 };
             let st = match si.parent {
-                None => State { len, radius, origin: si.base, rot: Quat::IDENTITY },
+                // young trees are slender: thickness grows faster than size (size^1.3)
+                None => State { len, radius: rc * f.powf(SLENDER), origin: si.base, rot: Quat::IDENTITY, scale: f, open: 1.0 },
                 Some((p, a, c)) => {
                     let ps = state(p, g, gr, out);
+                    let scale = ps.scale * f;
                     let pr = gr.stems[p].factor(&ps, gr.openings[i].map_or(a, |o| o.t)).1;
-                    // never further along in thickness than the parent where it comes out, so its
-                    // joint stays inside the parent's bark; a root's flare keeps the parent's
-                    // proportions (it is part of the trunk's foot)
-                    radius = if si.root { pr } else { radius.min(pr) };
+                    // never thicker, against its final size, than the parent where it comes out,
+                    // so its joint stays inside the parent's bark; a root's flare keeps the
+                    // parent's proportions (it is part of the trunk's foot)
+                    let radius = if si.root {
+                        pr
+                    } else if f > 1e-6 {
+                        (rc * scale.powf(SLENDER)).min(pr / f)
+                    } else {
+                        0.0
+                    };
+                    let open = f * radius;
                     let rot = ps.rot * Quat::from_axis_angle(si.fold.0, -(1.0 - fold) * si.fold.1);
                     // where it comes out of the parent's bark is the centre of the opening there as
                     // the parent is now, so the opening and the branch close around the same point
-                    // (at the parent's growing tip while the parent has not reached it yet)
                     let origin = match gr.openings[i] {
                         Some(o) => {
                             let done: &[Option<State>] = out;
-                            let on = gr.close(&|j| done[j].unwrap_or(ps), p, &o, radius, true, o.at, o.ac, o.anchor);
-                            on - rot * (o.anchor - si.base)
+                            let on = gr.close(&|j| done[j].unwrap_or(ps), p, &o, open, true, o.at, o.ac, o.anchor);
+                            on - rot * ((o.anchor - si.base) * scale)
                         }
-                        None => {
-                            let on = gr.stems[p].moved(&ps, a, c, si.base);
-                            ps.origin + ps.rot * (on - gr.stems[p].base)
-                        }
+                        None => gr.place(p, &ps, a, c, si.base),
                     };
-                    State { len, radius, origin, rot }
+                    State { len, radius, origin, rot, scale, open }
                 }
             };
             out[i] = Some(st);
@@ -879,7 +914,7 @@ impl Grower {
         if let (Some((p, ..)), Some(o)) = (info.parent, self.openings[s]) {
             if t <= info.joint + 1e-6 {
                 let (tp, cp) = locate_on(&self.stems[p].axis.points, q);
-                return self.close(states, p, &o, states(s).radius, true, tp, cp, q);
+                return self.close(states, p, &o, states(s).open, true, tp, cp, q);
             }
         }
         self.place(s, &states(s), t, c, q)
@@ -892,7 +927,7 @@ impl Grower {
         let info = &self.stems[ch];
         let cs = &states[ch];
         let pr = self.stems[p].factor(&states[p], o.t).1;
-        let k = if pr > 1e-6 { (cs.radius / pr).clamp(0.0, 1.0) } else { 0.0 };
+        let k = if pr > 1e-6 { (cs.open / pr).clamp(0.0, 1.0) } else { 0.0 };
         let behind = (k * (info.joint - ct).max(0.0) + (cs.len - info.joint).max(0.0)) * info.length;
         let rad = info.final_radius(ct) * k;
         if rad <= 1e-6 {
@@ -905,7 +940,7 @@ impl Grower {
     /// Point `q` of stem `s` (axis point `c` at arc fraction `t`) at its state.
     fn place(&self, s: usize, st: &State, t: f32, c: Vec3, q: Vec3) -> Vec3 {
         let info = &self.stems[s];
-        st.origin + st.rot * (info.moved(st, t, c, q) - info.base)
+        st.origin + st.rot * ((info.moved(st, t, c, q) - info.base) * st.scale)
     }
 
     /// Vertex positions at growth `g` (1 = the mature mesh).
@@ -915,7 +950,7 @@ impl Grower {
             return self.base.clone();
         }
         let states = self.states(g);
-        let tree = self.leader.map(|i| states[i].len).unwrap_or(g);
+        let tree = self.leader.map(|i| states[i].scale).unwrap_or(g);
         let mut out = Vec::with_capacity(self.base.len());
         for (v, b) in self.bind.iter().enumerate() {
             let p0 = self.base[v];
@@ -929,7 +964,7 @@ impl Grower {
                             // the branch's own joint rings end in its growing tip too, so a long
                             // welded base does not show as a stump with a flat end
                             let q = if ct >= 0.0 { cc + (p0 - cc) * self.joint_tip(&states, s, &o, ch, ct) } else { p0 };
-                            self.close(&|j| states[j], s, &o, states[ch].radius, ct >= 0.0, t, c, q)
+                            self.close(&|j| states[j], s, &o, states[ch].open, ct >= 0.0, t, c, q)
                         }
                         None => self.place(s, &states[s], t, c, p0),
                     }
@@ -945,7 +980,8 @@ impl Grower {
                         match Timing::progress(self.timing.leaf_start[l as usize], self.timing.leaf_time[l as usize], g) {
                             None => anchor,
                             Some(x) => {
-                                let size = gs.start_size + (1.0 - gs.start_size) * gs.speed_curve.at(x);
+                                // a young tree's leaves are a little smaller
+                                let size = (gs.start_size + (1.0 - gs.start_size) * gs.speed_curve.at(x)) * (0.45 + 0.55 * tree.clamp(0.0, 1.0));
                                 let xo = (x / gs.orientation_time).min(1.0);
                                 let turned = gs.start_angle + (1.0 - gs.start_angle) * gs.speed_curve.at(xo);
                                 let r = Quat::IDENTITY.slerp(li.fold, 1.0 - turned);
@@ -1154,7 +1190,7 @@ mod tests {
             let count: usize = flips.iter().map(|f| f.0).sum();
             let worst = flips.iter().map(|f| f.1).fold(0.0f32, f32::max);
             assert!(crack < 1e-4, "{name}: copies of a point {crack} m apart");
-            assert!(worst < 0.008 && count < 250, "{name}: {count} triangles inside out, the largest {worst} m²");
+            assert!(worst < 0.006 && count < 250, "{name}: {count} triangles inside out, the largest {worst} m²");
         }
     }
 

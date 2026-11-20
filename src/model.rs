@@ -269,20 +269,21 @@ impl GrowthCurve {
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum GrowthSync {
-    /// Stems grow with their parent: start where it reaches them and finish with it (sooner
-    /// at a higher speed), so the whole tree grows at once. Leaves come out with the growing
-    /// shoots and ride their tips until their twig has grown to them, so there are leaves at
-    /// every stage.
+    /// The whole tree grows at once, as real trees do: a branch's bud breaks a little after its
+    /// parent's (low buds first) and the branch grows to its share of the parent's size while
+    /// the parent keeps growing, so a young tree is a small, slender tree. Leaves come out with
+    /// the young shoots and keep coming over the whole growth, so the crown gets denser.
     #[default]
     Auto,
-    /// Start % of the way through the parent's growth (never before the parent reaches it).
+    /// Start % of the way through the parent's growth (never before the parent has grown to
+    /// its spot).
     Parent,
     /// All of this generator's stems or leaves start together: Start % between as early and as
     /// late as all of them can.
     Siblings,
     /// Start and finish together with the parent (good for roots).
     ParentStartEnd,
-    /// Exactly when the parent reaches the point it grows from.
+    /// Exactly when the parent has grown to the point it grows from.
     InPlace,
 }
 
@@ -300,9 +301,9 @@ impl GrowthSync {
     }
 }
 
-/// How one generator's stems or leaves grow in the growth animation. Each stem grows out along
-/// its final path from its base to its tip, at a speed, while its radius grows; it starts when
-/// its parent allows (see `sync`).
+/// How one generator's stems or leaves grow in the growth animation. Each stem keeps its final
+/// shape and grows in size relative to its parent (what grows on it stays at the same place
+/// along it), while it thickens; it starts when its parent allows (see `sync`).
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct GenGrowth {
@@ -920,9 +921,9 @@ impl GrowthStage {
     }
 }
 
-/// The growth animation: the same mesh moves from a sprout to the mature tree (trunk and
-/// branches lengthen and thicken, side branches sprout as their parent passes them, leaves
-/// unfold), so engines can play it as morph targets.
+/// The growth animation: the same mesh moves from a seedling to the mature tree (the whole tree
+/// grows at once, young trees are small and slender, branches come out of closed bark and
+/// leaves keep coming), so engines can play it as morph targets.
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct Growth {
@@ -1810,13 +1811,13 @@ pub const PARAM_REFERENCE: &[(&str, &str, &str, &str)] = &[
     ("weld", "branches", "0..1", "Welding: the branch base swells into a collar that blends into the parent instead of a hard joint."),
     ("curves", "all", "{key: {points: [[x,y],...]}}", "Shaping curves, see curve_reference / set_curve."),
     ("growth", "all", "{speed, speed_curve, radius_curve, start_size, start_angle, orientation_time, sync, start_pct, offset, offset_variation}", "How this generator's stems or leaves grow in the growth animation; see the growth.* rows."),
-    ("growth.speed", "all", "0.05..10", "Speed scale. With sync auto a branch takes 1/speed of the time its parent has left when it starts (x1 = finishes with the parent). With the other syncs stems grow at this many times the trunk's pace (a stem as long as the trunk takes 1/speed of the trunk's growth time). Leaves unfold in 0.15/speed of the trunk's time."),
-    ("growth.speed_curve", "all", "linear, ease_in, ease_out, s_curve", "How the length (leaves: the size) grows over the part's own growth: steady, slow start, slow end, or slow-fast-slow."),
-    ("growth.radius_curve", "trunk, branches, roots", "linear, ease_in, ease_out, s_curve", "How the radius grows over the stem's own growth. A branch is never thicker than its parent where it comes out."),
+    ("growth.speed", "all", "0.05..10", "Speed scale. Trunk: it reaches its full size in 1/speed of the growth. With sync auto a branch reaches its full size relative to its parent in 0.25/speed of the trunk's growth time. With the other syncs a stem takes its length relative to the trunk divided by speed (a stem as long as the trunk takes 1/speed of the trunk's time). Leaves unfold in 0.15/speed of the trunk's time."),
+    ("growth.speed_curve", "all", "linear, ease_in, ease_out, s_curve", "How the size grows over the part's own growth: steady, slow start, slow end, or slow-fast-slow."),
+    ("growth.radius_curve", "trunk, branches, roots", "linear, ease_in, ease_out, s_curve", "How the radius grows over the stem's own growth, on top of young stems being slender (thickness grows with size^1.3). A branch is never thicker than its parent where it comes out."),
     ("growth.start_size", "all", "0..1", "Share of its final size a stem or leaf has as soon as it appears (0 = grows from nothing)."),
     ("growth.start_angle", "all", "0..1", "Stems: share of the final angle to the parent at the start (below 1 they fold out of the parent). Leaves: share of the final orientation (below 1 they turn into place from lying along the twig)."),
     ("growth.orientation_time", "leaves", "0.1..5", "How long leaves take to turn into place, relative to unfolding (1 = together)."),
-    ("growth.sync", "branches, roots, leaves", "auto, parent, siblings, parent_start_end, in_place", "When a part starts. auto (default): stems grow with their parent (start where it reaches them, finish with it, so the whole tree grows at once); leaves come out with the growing shoots (most with their twig, some with the branch below, a few with the young trunk) and ride the growing tips until their twig reaches them, so there are leaves at every stage. parent = Start % through the parent's growth; siblings = all of this generator together; parent_start_end = start and finish with the parent; in_place = exactly when the parent reaches its spot. Stems never start before their parent reaches them."),
+    ("growth.sync", "branches, roots, leaves", "auto, parent, siblings, parent_start_end, in_place", "When a part starts. auto (default): the whole tree grows at once, as real trees do: a branch's bud breaks a little after its parent's (low buds first) and the branch grows to its share of the parent's size while the parent keeps growing, so a young tree is a small, slender tree; leaves come out with the young shoots (a few with the trunk, some with the branch below their twig, most with their twig) and keep coming over the whole growth, so the crown gets denser. parent = Start % through the parent's growth; siblings = all of this generator together; parent_start_end = start and finish with the parent; in_place = when the parent has grown to its spot. Nothing starts before its parent."),
     ("growth.start_pct", "branches, roots, leaves", "0..1", "With sync parent or siblings: 0 = start as early as possible, 1 = as late."),
     ("growth.offset", "branches, roots, leaves", "0..3", "Delay added to every start, in shares of the trunk's growth time."),
     ("growth.offset_variation", "branches, roots, leaves", "0..3", "Random extra delay of up to this much per stem or leaf, so neighbours do not all start together."),

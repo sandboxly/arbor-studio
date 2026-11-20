@@ -66,12 +66,10 @@ the source or the docs in this repository.
 
 - Eyebrow: New in v0.2.0: growth animation
 - H2: The tree grows in your game, from a shoot to the crown you designed.
-- Lead: Every branch grows out along its final path while the trunk is still getting taller, and leaves
-  come with the young shoots, so the crown fills in all at once instead of from the bottom up. The bark
-  closes over branches that haven't started yet.
-- Animation 1 (tall): the person's oak from the hero, 744 stems, growth 0 to 1, camera turning 50°.
+- Lead: The whole tree grows at once, the way trees do: every shoot grows a little each season, so a young tree is a small, slender tree with its own branches that thickens, widens and fills in with leaves. Branches come out of closed bark.
+- Animation 1 (tall): the person's oak from the hero, 744 stems, growth 0 to 1, camera turning 50° and pulling back as the tree grows.
   Rendered with render_preview at 72 points of the growth. WebP, GIF fallback, still for reduced motion.
-- Animation 2 (wide): closer to the crown, growth 0.3 to 1, camera pulling back as the crown widens.
+- Animation 2 (wide): closer to the crown, growth 0.2 to 1, camera pulling back with the tree's size.
 - Facts: Per generator (speed, start size, start angle, length and radius curves, when parts start) ·
   Stages (up to eight, named) · GLB (morph targets on every LOD, a Grow clip and one clip per stage; Godot
   and Blender play them without a plugin) · Agents (set_growth, render_preview, include_growth).

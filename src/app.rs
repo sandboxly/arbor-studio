@@ -1396,7 +1396,7 @@ fn gen_growth_ui(ui: &mut Ui, g: &mut crate::model::GenGrowth, kind: GenKind) {
                     })
                     .response
             };
-            prow(ui, if leaves { "Size curve" } else { "Length curve" }, "growth.speed_curve", |ui| curve(ui, "gg_speed_curve", &mut g.speed_curve));
+            prow(ui, "Size curve", "growth.speed_curve", |ui| curve(ui, "gg_speed_curve", &mut g.speed_curve));
             if !leaves {
                 prow(ui, "Radius curve", "growth.radius_curve", |ui| curve(ui, "gg_radius_curve", &mut g.radius_curve));
             }

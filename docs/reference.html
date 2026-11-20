@@ -81,7 +81,7 @@
 <p>How the generator's parts grow in the <a href="growth.html">growth animation</a>. Names are under <code>growth</code> in the parameters.</p>
 <table class="ref">
 <tr><th>Label</th><th>Name</th><th>For</th><th>Range</th><th>Effect</th></tr>
-<tr><td>Speed</td><td><code>growth.speed</code></td><td>all</td><td>0.05–10</td><td>Growth speed: with sync auto, ×1 finishes with the parent; otherwise relative to the trunk's pace.</td></tr>
+<tr><td>Speed</td><td><code>growth.speed</code></td><td>all</td><td>0.05–10</td><td>Growth speed. Trunk: ×1 reaches full size at the end of the growth. With sync auto a branch reaches its full size relative to its parent in a quarter of the trunk's time at ×1; otherwise relative to the trunk's pace.</td></tr>
 <tr><td>Length curve / Size curve</td><td><code>growth.speed_curve</code></td><td>all</td><td>linear, ease_in, ease_out, s_curve</td><td>How the length (leaves: size) grows over the part's own growth.</td></tr>
 <tr><td>Radius curve</td><td><code>growth.radius_curve</code></td><td>trunk, branches, roots</td><td>linear, ease_in, ease_out, s_curve</td><td>How the radius grows.</td></tr>
 <tr><td>Start size</td><td><code>growth.start_size</code></td><td>all</td><td>0–1</td><td>Size when a part appears.</td></tr>
