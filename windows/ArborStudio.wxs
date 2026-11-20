@@ -27,9 +27,11 @@
         <Component Id="Program">
           <File Id="ArborStudioExe" Source="$(var.Exe)" Name="arbor_studio.exe" KeyPath="yes" />
         </Component>
-        <Component Id="Notes">
+        <Component Id="Readme">
           <File Id="Readme" Source="$(var.Readme)" Name="README.md" KeyPath="yes" />
-          <File Id="Licence" Source="$(var.Licence)" Name="LICENSE.txt" />
+        </Component>
+        <Component Id="Licence">
+          <File Id="Licence" Source="$(var.Licence)" Name="LICENSE.txt" KeyPath="yes" />
         </Component>
       </Directory>
     </StandardDirectory>
@@ -44,7 +46,8 @@
 
     <Feature Id="Main" Title="ArborStudio">
       <ComponentRef Id="Program" />
-      <ComponentRef Id="Notes" />
+      <ComponentRef Id="Readme" />
+      <ComponentRef Id="Licence" />
       <ComponentRef Id="StartMenuEntry" />
     </Feature>
 
