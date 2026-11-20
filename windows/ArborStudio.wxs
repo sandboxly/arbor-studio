@@ -1,0 +1,55 @@
+<!--
+  Windows installer (.msi) for ArborStudio, built with WiX Toolset 5:
+
+    wix extension add -g WixToolset.UI.wixext/5.0.2
+    wix build windows/ArborStudio.wxs -arch x64 -ext WixToolset.UI.wixext
+      -d Version=0.1.0 -d Exe=arbor_studio.exe -d LicenseRtf=license.rtf
+      -d Icon=assets\icon.ico -d Readme=README.md -d Licence=LICENSE
+      -o arbor_studio-windows-x86_64.msi
+
+  Installs into Program Files\ArborStudio for all users, adds a Start menu entry and an entry
+  under Settings > Apps for uninstalling. A newer version replaces an older one (the
+  UpgradeCode below must never change).
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="ArborStudio" Manufacturer="ArborStudio contributors" Version="$(var.Version)"
+           UpgradeCode="5ce9a564-a20f-4e44-868e-91433241dc4a" Scope="perMachine" Language="1033">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of ArborStudio is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="AppIcon" SourceFile="$(var.Icon)" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://sandboxly.github.io/arbor-studio/" />
+    <Property Id="ARPHELPLINK" Value="https://sandboxly.github.io/arbor-studio/docs/" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="ArborStudio">
+        <Component Id="Program">
+          <File Id="ArborStudioExe" Source="$(var.Exe)" Name="arbor_studio.exe" KeyPath="yes" />
+        </Component>
+        <Component Id="Notes">
+          <File Id="Readme" Source="$(var.Readme)" Name="README.md" KeyPath="yes" />
+          <File Id="Licence" Source="$(var.Licence)" Name="LICENSE.txt" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuEntry">
+        <Shortcut Id="StartMenuShortcut" Name="ArborStudio" Description="Tree editor for games"
+                  Target="[INSTALLFOLDER]arbor_studio.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon" />
+        <RegistryValue Root="HKCU" Key="Software\ArborStudio" Name="StartMenuEntry" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="ArborStudio">
+      <ComponentRef Id="Program" />
+      <ComponentRef Id="Notes" />
+      <ComponentRef Id="StartMenuEntry" />
+    </Feature>
+
+    <!-- one page with the MIT licence, then install -->
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+  </Package>
+</Wix>

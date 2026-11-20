@@ -1,5 +1,10 @@
 # Pushing a version tag (for example v0.1.0) builds ArborStudio for Linux, macOS and Windows and
-# attaches the downloads to a GitHub release of that name.
+# attaches the downloads to a GitHub release of that name:
+#   macOS    ArborStudio-macos-universal.dmg     disk image, drag the app to Applications
+#   Windows  arbor_studio-windows-x86_64.msi     installer (WiX Toolset 5, windows/ArborStudio.wxs)
+#   Linux    arbor_studio-linux-x86_64.tar.gz
+# "Run workflow" (Actions tab) with an existing tag rebuilds that version with the packaging of
+# the branch it runs from and replaces the release's downloads of the same name.
 #
 # macOS: one "ArborStudio.app" that runs on Apple silicon and Intel Macs. It is signed and
 # notarised by Apple when these repository secrets exist (Settings > Secrets and variables >
@@ -15,6 +20,14 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing version tag to build, for example v0.1.0"
+        required: true
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: write
@@ -30,10 +43,19 @@ jobs:
             archive: arbor_studio-linux-x86_64.tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            archive: arbor_studio-windows-x86_64.zip
+            archive: arbor_studio-windows-x86_64.msi
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Packaging files of this workflow's commit
+        uses: actions/checkout@v4
+        with:
+          path: .ci
+          sparse-checkout: |
+            macos
+            windows
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -50,17 +72,30 @@ jobs:
           mkdir dist
           cp -R target/${{ matrix.target }}/release/arbor_studio README.md LICENSE dist/
           tar -czf ${{ matrix.archive }} -C dist .
-      - name: Package (Windows)
+      - name: Package (Windows installer)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory dist | Out-Null
-          Copy-Item target/${{ matrix.target }}/release/arbor_studio.exe, README.md, LICENSE dist/
-          Compress-Archive -Path dist/* -DestinationPath ${{ matrix.archive }}
+          dotnet tool install --global wix --version 5.0.2
+          $wix = "$env:USERPROFILE\.dotnet\tools\wix.exe"
+          & $wix extension add -g WixToolset.UI.wixext/5.0.2
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # the licence page of the installer wants RTF
+          $text = (Get-Content LICENSE -Raw) -replace '\\', '\\' -replace '\{', '\{' -replace '\}', '\}' -replace "`r?`n", "\par`n"
+          $rtf = "$env:RUNNER_TEMP\license.rtf"
+          Set-Content -Path $rtf -Encoding ascii -Value ("{\rtf1\ansi\deff0{\fonttbl{\f0 Segoe UI;}}\f0\fs18 " + $text + "}")
+          $version = "$env:TAG".TrimStart('v')
+          & $wix build .ci/windows/ArborStudio.wxs -arch x64 -ext WixToolset.UI.wixext `
+            -d Version=$version -d Exe=target/${{ matrix.target }}/release/arbor_studio.exe `
+            -d LicenseRtf=$rtf -d Icon=assets/icon.ico -d Readme=README.md -d Licence=LICENSE `
+            -o ${{ matrix.archive }}
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG }}
           files: ${{ matrix.archive }}
-          generate_release_notes: true
+          fail_on_unmatched_files: true
+          generate_release_notes: ${{ github.event_name == 'push' }}
 
   macos:
     runs-on: macos-latest
@@ -70,9 +105,18 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      ARCHIVE: ArborStudio-macos-universal.zip
+      ARCHIVE: ArborStudio-macos-universal.dmg
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Packaging files of this workflow's commit
+        uses: actions/checkout@v4
+        with:
+          path: .ci
+          sparse-checkout: |
+            macos
+            windows
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -98,19 +142,19 @@ jobs:
           IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep 'Developer ID Application' | head -1 | awk -F'"' '{print $2}')"
           if [ -z "$IDENTITY" ]; then echo "No 'Developer ID Application' certificate in MACOS_CERTIFICATE" >&2; exit 1; fi
           echo "MACOS_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
-      - name: Make the app
+      - name: Make the app and the disk image
         run: |
           mkdir dist
-          sh macos/bundle.sh "$RUNNER_TEMP/arbor_studio" dist "${GITHUB_REF_NAME#v}"
-          ditto -c -k --keepParent "dist/ArborStudio.app" "$ARCHIVE"
+          sh .ci/macos/bundle.sh "$RUNNER_TEMP/arbor_studio" dist "${TAG#v}"
+          sh .ci/macos/dmg.sh dist/ArborStudio.app "$ARCHIVE"
       - name: Notarise with Apple
         if: env.MACOS_SIGN_IDENTITY != '' && env.APPLE_ID != ''
         run: |
           xcrun notarytool submit "$ARCHIVE" --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
-          xcrun stapler staple "dist/ArborStudio.app"
-          rm "$ARCHIVE"
-          ditto -c -k --keepParent "dist/ArborStudio.app" "$ARCHIVE"
+          xcrun stapler staple "$ARCHIVE"
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG }}
           files: ${{ env.ARCHIVE }}
-          generate_release_notes: true
+          fail_on_unmatched_files: true
+          generate_release_notes: ${{ github.event_name == 'push' }}
