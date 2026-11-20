@@ -777,6 +777,9 @@ pub struct StageShape {
     /// Stems: thickness relative to what the automatic growth gives at this stage (0.05..2).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thickness: Option<f32>,
+    /// Side stems: share of them that have started to grow (0..1).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<f32>,
     /// Leaves: share of the leaves that are out (0..1).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub leaves: Option<f32>,
@@ -787,10 +790,11 @@ pub struct StageShape {
 
 impl StageShape {
     pub fn is_empty(&self) -> bool {
-        self.length.is_none() && self.thickness.is_none() && self.leaves.is_none() && self.leaf_size.is_none()
+        self.count.is_none() && self.length.is_none() && self.thickness.is_none() && self.leaves.is_none() && self.leaf_size.is_none()
     }
 
     pub fn clamp(&mut self) {
+        self.count = self.count.map(|v| v.clamp(0.0, 1.0));
         self.length = self.length.map(|v| v.clamp(0.0, 1.0));
         self.thickness = self.thickness.map(|v| v.clamp(0.05, 2.0));
         self.leaves = self.leaves.map(|v| v.clamp(0.0, 1.0));
@@ -815,6 +819,8 @@ pub struct Growth {
     pub keyframes: u32,
     /// A few leaves on the young shoot before the first side branches grow.
     pub seedling_leaves: bool,
+    /// How long new branches keep appearing (0 = all start early, 1 = until the end).
+    pub branching: f32,
 }
 
 impl Default for Growth {
@@ -830,6 +836,7 @@ impl Default for Growth {
             duration: 12.0,
             keyframes: 16,
             seedling_leaves: true,
+            branching: 0.6,
         }
     }
 }
@@ -861,6 +868,7 @@ impl Growth {
             st.generators.retain(|g| !g.is_empty());
         }
         self.stages.sort_by(|a, b| a.at.total_cmp(&b.at));
+        self.branching = if self.branching.is_finite() { self.branching.clamp(0.0, 1.0) } else { 0.6 };
         self.duration = self.duration.clamp(0.5, 600.0);
         self.keyframes = self.keyframes.clamp(4, 48);
     }
@@ -1712,6 +1720,8 @@ pub const SETTINGS_REFERENCE: &[(&str, &str, &str)] = &[
     ("budget.fit", "on/off", "On: a level over its budget gets fewer sides, rings and (larger) leaves until it fits. Off: levels keep their usual detail and the ones over budget are reported."),
     ("growth.export", "on/off", "Exports carry the growth animation: GLB gets morph targets with a Grow clip and one clip per stage, OBJ one file per stage, JSON the growth timing of every stem and leaf."),
     ("growth.stages", "[{name, at 0.01..1, generators}], up to 8", "Moments of the growth (0 = nothing above ground, 1 = the mature tree), for example Sprout 0.12, Sapling 0.38, Young 0.68, Mature 1. Names are optional; unnamed stages are called Stage 1, Stage 2, ... by their place."),
+    ("growth.branching", "0..1", "How long new branches keep appearing while the tree grows: 0 = every branch starts early, 1 = new branches, twigs and leaves keep sprouting until the tree is mature."),
+    ("growth.stages.count", "0..1 or auto", "Per stage and side-stem generator (branches, twigs, roots): share of its stems that have started to grow at this stage. Auto follows New branches."),
     ("growth.stages.length", "0..1 or auto", "Per stage and stem generator: share of the stems' total mature length grown out at this stage. Auto follows the automatic growth."),
     ("growth.stages.thickness", "0.05..2 (1 = auto)", "Per stage and stem generator: thickness relative to the automatic growth. A branch never gets thicker than the stem it comes out of."),
     ("growth.stages.leaves", "0..1 or auto", "Per stage and Leaves generator: share of the leaves that are out at this stage."),

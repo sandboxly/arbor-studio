@@ -744,7 +744,7 @@ impl eframe::App for ArborApp {
                     node_ui(ui, &mut sh, &self.skeleton);
                 }
                 if self.growth_auto.is_none() {
-                    self.growth_auto = Some(crate::growth::AutoTable::new(&self.skeleton, &crate::growth::Timing::new(&self.skeleton)));
+                    self.growth_auto = Some(crate::growth::AutoTable::new(&self.skeleton, &crate::growth::Timing::new(&self.skeleton, &sh.doc.growth)));
                 }
                 properties_ui(ui, &mut sh, &self.stats, &mut self.editing_material, self.growth_auto.as_ref());
                 if let Some(g) = ui.data_mut(|d| d.remove_temp::<u32>(egui::Id::new("pick_leaf_mesh"))) {
@@ -876,7 +876,7 @@ impl eframe::App for ArborApp {
             let growing = sh.view.growth < 1.0;
             if growing && self.grown.as_ref().map(|(g, _)| *g) != Some(sh.view.growth) {
                 if self.grower.is_none() {
-                    let timing = crate::growth::Timing::new(&self.skeleton);
+                    let timing = crate::growth::Timing::new(&self.skeleton, &sh.doc.growth);
                     self.grower = Some(crate::growth::Grower::new(&sh.doc.growth, &self.skeleton, &self.mesh, &timing));
                 }
                 let gm = self.grower.as_ref().unwrap().mesh_at(&self.mesh, sh.view.growth);
@@ -1436,6 +1436,13 @@ fn growth_ui(ui: &mut Ui, sh: &mut Shared, auto: Option<&crate::growth::AutoTabl
         egui::Grid::new("growth_settings").num_columns(2).show(ui, |ui| {
             prow(ui, "Duration", "growth.duration", |ui| ui.add(egui::Slider::new(&mut g.duration, 0.5..=120.0).suffix(" s").logarithmic(true)));
             prow(ui, "Keyframes", "growth.keyframes", |ui| ui.add(egui::Slider::new(&mut g.keyframes, 4..=48)));
+            prow(ui, "New branches", "growth.branching", |ui| {
+                ui.add(egui::Slider::new(&mut g.branching, 0.0..=1.0).custom_formatter(|x, _| match x {
+                    x if x < 0.05 => "all early".into(),
+                    x if x > 0.95 => "until the end".into(),
+                    x => format!("{x:.2}"),
+                }))
+            });
             prow(ui, "Seedling leaves", "growth.seedling_leaves", |ui| ui.checkbox(&mut g.seedling_leaves, ""));
             prow(ui, "Export", "growth.export", |ui| ui.checkbox(&mut g.export, "Include the growth in exports"));
         });
@@ -1493,15 +1500,23 @@ fn stage_ui(ui: &mut Ui, sh: &mut Shared, i: usize, auto: Option<&crate::growth:
                 let leaves = *kind == GenKind::Leaves;
                 let automatic = |gg: f32| auto.and_then(|a| if leaves { a.leaves(*id, gg) } else { a.length(*id, gg) });
                 let Some(auto_amount) = automatic(at).or(if auto.is_none() { Some(at) } else { None }) else { continue };
+                let auto_count = if leaves { None } else { auto.and_then(|a| a.count(*id, at)) };
                 let st = &mut g.stages[i];
                 let cur = st.shape(*id).cloned().unwrap_or_default();
-                // (label, help key, set value, automatic value, range, as percent)
-                let rows: [(&str, &str, Option<f32>, f32, std::ops::RangeInclusive<f32>, bool); 2] = if leaves {
-                    [("Leaves", "growth.stages.leaves", cur.leaves, auto_amount, 0.0..=1.0, true), ("Leaf size", "growth.stages.leaf_size", cur.leaf_size, 1.0, 0.05..=2.0, false)]
+                // (field, label, help key, set value, automatic value, range, as percent)
+                type Row<'a> = (&'a str, &'a str, &'a str, Option<f32>, f32, std::ops::RangeInclusive<f32>, bool);
+                let mut rows: Vec<Row> = vec![];
+                if leaves {
+                    rows.push(("leaves", "Leaves", "growth.stages.leaves", cur.leaves, auto_amount, 0.0..=1.0, true));
+                    rows.push(("leaf_size", "Leaf size", "growth.stages.leaf_size", cur.leaf_size, 1.0, 0.05..=2.0, false));
                 } else {
-                    [("Length", "growth.stages.length", cur.length, auto_amount, 0.0..=1.0, true), ("Thickness", "growth.stages.thickness", cur.thickness, 1.0, 0.05..=2.0, false)]
-                };
-                for (r, (label, key, set, auto_v, range, pct)) in rows.into_iter().enumerate() {
+                    if let Some(c) = auto_count {
+                        rows.push(("count", "Count", "growth.stages.count", cur.count, c, 0.0..=1.0, true));
+                    }
+                    rows.push(("length", "Length", "growth.stages.length", cur.length, auto_amount, 0.0..=1.0, true));
+                    rows.push(("thickness", "Thickness", "growth.stages.thickness", cur.thickness, 1.0, 0.05..=2.0, false));
+                }
+                for (r, (field, label, key, set, auto_v, range, pct)) in rows.into_iter().enumerate() {
                     if r == 0 {
                         ui.label(RichText::new(format!("{}{}", "  ".repeat(*depth), name)).color(kind_color(*kind)));
                     } else {
@@ -1529,11 +1544,12 @@ fn stage_ui(ui: &mut Ui, sh: &mut Shared, i: usize, auto: Option<&crate::growth:
                     }
                     if let Some(nv) = new {
                         let sh = st.shape_mut(*id);
-                        match (leaves, r) {
-                            (false, 0) => sh.length = nv,
-                            (false, _) => sh.thickness = nv,
-                            (true, 0) => sh.leaves = nv,
-                            (true, _) => sh.leaf_size = nv,
+                        match field {
+                            "count" => sh.count = nv,
+                            "length" => sh.length = nv,
+                            "thickness" => sh.thickness = nv,
+                            "leaves" => sh.leaves = nv,
+                            _ => sh.leaf_size = nv,
                         }
                         sh.clamp();
                         if sh.is_empty() {

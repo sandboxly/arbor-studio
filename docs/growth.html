@@ -26,17 +26,18 @@
 <p>Growth runs from <strong>0</strong> (nothing above the ground) to <strong>1</strong> (the tree as designed). On the way:</p>
 <ul>
 <li>Every branch is a small copy of its final shape that grows to full size. It lengthens from the point where it leaves its parent and thickens as it grows, and it carries its own twigs and leaves with it.</li>
-<li>The trunk grows the whole time, slowly at first. Side branches, twigs and roots start later the further out along their parent they sit, so lower branches are older and larger, and the crown fills in from the bottom up and from the inside out.</li>
+<li>The trunk grows the whole time, slowly at first. Side branches and twigs start later the further out along their parent they sit, so lower branches are older and larger, and the crown fills in from the bottom up and from the inside out.</li>
+<li>New branches keep appearing while the tree grows: a sapling has a few branches, a young tree more, and new twigs (with their leaves) sprout until the tree is nearly mature. <strong>New branches</strong> sets how long this goes on; at 0 every branch starts early and the tree mostly just gets bigger. Roots always start early, so the young trunk stands on its roots.</li>
 <li>A young shoot tapers to a point; it gets its full-size shape as it grows. Where a branch is joined to its parent (<a href="joints.html">Branch joints</a>), the opening in the parent's bark is only as wide as the branch is thick, so the joint stays closed and smooth at every stage.</li>
 <li>Leaves unfold from their stalk soon after their twig starts.</li>
-<li>With <strong>Seedling leaves</strong> on, a few leaves sit on the young shoot before the first side branches carry their own, so the sprout is green. They shrink away by 0.4 of the growth.</li>
+<li>With <strong>Seedling leaves</strong> on, a few leaves sit on the young shoot before the first side branches carry their own, so the sprout is green. They shrink away by 0.4 of the growth, a little later with New branches up, as the crown's own leaves come later then.</li>
 </ul>
 <p>The mesh never changes its triangles; only its points move. At 1 it is exactly the tree you export without growth. This is what lets engines play the growth as morph targets (also called blend shapes or shape keys).</p>
 <p><strong>Age</strong> in <a href="tree-settings.html">Tree settings</a> is different: it grows a new, younger tree with fewer branches, as a separate model. The growth animation always ends at the tree you designed.</p>
 
 <h2>Previewing the growth</h2>
 <p>Click <strong>▶ Grow</strong> in the toolbar to play the growth in the viewport. The <strong>Growth</strong> section at the end of the Properties panel has the same button, a slider to scrub through the growth, and one button per stage to jump to it. The viewport header shows the point of the growth and the stage, for example <em>Growth 38% (Sapling)</em>. Wind plays during the growth too.</p>
-<figure><img src="images/ui-growth.jpg" alt="The Growth section: Grow button and slider at 38 percent, stage buttons Sprout, Sapling, Young, Mature and + Stage. Below, the Sapling stage: its name, a Remove button, its place at 0.38, and Shape at this stage with Length and Thickness sliders for Trunk, Roots, Side roots, Main branches and Twigs, and Leaves and Leaf size for Leaves. Trunk length is set to 40 percent, leaves to 50 percent and leaf size to 0.8; the rest show auto. Then Duration, Keyframes, Seedling leaves and Export."><figcaption>The Growth section with the Sapling stage selected: a taller trunk and half the leaves out, the rest automatic.</figcaption></figure>
+<figure><img src="images/ui-growth.jpg" alt="The Growth section: Grow button and slider at 38 percent, stage buttons Sprout, Sapling, Young, Mature and + Stage. Below, the Sapling stage: its name, a Remove button, its place at 0.38, and Shape at this stage: Length and Thickness for Trunk; Count, Length and Thickness for Roots, Side roots, Main branches and Twigs; Leaves and Leaf size for Leaves. Trunk length is set to 40 percent, twig count to 20 percent, leaves to 50 percent and leaf size to 0.8; the rest show auto. Then Duration, Keyframes, New branches 0.60, Seedling leaves and Export."><figcaption>The Growth section with the Sapling stage selected: a taller trunk, a fifth of the twigs and half the leaves out, the rest automatic.</figcaption></figure>
 
 <h2>Stages</h2>
 <p>Click a stage's button to show the tree there and edit the stage below the buttons:</p>
@@ -49,6 +50,7 @@
 <p>Each stage lists the generators of your tree, like the Generation panel. Every value starts as <em>auto</em>: what the automatic growth gives there, shown greyed. Drag a slider to set your own value; <strong>↺</strong> returns it to auto.</p>
 <table>
 <tr><th>Control</th><th>For</th><th>Range</th><th>Meaning</th></tr>
+<tr><td>Count</td><td>Branches, Roots</td><td>0–100%</td><td>The share of this generator's branches (or twigs, or roots) that have started to grow. 20% on the twigs at the Sapling stage gives a sapling with few twigs; the rest sprout later, in their usual order.</td></tr>
 <tr><td>Length</td><td>Trunk, Branches, Roots</td><td>0–100%</td><td>How far the stems of this generator have grown out, as a share of their total mature length. 40% on the trunk at the Sapling stage makes a tall, slender sapling.</td></tr>
 <tr><td>Thickness</td><td>Trunk, Branches, Roots</td><td>×0.05–×2</td><td>Thickness relative to the automatic growth at this stage. A branch never gets thicker than the stem it grows out of.</td></tr>
 <tr><td>Leaves</td><td>Leaves</td><td>0–100%</td><td>The share of the leaves that are out. 0% gives bare branches at this stage.</td></tr>
@@ -62,6 +64,7 @@
 <tr><td>Stages</td><td>up to 8, each 0.01–1</td><td>Moments of the growth, in growing order, each with an optional name and its shape per generator (see Stages above). The last stage is normally the mature tree at 1.</td></tr>
 <tr><td>Duration</td><td>0.5–600 s</td><td>How long the whole growth takes in the exported animation and the preview.</td></tr>
 <tr><td>Keyframes</td><td>4–48</td><td>How many shapes the growth is sampled at. Every stage always gets one. More keyframes play more smoothly and make larger files.</td></tr>
+<tr><td>New branches</td><td>0–1 (0.6)</td><td>How long new branches, twigs and leaves keep appearing while the tree grows: 0 = all start early, 1 = new ones until near the end. Stage Count settings override it per generator.</td></tr>
 <tr><td>Seedling leaves</td><td>on, off</td><td>A few leaves on the young shoot until the side branches carry their own.</td></tr>
 <tr><td>Export</td><td>on, off</td><td>Exports include the growth animation.</td></tr>
 </table>
@@ -88,7 +91,7 @@
 <p>Regrowing a tree (after it was cut down, for example) is the same animation played again from the start.</p>
 
 <h2>Growth for agents</h2>
-<p><code>set_growth</code> changes the stages (with their shape per generator: <code>length</code>, <code>thickness</code>, <code>leaves</code>, <code>leaf_size</code>, or null for auto), duration, keyframes, seedling leaves and the export default. It returns every stage with each generator's value there (set or automatic), the keyframes and the clips with their lengths in seconds. <code>render_preview</code> and <code>set_view</code> take <code>growth</code> (0–1) or <code>growth_stage</code> (a stage name or label such as <em>Stage 2</em>); <code>set_view</code> also takes <code>growth_playing</code>. <code>export_tree</code> and <code>export_variations</code> take <code>include_growth</code>.</p>
+<p><code>set_growth</code> changes the stages (with their shape per generator: <code>count</code>, <code>length</code>, <code>thickness</code>, <code>leaves</code>, <code>leaf_size</code>, or null for auto), duration, keyframes, <code>branching</code> (New branches), seedling leaves and the export default. It returns every stage with each generator's value there (set or automatic), the keyframes and the clips with their lengths in seconds. <code>render_preview</code> and <code>set_view</code> take <code>growth</code> (0–1) or <code>growth_stage</code> (a stage name or label such as <em>Stage 2</em>); <code>set_view</code> also takes <code>growth_playing</code>. <code>export_tree</code> and <code>export_variations</code> take <code>include_growth</code>.</p>
 <pre><code>set_growth {"stages": [{"name": "Sprout", "at": 0.1},
   {"name": "Sapling", "at": 0.35, "generators": [{"id": 1, "length": 0.4}, {"id": 6, "leaves": 0.5}]},
   {"at": 0.7}, {"name": "Grown", "at": 1}], "duration": 20}

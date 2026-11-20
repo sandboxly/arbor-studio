@@ -109,7 +109,7 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
     }
     // growth animation: every level grows on the full tree's timing
     let growth = doc.growth.export.then(|| {
-        let timing = crate::growth::Timing::new(&full);
+        let timing = crate::growth::Timing::new(&full, &doc.growth);
         let pairs: Vec<(&Mesh, &crate::grow::Skeleton)> = meshes.iter().map(|(_, m, sk)| (m, sk)).collect();
         (timing.clone(), crate::growth::animate(&doc.growth, &timing, &pairs))
     });
@@ -161,7 +161,7 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
             if let (Some((timing, _)), Some(info)) = (&growth, &growth_info) {
                 let mut g = info.clone();
                 g["timing"] = json!(timing);
-                g["note"] = json!("Growth g runs from 0 (nothing above ground) to 1 (this tree). Stem i is a scaled copy of its full shape: from timing.stem_start[i] to 1 its size goes from 0 to 1 (linearly; trunks as x^1.3), its thickness is size^0.85, and its base follows the point of its parent it grows from; a branch is never further along than its parent. Leaf i unfolds from timing.leaf_start[i] over timing.leaf_time (smoothstep), at 0.45 + 0.55 x its stem's size. Stages may set, per generator, length (share of the stems' mature length; remaps that generator's clock), thickness (multiplier), leaves (share out; remaps the leaves' clock) and leaf_size (multiplier), linear between stages; see document.growth.stages. Use the GLB morph targets to get these exactly.");
+                g["note"] = json!("Growth g runs from 0 (nothing above ground) to 1 (this tree). Stem i is a scaled copy of its full shape: from timing.stem_start[i] (which already holds New branches and the stages' count settings) to 1 its size goes from 0 to 1 (linearly; trunks as x^1.3), its thickness is size^0.85, and its base follows the point of its parent it grows from; a branch is never further along than its parent. Leaf i unfolds from timing.leaf_start[i] over timing.leaf_time (smoothstep), at 0.45 + 0.55 x its stem's size. Stages may set, per generator, length (share of the stems' mature length; remaps that generator's clock), thickness (multiplier), leaves (share out; remaps the leaves' clock) and leaf_size (multiplier), linear between stages; see document.growth.stages. Use the GLB morph targets to get these exactly.");
                 v["growth"] = g;
             }
             std::fs::write(path, serde_json::to_string_pretty(&v).unwrap()).map_err(|e| format!("cannot write {}: {e}", path.display()))?;

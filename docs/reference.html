@@ -100,6 +100,8 @@
 <tr><td>LOD0 to LOD3</td><td><code>budget.levels</code></td><td>0–5,000,000 each</td><td>Most triangles per level; 0 = no limit.</td></tr>
 <tr><td>Reduce detail to fit</td><td><code>budget.fit</code></td><td>on, off</td><td>On: levels over budget get less detail until they fit. Off: they are only reported.</td></tr>
 <tr><td>Growth: Stages</td><td><code>growth.stages</code></td><td>up to 8, each 0.01–1</td><td>Moments of the growth animation, optionally named. See <a href="growth.html">Growth animation</a>.</td></tr>
+<tr><td>Growth: New branches</td><td><code>growth.branching</code></td><td>0–1</td><td>How long new branches, twigs and leaves keep appearing while the tree grows.</td></tr>
+<tr><td>Growth: Stage count</td><td><code>growth.stages[].generators[].count</code></td><td>0–1 or auto</td><td>Per stage and branch or root generator: share of its stems that have started to grow.</td></tr>
 <tr><td>Growth: Stage length</td><td><code>growth.stages[].generators[].length</code></td><td>0–1 or auto</td><td>Per stage and stem generator: share of the stems' mature length grown out.</td></tr>
 <tr><td>Growth: Stage thickness</td><td><code>growth.stages[].generators[].thickness</code></td><td>0.05–2 (1 = auto)</td><td>Per stage and stem generator: thickness relative to the automatic growth.</td></tr>
 <tr><td>Growth: Stage leaves</td><td><code>growth.stages[].generators[].leaves</code></td><td>0–1 or auto</td><td>Per stage and Leaves generator: share of the leaves that are out.</td></tr>
