@@ -165,10 +165,10 @@
     </header>
 
     <div class="strip" role="list" aria-label="Triangles per level, Oak preset, seed 1">
-      <figure class="strip__cell" role="listitem" style="--share: 1"><img src="docs/images/lod-0.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD0, full detail"><figcaption><span class="label">LOD0</span><span class="num">20,668</span><span class="bar"></span></figcaption></figure>
-      <figure class="strip__cell" role="listitem" style="--share: .546"><img src="docs/images/lod-1.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD1, same outline with fewer leaves"><figcaption><span class="label">LOD1</span><span class="num">11,280</span><span class="bar"></span></figcaption></figure>
-      <figure class="strip__cell" role="listitem" style="--share: .336"><img src="docs/images/lod-2.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD2"><figcaption><span class="label">LOD2</span><span class="num">6,954</span><span class="bar"></span></figcaption></figure>
-      <figure class="strip__cell" role="listitem" style="--share: .218"><img src="docs/images/lod-3.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD3, coarse branches and large leaf clusters"><figcaption><span class="label">LOD3</span><span class="num">4,498</span><span class="bar"></span></figcaption></figure>
+      <figure class="strip__cell" role="listitem" style="--share: 1"><img src="docs/images/lod-0.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD0, full detail"><figcaption><span class="label">LOD0</span><span class="num">32,014</span><span class="bar"></span></figcaption></figure>
+      <figure class="strip__cell" role="listitem" style="--share: .530"><img src="docs/images/lod-1.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD1, same outline with fewer leaves"><figcaption><span class="label">LOD1</span><span class="num">16,982</span><span class="bar"></span></figcaption></figure>
+      <figure class="strip__cell" role="listitem" style="--share: .320"><img src="docs/images/lod-2.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD2"><figcaption><span class="label">LOD2</span><span class="num">10,234</span><span class="bar"></span></figcaption></figure>
+      <figure class="strip__cell" role="listitem" style="--share: .200"><img src="docs/images/lod-3.jpg" width="300" height="340" loading="lazy" alt="Oak at LOD3, coarse branches and large leaf clusters"><figcaption><span class="label">LOD3</span><span class="num">6,406</span><span class="bar"></span></figcaption></figure>
       <figure class="strip__cell strip__cell--bb" role="listitem" style="--share: .004"><img src="docs/images/lod-4.jpg" width="300" height="340" loading="lazy" alt="Oak as a billboard: crossed cards showing renders of the tree"><figcaption><span class="label">Billboard</span><span class="num">16</span><span class="bar"></span></figcaption></figure>
     </div>
     <p class="strip__note">Triangles per level, Oak preset, seed 1.</p>
@@ -253,7 +253,7 @@
       </ol>
 
       <ul class="params" aria-label="Some of the parameters">
-        <li>Count per parent</li><li>Phyllotaxis</li><li>Length (× parent)</li><li>Crown profile</li><li>Angle</li><li>Gravity</li><li>Wiggle</li><li>Kink</li><li>Taper</li><li>Branch welding</li><li>Broken branches</li><li>Flutes</li><li>Bark lumps</li><li>Leaf fold</li><li>Age</li><li>Autumn</li><li>Fallen leaves</li><li>Ambient occlusion</li>
+        <li>Count per parent</li><li>Phyllotaxis</li><li>Length (× parent)</li><li>Crown profile</li><li>Angle</li><li>Gravity</li><li>Wiggle</li><li>Kink</li><li>Split</li><li>Taper</li><li>Branch welding</li><li>Broken branches</li><li>Flutes</li><li>Bark lumps</li><li>Leaf fold</li><li>Age</li><li>Autumn</li><li>Fallen leaves</li><li>Ambient occlusion</li>
       </ul>
 
       <div class="ab-panel timing">
@@ -261,9 +261,9 @@
         <table>
           <thead><tr><th scope="col">Preset</th><th scope="col">Triangles</th><th scope="col">LOD0</th><th scope="col">All 5 levels</th><th scope="col"><span class="sr">Relative time</span></th></tr></thead>
           <tbody>
-            <tr><th scope="row">Oak</th><td>21k</td><td>16 ms</td><td>101 ms</td><td class="timing__bar"><span style="--t: 0.254"></span></td></tr>
+            <tr><th scope="row">Oak</th><td>32k</td><td>23 ms</td><td>145 ms</td><td class="timing__bar"><span style="--t: 0.365"></span></td></tr>
             <tr><th scope="row">Birch</th><td>36k</td><td>24 ms</td><td>110 ms</td><td class="timing__bar"><span style="--t: 0.277"></span></td></tr>
-            <tr><th scope="row">Willow</th><td>41k</td><td>38 ms</td><td>208 ms</td><td class="timing__bar"><span style="--t: 0.524"></span></td></tr>
+            <tr><th scope="row">Willow</th><td>46k</td><td>40 ms</td><td>208 ms</td><td class="timing__bar"><span style="--t: 0.524"></span></td></tr>
             <tr><th scope="row">Pine</th><td>75k</td><td>94 ms</td><td>397 ms</td><td class="timing__bar"><span style="--t: 1"></span></td></tr>
           </tbody>
         </table>
@@ -353,7 +353,7 @@
 
 <footer class="foot">
   <div class="wrap">
-    <p class="notes" id="m1"><sup>1</sup> Measured with the v0.2.0 build on an Apple M2 Max, median of 20 runs for the oak above and of 20 seeds per preset in the table, timed through the MCP server. LOD0 includes growing the skeleton and building the mesh; all 5 levels includes rendering the billboard atlas.</p>
+    <p class="notes" id="m1"><sup>1</sup> Measured with the current build on an Apple M2 Max, median of 20 runs for the oak above and of 20 seeds per preset in the table, timed through the MCP server. LOD0 includes growing the skeleton and building the mesh; all 5 levels includes rendering the billboard atlas.</p>
     <div class="foot__row">
       <span class="brand brand--sm">ArborStudio 0.2.0</span>
       <span class="foot__fact">MIT licence. Written in Rust.</span>

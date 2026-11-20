@@ -1,7 +1,7 @@
 # ArborStudio landing page: copy
 
 All page text, section by section. The markup in `index.html` follows this file.
-Numbers marked (measured) were measured on 2026-11-20 with the v0.2.0 build on an Apple M2 Max
+Numbers marked (measured) were measured on 2026-11-20 with the current build on an Apple M2 Max
 (12 cores), median of 20 seeds, through the MCP server over stdio. Numbers marked (from code) come from
 the source or the docs in this repository.
 
@@ -50,8 +50,8 @@ the source or the docs in this repository.
 ## 2. What ends up in the file
 
 - H2: Four LODs, a billboard, wind weights. One GLB.
-- LOD table (Oak preset, seed 1, from code via get_stats): LOD0 20,668 · LOD1 11,280 · LOD2 6,954 ·
-  LOD3 4,498 · Billboard 16 triangles.
+- LOD table (Oak preset, seed 1, from code via get_stats): LOD0 32,014 · LOD1 16,982 · LOD2 10,234 ·
+  LOD3 6,406 · Billboard 16 triangles.
 - LOD note: Lower levels keep the skeleton and coarsen the mesh around it, so the silhouette holds when the
   engine switches.
 - Wind: Two weights per vertex in TEXCOORD_1 (UV2): x is branch sway, 0 at the ground to 1 at the crown
@@ -82,10 +82,10 @@ the source or the docs in this repository.
 - Lead: A tree is a stack of generators: trunk, branches, twigs, roots, leaves. Each one has its own set of
   settings, and most can follow a curve along the parent.
 - Parameter names (from the editor): Count per parent, Start, End, Phyllotaxis, Length (× parent),
-  Crown profile, Angle, Gravity, Wiggle, Kink, Radius (× parent), Taper, Branch welding, Broken branches,
+  Crown profile, Angle, Gravity, Wiggle, Kink, Split, Radius (× parent), Taper, Branch welding, Broken branches,
   Flutes, Bark lumps, Leaf shape, Leaf fold, Age, Autumn, Fallen leaves, Ambient occlusion.
-- Timing table (measured, LOD0 / all five levels incl. billboard): Oak 21k tris 16 ms / 101 ms ·
-  Birch 36k 24 ms / 110 ms · Willow 41k 38 ms / 208 ms · Pine 75k 94 ms / 397 ms.
+- Timing table (measured, LOD0 / all five levels incl. billboard): Oak 32k tris 23 ms / 145 ms ·
+  Birch 36k 24 ms / 110 ms · Willow 46k 40 ms / 208 ms · Pine 75k 94 ms / 397 ms.
 - Note: Fast enough that the viewport follows a slider.
 
 ## 5. ArborStudio and SpeedTree

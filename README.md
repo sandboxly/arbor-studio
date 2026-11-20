@@ -163,7 +163,9 @@ use `set_view` `lighting`, and `render_preview` follows the window's choice or i
   app: the small curve icon at the end of each setting's row opens a popup curve editor (switch the curve
   on, pick the x axis, drag points, double-click to add, right-click to remove); the icon turns green when
   a curve is on.
-* **Spine**: kink, jitter, spacing in metres (`interval`) instead of a count.
+* **Spine**: kink, jitter, spacing in metres (`interval`) instead of a count, and splitting (`splits`, `split_at`,
+  `split_angle`): each stem of a trunk, branch or root generator divides into 2-5 leaders that share its wood,
+  taper to thin tips and carry the children above the split.
 * **Skin**: flutes, flatten, bark lumps, weld (collar where a branch meets its parent), broken branch stubs.
 * **Leaves**: fold, curl, face the sky, or your own OBJ model (`leaf_shape: mesh`, `leaf_mesh`).
 * **Node editing**: pick "Branches" in the toolbar and click one branch to delete it or change its length,

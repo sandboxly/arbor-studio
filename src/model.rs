@@ -191,6 +191,13 @@ pub struct GenParams {
     pub break_chance: f32,
     /// Length of broken stubs relative to the full branch.
     pub break_length: f32,
+    /// Split each stem into this many leaders (0 = no split): decurrent crowns such as oaks and
+    /// maples, whose trunk divides into several big limbs instead of running to the top.
+    pub splits: u32,
+    /// Where along the stem it splits (fraction of its length).
+    pub split_at: f32,
+    /// How far each leader leans away from the stem's direction (degrees).
+    pub split_angle: f32,
     /// Curves that shape a value along the parent or along the stem itself; see CURVE_REFERENCE.
     pub curves: BTreeMap<String, Curve>,
     /// How this generator's parts grow in the growth animation.
@@ -596,6 +603,9 @@ impl GenParams {
             weld: 0.35,
             break_chance: 0.0,
             break_length: 0.2,
+            splits: 0,
+            split_at: 0.5,
+            split_angle: 30.0,
             curves: BTreeMap::new(),
             growth: GenGrowth::default(),
         };
@@ -695,6 +705,9 @@ impl GenParams {
         self.weld = self.weld.clamp(0.0, 1.0);
         self.break_chance = self.break_chance.clamp(0.0, 1.0);
         self.break_length = self.break_length.clamp(0.03, 0.9);
+        self.splits = if self.splits < 2 || kind == GenKind::Leaves { 0 } else { self.splits.min(5) };
+        self.split_at = self.split_at.clamp(0.05, 0.95);
+        self.split_angle = self.split_angle.clamp(0.0, 80.0);
         self.growth.clamp();
         self.curves.retain(|k, _| curve_applies(k, kind));
         for c in self.curves.values_mut() {
@@ -1401,7 +1414,10 @@ pub fn preset(name: &str) -> Option<Document> {
             let t = b.add(Trunk, None, "Trunk", |p| {
                 p.length = 7.0;
                 p.radius = 0.38;
-                p.taper = 0.3;
+                p.taper = 0.12;
+                p.splits = 3;
+                p.split_at = 0.42;
+                p.split_angle = 30.0;
                 p.flare = 0.7;
                 p.wiggle = 0.25;
             });
@@ -1425,7 +1441,7 @@ pub fn preset(name: &str) -> Option<Document> {
                 p.profile = Profile::Cylindrical;
             });
             let br = b.add(Branches, Some(t), "Main branches", |p| {
-                p.count = 10;
+                p.count = 15;
                 p.start = 0.35;
                 p.end = 0.95;
                 p.length = 0.62;
@@ -1560,9 +1576,12 @@ pub fn preset(name: &str) -> Option<Document> {
             let t = b.add(Trunk, None, "Trunk", |p| {
                 p.length = 6.0;
                 p.radius = 0.42;
-                p.taper = 0.4;
+                p.taper = 0.15;
                 p.flare = 0.6;
                 p.wiggle = 0.3;
+                p.splits = 3;
+                p.split_at = 0.5;
+                p.split_angle = 30.0;
             });
             b.add(Roots, Some(t), "Roots", |p| {
                 p.count = 8;
@@ -1649,7 +1668,11 @@ pub fn preset(name: &str) -> Option<Document> {
             let t = b.add(Trunk, None, "Trunk", |p| {
                 p.length = 6.5;
                 p.radius = 0.3;
+                p.taper = 0.12;
                 p.flare = 0.5;
+                p.splits = 3;
+                p.split_at = 0.48;
+                p.split_angle = 26.0;
             });
             b.add(Roots, Some(t), "Roots", |p| {
                 p.count = 6;
@@ -1657,7 +1680,7 @@ pub fn preset(name: &str) -> Option<Document> {
                 p.radius = 0.75;
             });
             let br = b.add(Branches, Some(t), "Main branches", |p| {
-                p.count = 9;
+                p.count = 13;
                 p.start = 0.35;
                 p.length = 0.7;
                 p.profile = Profile::Hemispherical;
@@ -1781,6 +1804,9 @@ pub const PARAM_REFERENCE: &[(&str, &str, &str, &str)] = &[
     ("leaf_face_up", "leaves", "0..1", "Turn leaves to face the sky."),
     ("break_chance", "branches", "0..1", "Chance that a branch is broken off: a short blunt stub with no children or leaves (dead wood, storm damage, pruned lower branches)."),
     ("break_length", "branches", "0.03..0.9", "Length of broken stubs relative to the full branch."),
+    ("splits", "trunk, branches, roots", "0 or 2..5", "Split each stem of this generator into this many leaders (0 = no split), as in oaks and maples whose trunk divides into big limbs instead of running to the top. The leaders share the stem's wood, so each is thinner and tapers to a thin tip; a trunk's leaders curve back up. Children above the split spread over the leaders, and none grow in the crotch."),
+    ("split_at", "trunk, branches, roots", "0.05..0.95", "Where along the stem it splits, as a fraction of its length."),
+    ("split_angle", "trunk, branches, roots", "0..80 deg", "How far each leader leans away from the stem's direction."),
     ("weld", "branches", "0..1", "Welding: the branch base swells into a collar that blends into the parent instead of a hard joint."),
     ("curves", "all", "{key: {points: [[x,y],...]}}", "Shaping curves, see curve_reference / set_curve."),
     ("growth", "all", "{speed, speed_curve, radius_curve, start_size, start_angle, orientation_time, sync, start_pct, offset, offset_variation}", "How this generator's stems or leaves grow in the growth animation; see the growth.* rows."),

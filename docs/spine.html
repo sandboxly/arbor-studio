@@ -79,6 +79,24 @@
 </div>
 
 <div class="tip"><strong>Tip</strong> Gravity, Wiggle, Jitter and Force response can follow a curve along the stem. A gravity curve that rises towards the tip lets branches grow out straight and droop only at their ends, as in willows.</div>
+
+<h2 id="split">Splitting</h2>
+<p>In many broadleaf trees, such as oaks, maples and willows, the trunk doesn't run to the top of the crown: somewhere in the crown it divides into a few big limbs of about the same size. Conifers and birches keep one leader that tapers to a thin tip. Every trunk, branch and root generator has its own split settings, so trunks can divide into limbs, main branches can fork and roots can branch into a Y.</p>
+<dl class="params">
+<dt>Split <span class="range">No split, 2 to 5 leaders</span></dt>
+<dd>Divides each stem of this generator into this many leaders. The stem carries on as one of them. The leaders share the stem's wood, so each one is thinner than the stem below the split, and every leader tapers to a thin tip. A trunk's leaders curve back up towards the light.</dd>
+<dt>Split height <span class="range">0.05 to 0.95</span></dt>
+<dd>Where along the stem it splits, as a fraction of its length.</dd>
+<dt>Split angle <span class="range">0° to 80°</span></dt>
+<dd>How far each leader leans away from the stem's direction.</dd>
+</dl>
+<p>The children of a split stem, such as the branches on a split trunk, spread over the stem and its leaders above the split. No children grow in the crotch where the leaders part. The Oak, Maple and Willow presets split their trunks into three leaders.</p>
+<div class="gallery">
+<figure><img src="images/split-0.jpg" alt="The Oak preset without leaves and without a split: one trunk runs up through the crown"><figcaption>No split</figcaption></figure>
+<figure><img src="images/split-2.jpg" alt="The same oak with the trunk split into two leaders a little below the middle of its height"><figcaption>2 leaders, height 0.45</figcaption></figure>
+<figure><img src="images/split-3.jpg" alt="The same oak with the trunk split into three leaders that lean apart and curve back up"><figcaption>3 leaders, height 0.42</figcaption></figure>
+<figure><img src="images/split-3-low.jpg" alt="The same oak split low into three leaders at a wide angle, giving a short trunk and a spreading crown"><figcaption>3 leaders, height 0.2, angle 40°</figcaption></figure>
+</div>
 </main>
 </body>
 </html>

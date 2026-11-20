@@ -1148,6 +1148,21 @@ fn properties_ui(ui: &mut Ui, sh: &mut Shared, stats: &Stats, editing_material: 
                         crow(ui, "Force response", "force_response", &["force_response"], &mut p.curves, ccx, |ui| ui.add(egui::Slider::new(&mut p.force_response, 0.0..=3.0)));
                         crow(ui, "Kink", "kink", &["kink"], &mut p.curves, ccx, |ui| ui.add(egui::Slider::new(&mut p.kink, 0.0..=120.0).suffix("°")));
                         crow(ui, "Jitter", "jitter", &["jitter"], &mut p.curves, ccx, |ui| ui.add(egui::Slider::new(&mut p.jitter, 0.0..=1.0)));
+                        let split_label = |n: u32| if n < 2 { "No split".to_string() } else { format!("{n} leaders") };
+                        prow(ui, "Split", "splits", |ui| {
+                            egui::ComboBox::from_id_salt("splits")
+                                .selected_text(split_label(p.splits))
+                                .show_ui(ui, |ui| {
+                                    for n in [0u32, 2, 3, 4, 5] {
+                                        ui.selectable_value(&mut p.splits, n, split_label(n));
+                                    }
+                                })
+                                .response
+                        });
+                        if p.splits >= 2 {
+                            prow(ui, "Split height", "split_at", |ui| ui.add(egui::Slider::new(&mut p.split_at, 0.05..=0.95)));
+                            prow(ui, "Split angle", "split_angle", |ui| ui.add(egui::Slider::new(&mut p.split_angle, 0.0..=80.0).suffix("°")));
+                        }
                     }
                 });
             });

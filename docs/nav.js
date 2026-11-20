@@ -10,7 +10,7 @@ const HELP_PAGES = [
   ["Building trees", [
     ["concepts.html", "How trees are built", "generator hierarchy seed relative count parent"],
     ["generators.html", "Generators and placement", "count start end phyllotaxis whorl randomness spacing interval add remove"],
-    ["spine.html", "Stem shape", "length height profile crown angle lean gravity wiggle segments kink jitter force response"],
+    ["spine.html", "Stem shape", "length height profile crown angle lean gravity wiggle segments kink jitter force response split fork leaders decurrent crotch"],
     ["skin.html", "Thickness and bark surface", "radius taper flare buttress sides flutes flatten lumps bumps broken stubs"],
     ["roots.html", "Roots", "roots ground buried gravity side roots flutes"],
     ["leaves.html", "Leaves", "leaf shape size fold curl face sky card mesh obj frond needle"],

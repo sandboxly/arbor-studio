@@ -66,6 +66,18 @@ pub struct Stem {
     pub key: u32,
     /// Broken-off stub: blunt end, nothing grows on it.
     pub broken: bool,
+    /// A leader from a split of its parent (the same generator's stem, split in two or more).
+    #[serde(rename = "split")]
+    pub fork: bool,
+    /// The leaders this stem forks into (indices), and the fraction of its length where it
+    /// forks (1 = no fork). What grows above the fork spreads over the stem and its leaders.
+    #[serde(skip)]
+    pub forks: Vec<usize>,
+    #[serde(skip)]
+    pub fork_t: f32,
+    /// Length (metres) of the crotch below and above the fork where nothing grows.
+    #[serde(skip)]
+    pub fork_gap: f32,
 }
 
 #[derive(Clone, Serialize)]
@@ -1023,6 +1035,7 @@ fn build_stem(cx: &Ctx, origin: Vec3, dir: Vec3, length: f32, r0: f32, p: &GenPa
     let kink_t = 0.3 + 0.4 * rng.f();
     let kink_axis = rng.unit();
     let mut kinked = kink <= 0.0;
+    let mut cut_short = false;
     for i in 0..n {
         let t = i as f32 / n as f32;
         let h = cx.hf(pos);
@@ -1073,6 +1086,7 @@ fn build_stem(cx: &Ctx, origin: Vec3, dir: Vec3, length: f32, r0: f32, p: &GenPa
             // branches stop at the volume's surface; trunks may grow up into it but are cut at its top
             let cut = if trunk { !pr.contains(next) && next.y > pr.center[1] } else { !pr.contains(next) };
             if cut {
+                cut_short = true;
                 break;
             }
         }
@@ -1091,10 +1105,155 @@ fn build_stem(cx: &Ctx, origin: Vec3, dir: Vec3, length: f32, r0: f32, p: &GenPa
             *q += o * (p.jitter * k * step * 0.35);
         }
     }
-    let ts: Vec<f32> = (0..pts.len()).map(|i| i as f32 / n as f32).collect();
+    // a stem stopped by the crown volume is as long as fits: it tapers to its tip over the
+    // length it has, instead of ending in a sawn-off stump
+    let span = if cut_short { (pts.len() - 1).max(1) } else { n };
+    let ts: Vec<f32> = (0..pts.len()).map(|i| i as f32 / span as f32).collect();
     let hs: Vec<f32> = pts.iter().map(|q| cx.hf(*q)).collect();
     let radii = stem_radii(p, r0, &ts, &hs, ground);
     (pts, radii)
+}
+
+/// One leader of a fork: its axis and radii.
+type Leader = (Vec<Vec3>, Vec<f32>);
+
+/// Split a stem into `p.splits` leaders at `p.split_at` of its length, as decurrent crowns do
+/// (oaks, maples): the stem itself carries on as the first leader, bent away from the others,
+/// and the rest grow from the fork point. The leaders share the stem's wood (their cross-sections
+/// add up to a bit more than the stem's below the fork), so each is thinner, and every one
+/// tapers to a thin tip. Returns the arc fraction of the fork on the stem (1 = no fork) and the
+/// other leaders.
+fn fork_stem(cx: &Ctx, p: &GenParams, points: &mut Vec<Vec3>, radii: &mut Vec<f32>, trunk: bool, ground: bool, key: u32) -> (f32, f32, Vec<Leader>) {
+    let nf = p.splits as usize;
+    if nf < 2 || points.len() < 3 {
+        return (1.0, 0.0, vec![]);
+    }
+    // its own random numbers, so forking does not reshuffle the rest of the tree
+    let mut rng = Rng::new(&[cx.seed, key as u64, 0xF0_4C]);
+    let mut acc = vec![0.0f32];
+    for w in points.windows(2) {
+        acc.push(acc.last().unwrap() + w[0].distance(w[1]));
+    }
+    let total = *acc.last().unwrap();
+    if total < 1e-4 {
+        return (1.0, 0.0, vec![]);
+    }
+    let at = (p.split_at + rng.s() * 0.04).clamp(0.05, 0.95) * total;
+    // the fork sits on a ring: the nearest one if close, else a new one
+    let i = (0..points.len() - 1).find(|&i| acc[i + 1] >= at).unwrap_or(points.len() - 2);
+    let seg = (acc[i + 1] - acc[i]).max(1e-6);
+    let f = (at - acc[i]) / seg;
+    let fi = if f < 0.2 {
+        i
+    } else if f > 0.8 {
+        i + 1
+    } else {
+        points.insert(i + 1, points[i].lerp(points[i + 1], f));
+        radii.insert(i + 1, radii[i] + (radii[i + 1] - radii[i]) * f);
+        i + 1
+    };
+    if fi < 1 || fi + 1 >= points.len() {
+        return (1.0, 0.0, vec![]);
+    }
+    let c = points[fi];
+    let fork_arc: f32 = points[..=fi].windows(2).map(|w| w[0].distance(w[1])).sum();
+    let ft = fork_arc / total;
+    let d0 = (points[fi] - points[fi - 1]).normalize_or(Vec3::Y);
+    let rf = radii[fi];
+    // the leaders' wood adds up to a little more than the stem's (da Vinci's rule, plus a bit)
+    let rl = (rf * 1.15 / (nf as f32).sqrt()).min(rf * 0.9);
+    let tip_l = radii.last().copied().unwrap_or(rl) * (rl / rf.max(1e-6));
+    let (b1, b2) = perp_basis(d0);
+    let az0 = rng.f() * TAU;
+    let dirs: Vec<Vec3> = (0..nf)
+        .map(|j| {
+            let az = az0 + j as f32 * TAU / nf as f32 + rng.s() * 0.35;
+            let tilt = (p.split_angle * (1.0 + rng.s() * 0.3)).max(0.0).to_radians();
+            (d0 * tilt.cos() + (b1 * az.cos() + b2 * az.sin()) * tilt.sin()).normalize_or(d0)
+        })
+        .collect();
+    let rest = total - fork_arc;
+    let lens: Vec<f32> = (0..nf).map(|j| if j == 0 { rest } else { rest * (1.0 + rng.s() * 0.12) }).collect();
+    // every leader grows afresh from the fork; a trunk's leaders curve back up towards the
+    // light, as the limbs of a forked oak do
+    let mut pj = p.clone();
+    pj.segments = ((p.segments as f32 * (1.0 - ft)).round() as u32).max(2);
+    pj.kink = 0.0;
+    if trunk {
+        pj.gravity = p.gravity.min(0.0) - 0.3;
+    }
+    let mut built: Vec<Vec<Vec3>> = (0..nf)
+        .map(|j| {
+            let mut lr = Rng::new(&[cx.seed, key as u64, 0xF0_4C, j as u64]);
+            build_stem(cx, c, dirs[j], lens[j], rl, &pj, 0.0, trunk, ground, &mut lr).0
+        })
+        .collect();
+    // the stem carries on as the first leader
+    let first = std::mem::take(&mut built[0]);
+    if first.len() < 2 {
+        return (1.0, 0.0, vec![]);
+    }
+    points.truncate(fi + 1);
+    radii.truncate(fi + 1);
+    points.extend_from_slice(&first[1..]);
+    radii.resize(points.len(), 0.0);
+    // radii past the fork: from the leader's base to its tip, and right at the fork a short
+    // crotch where the stem narrows into the leader
+    let leader_radii = |pts: &[Vec3], crotch: bool| -> Vec<f32> {
+        let mut a = vec![0.0f32];
+        for w in pts.windows(2) {
+            a.push(a.last().unwrap() + w[0].distance(w[1]));
+        }
+        let len = a.last().copied().unwrap_or(0.0).max(1e-6);
+        a.iter()
+            .map(|&x| {
+                let r = rl + (tip_l - rl) * (x / len);
+                if crotch {
+                    let s = (x / (1.2 * rf)).clamp(0.0, 1.0);
+                    r + (rf - rl) * (1.0 - s * s * (3.0 - 2.0 * s))
+                } else {
+                    r
+                }
+            })
+            .map(|r| r.max(0.002))
+            .collect()
+    };
+    let tail = leader_radii(&points[fi..], true);
+    for (k, r) in tail.into_iter().enumerate() {
+        radii[fi + k] = r;
+    }
+    let mut out = vec![];
+    for lp in built.into_iter().skip(1) {
+        if lp.len() < 2 {
+            continue;
+        }
+        let rr = leader_radii(&lp, false);
+        out.push((lp, rr));
+    }
+    // the crotch: about as far as a leader's base reaches along the stem
+    let gap = (rl / p.split_angle.max(12.0).to_radians().sin() + 0.3 * rf).min(0.3 * total);
+    (ft, gap, out)
+}
+
+/// Add a stem's fork leaders (from [`fork_stem`]) to the skeleton as children of stem `idx`.
+fn push_leaders(cx: &Ctx, sk: &mut Skeleton, idx: usize, leaders: Vec<Leader>, p: &GenParams) {
+    let main = &sk.stems[idx];
+    let (gen, depth, key, phase, ft, root) = (main.gen, main.depth, main.key, main.phase, main.fork_t, main.root);
+    let rf = main.sample(ft).2;
+    for (j, (mut points, mut radii)) in leaders.into_iter().enumerate() {
+        let lkey = node_key(key, gen, 0xF000 + j as u32);
+        if cx.edits.get(&lkey).map(|e| e.hidden).unwrap_or(false) {
+            continue;
+        }
+        let r0 = radii[0];
+        if !root || cx.doc.settings.join_branches {
+            weld_base(&mut points, &mut radii, r0, rf, p.weld, !root && !cx.doc.settings.join_branches);
+        }
+        let length = points.windows(2).map(|w| w[0].distance(w[1])).sum();
+        sk.stems.push(Stem { gen, depth: depth + 1, parent: Some(idx), points, radii, length, phase: phase + 0.3 * (j as f32 + 1.0), root, lobes: vec![], key: lkey, broken: false, fork: true, forks: vec![], fork_t: 1.0, fork_gap: 0.0 });
+        let li = sk.stems.len() - 1;
+        sk.stems[idx].forks.push(li);
+    }
 }
 
 pub fn grow(doc: &Document, level: u32) -> Skeleton {
@@ -1135,12 +1294,14 @@ pub fn grow(doc: &Document, level: u32) -> Skeleton {
             let dir = Vec3::new(az.cos() * lean.sin(), lean.cos(), az.sin() * lean.sin());
             let len = p.length * (1.0 + rng.s() * p.length_variation) * s.scale * edit.map(|e| e.length).unwrap_or(1.0) * s.age.powf(0.85);
             let r0 = p.radius * s.scale * edit.map(|e| e.radius).unwrap_or(1.0) * s.age.powf(1.2);
-            let (points, radii) = build_stem(&cx, origin, dir, len, r0, p, p.kink, true, false, &mut rng);
+            let (mut points, mut radii) = build_stem(&cx, origin, dir, len, r0, p, p.kink, true, false, &mut rng);
             if points.len() < 2 {
                 continue;
             }
-            sk.stems.push(Stem { gen: g.id, depth: 0, parent: None, points, radii, length: len, phase: rng.f() * TAU, root: false, lobes: vec![], key, broken: false });
+            let (fork_t, fork_gap, leaders) = fork_stem(&cx, p, &mut points, &mut radii, true, false, key);
+            sk.stems.push(Stem { gen: g.id, depth: 0, parent: None, points, radii, length: len, phase: rng.f() * TAU, root: false, lobes: vec![], key, broken: false, fork: false, forks: vec![], fork_t, fork_gap });
             let idx = sk.stems.len() - 1;
+            push_leaders(&cx, &mut sk, idx, leaders, p);
             grow_children(&cx, g.id, idx, &mut sk);
             // buttress ridges line up with the roots; without roots, a few irregular ridges
             let mut lobes: Vec<f32> = sk
@@ -1193,6 +1354,8 @@ fn grow_children(cx: &Ctx, gen_id: u32, stem_idx: usize, sk: &mut Skeleton) {
         }
         let nodes = n.div_ceil(whorl).max(1);
         let parent_key = sk.stems[stem_idx].key;
+        let main_gap = sk.stems[stem_idx].fork_gap;
+        let main_arc: f32 = sk.stems[stem_idx].points.windows(2).map(|w| w[0].distance(w[1])).sum();
         for k in 0..n {
             if (g.kind == GenKind::Leaves && sk.leaves.len() >= MAX_LEAVES) || sk.stems.len() >= MAX_STEMS {
                 return;
@@ -1202,12 +1365,40 @@ fn grow_children(cx: &Ctx, gen_id: u32, stem_idx: usize, sk: &mut Skeleton) {
             let tn = (node as f32 + 0.5) / nodes as f32;
             let rel = (tn + rng.s() * p.random * 0.5 / nodes as f32).clamp(0.0, 1.0);
             let t = p.start + span * rel;
-            let parent = &sk.stems[stem_idx];
-            let (pos, tan, pr) = parent.sample(t);
-            let parent_len = parent.length;
-            let parent_depth = parent.depth;
+            let key = node_key(parent_key, g.id, k as u32);
+            // above a fork, children spread over the stem and its leaders
+            let main = &sk.stems[stem_idx];
+            let (host, ht) = if main.forks.is_empty() {
+                (stem_idx, t)
+            } else {
+                // nothing grows in the crotch: below the fork the children move down out of
+                // it, above it they spread over the stem and its leaders, past their bases
+                let ft = main.fork_t;
+                let g = main_gap / main_arc.max(1e-3);
+                if t <= ft {
+                    (stem_idx, t * ((ft - g).max(0.5 * ft) / ft.max(1e-4)))
+                } else {
+                    let u = ((t - ft) / (1.0 - ft).max(1e-4)).clamp(0.0, 1.0);
+                    let m = main.forks.len() + 1;
+                    match (splitmix(key as u64 ^ 0xF0_4C) % m as u64) as usize {
+                        0 => {
+                            let a = (ft + g).min(0.5 * (1.0 + ft));
+                            (stem_idx, a + (1.0 - a) * u)
+                        }
+                        pick => {
+                            let li = main.forks[pick - 1];
+                            let u0 = (main_gap / sk.stems[li].length.max(1e-3)).min(0.4);
+                            (li, u0 + (1.0 - u0) * u)
+                        }
+                    }
+                }
+            };
+            let parent = &sk.stems[host];
+            let (pos, tan, pr) = parent.sample(ht);
+            let parent_len = main.length;
+            let parent_depth = main.depth;
             let parent_phase = parent.phase;
-            let ground = g.kind == GenKind::Roots || parent.root;
+            let ground = g.kind == GenKind::Roots || main.root;
             // height of the spot on the tree, for curves measured along the tree's height
             let ha = cx.hf(pos);
             // draw every random number up front so edits and curves don't reshuffle the tree
@@ -1217,7 +1408,6 @@ fn grow_children(cx: &Ctx, gen_id: u32, stem_idx: usize, sk: &mut Skeleton) {
             if density_roll > p.cv("density", rel, ha) {
                 continue;
             }
-            let key = node_key(parent_key, g.id, k as u32);
             let edit = if g.kind == GenKind::Leaves { None } else { cx.edits.get(&key).copied() };
             if edit.map(|e| e.hidden).unwrap_or(false) {
                 continue;
@@ -1261,7 +1451,7 @@ fn grow_children(cx: &Ctx, gen_id: u32, stem_idx: usize, sk: &mut Skeleton) {
                     }
                     sk.leaves.push(Leaf {
                         gen: g.id,
-                        stem: stem_idx,
+                        stem: host,
                         pos,
                         dir: ldir,
                         normal,
@@ -1308,10 +1498,11 @@ fn grow_children(cx: &Ctx, gen_id: u32, stem_idx: usize, sk: &mut Skeleton) {
                         // roots only get the extra rings near the base (for the joint), never a swell
                         weld_base(&mut points, &mut radii, r0, pr, p.weld, !ground && !doc.settings.join_branches);
                     }
+                    let (fork_t, fork_gap, leaders) = if broken { (1.0, 0.0, vec![]) } else { fork_stem(cx, p, &mut points, &mut radii, false, ground, key) };
                     sk.stems.push(Stem {
                         gen: g.id,
                         depth: parent_depth + 1,
-                        parent: Some(stem_idx),
+                        parent: Some(host),
                         points,
                         radii,
                         length: len,
@@ -1320,8 +1511,13 @@ fn grow_children(cx: &Ctx, gen_id: u32, stem_idx: usize, sk: &mut Skeleton) {
                         lobes: vec![],
                         key,
                         broken,
+                        fork: false,
+                        forks: vec![],
+                        fork_t,
+                        fork_gap,
                     });
                     let idx = sk.stems.len() - 1;
+                    push_leaders(cx, sk, idx, leaders, p);
                     if !broken {
                         grow_children(cx, g.id, idx, sk);
                     }
@@ -1331,6 +1527,9 @@ fn grow_children(cx: &Ctx, gen_id: u32, stem_idx: usize, sk: &mut Skeleton) {
     }
     if doc.settings.join_branches && doc.settings.join_method == JoinMethod::Stitch {
         refine_for_children(doc, sk, stem_idx);
+        for li in sk.stems[stem_idx].forks.clone() {
+            refine_for_children(doc, sk, li);
+        }
     }
 }
 
@@ -1521,6 +1720,8 @@ pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) ->
         base_sway[i] = match st.parent {
             None => 0.0,
             Some(_) if st.root => 0.0,
+            // a trunk's fork leaders sway like the trunk they continue
+            Some(pi) if st.fork && sk.stems[pi].depth == 0 => base_sway[pi].max(w(st.points[0])),
             Some(pi) => base_sway[pi].max(w(st.points[0])) + 0.1,
         };
     }
@@ -1586,7 +1787,7 @@ pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) ->
             let flare_k = if flare > 0.0 { (1.0 - t * 6.0).max(0.0).powf(1.6) * under } else { 0.0 };
             let sway = if st.root {
                 0.0
-            } else if st.depth == 0 {
+            } else if st.depth == 0 || (st.fork && st.parent.is_some_and(|pi| sk.stems[pi].depth == 0)) {
                 (st.points[i].y / height).clamp(0.0, 1.0).powf(2.0) * 0.6
             } else {
                 (base_sway[si] + t * 0.25 * (st.depth as f32).min(2.0)).min(1.0)
