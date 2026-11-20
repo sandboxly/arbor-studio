@@ -1,70 +1,39 @@
-//! Growth animation: the tree from a sprout to the mature tree, on one mesh whose vertices move.
+//! Growth animation: the tree from nothing to the mature tree, on one mesh whose vertices move.
 //!
 //! The topology never changes, so an engine can play the growth as morph targets (blend
 //! shapes) between a handful of sampled shapes. Growth `g` runs from 0 (nothing above the
-//! ground) to 1 (the mature tree as designed):
+//! ground) to 1 (the mature tree as designed). It follows how tree modelling tools commonly
+//! animate growth:
 //!
-//! * every stem is a scaled-down copy of its final shape that grows to full size: it lengthens
-//!   (and thickens) from the point where it leaves its parent, carrying what grows on it;
-//! * the trunk grows the whole time; a side branch, twig or root starts later the further out
-//!   along its parent it sits, so lower branches are older and larger, and the crown fills in
-//!   from the bottom up and from the inside out; with New branches (`Growth::branching`) the
-//!   starts spread over more of the growth (and mix a little), so new branches, twigs and
-//!   leaves keep appearing while the tree grows;
-//! * leaves unfold from nothing at their stalk once their twig has started;
-//! * optional seedling leaves sit on the young shoot until the first side branches carry
-//!   their own, then shrink away where they are (a keyframe always sits where they are gone,
-//!   so they never travel through the crown between two keyframes).
+//! * every stem grows out along its final path, from its base to its tip, at a speed (its
+//!   generator's speed scale times the trunk's pace), so a longer branch takes longer; the part
+//!   not grown yet is gathered at the growing tip, which tapers to a point;
+//! * its radius grows over the stem's own growth (a radius curve), and a branch is never
+//!   thicker than its parent where it comes out;
+//! * a branch, twig or leaf starts when its parent allows: Start % of the way through the
+//!   parent's growth, together with its siblings, together with the parent (roots), or exactly
+//!   when the parent reaches its spot, but never before the parent has grown that far; an
+//!   offset with a random variation spreads neighbours out;
+//! * branches can fold out of their parent and leaves turn into place (start angle);
+//! * parts stay where they are in the mature tree: nothing slides or scales around, so joints
+//!   stay closed (the opening in a parent's bark is as wide as the branch is thick).
+//!
+//! The settings are per generator (`GenParams::growth`); the whole growth is normalised so it
+//! ends at 1 when the last part is done.
 
 use crate::grow::{Mesh, Skeleton, Stem};
-use crate::model::Growth;
-use glam::Vec3;
+use crate::model::{Document, GenGrowth, GenKind, GrowthCurve, GrowthSync};
+use glam::{Quat, Vec3};
 use serde::Serialize;
 use std::collections::HashMap;
 
-/// A side stem starts this share of its parent's remaining growth after the parent...
-const BIRTH_MIN: f32 = 0.02;
-/// ...plus this share times how far out along the parent it sits (0 at the base, 1 at the tip)...
-const BIRTH_ALONG: f32 = 0.22;
-/// With New branches, each generator's side stems spread their starts until this point...
-const BIRTH_END: f32 = 0.85;
-/// ...in their automatic order, mixed up by this much.
-const BIRTH_MIX: f32 = 0.08;
-/// No stem starts later than this, so each still grows to its full size visibly.
-const LAST_BIRTH: f32 = 0.95;
-/// Share of the growth a leaf takes to unfold.
-const LEAF_TIME: f32 = 0.06;
-/// Seedling leaves are gone at this point of the growth (with New branches off)...
-const SEEDLING_END: f32 = 0.4;
-/// ...and this much later with New branches at 1, as the crown's own leaves come later.
-const SEEDLING_LATER: f32 = 0.15;
-
-/// Where the seedling leaves are gone.
-pub fn seedling_end(growth: &Growth) -> f32 {
-    let b = if growth.branching.is_finite() { growth.branching.clamp(0.0, 1.0) } else { 0.0 };
-    SEEDLING_END + SEEDLING_LATER * b
-}
-/// The trunk's length fraction is g^TRUNK_PACE: slow at first, like a seedling.
-const TRUNK_PACE: f32 = 1.3;
-
-/// A stem never starts before the stem it grows on: at least a moment after it.
-fn after_parents(sk: &Skeleton, start: &mut [f32]) {
-    let mut done = vec![false; sk.stems.len()];
-    fn fix(i: usize, sk: &Skeleton, start: &mut [f32], done: &mut [bool]) {
-        if done[i] {
-            return;
-        }
-        if let Some(p) = sk.stems[i].parent {
-            fix(p, sk, start, done);
-            let b = start[p];
-            start[i] = start[i].max((b + (1.0 - b) * BIRTH_MIN).min(0.99));
-        }
-        done[i] = true;
-    }
-    for i in 0..sk.stems.len() {
-        fix(i, sk, start, &mut done);
-    }
-}
+/// A leaf unfolds in this share of the trunk's growth time at speed 1.
+const LEAF_TIME: f32 = 0.15;
+/// A branch starts once its parent has grown this many times its base radius past where it
+/// comes out, so its joint collar is never above the parent's growing tip.
+const JOINT_REACH: f32 = 2.5;
+/// A growing tip is a cone this many times as long as the stem is thick there.
+const TIP_SLOPE: f32 = 2.5;
 
 /// A fixed pseudo-random number in 0..1 for `i`.
 fn hash01(i: u32) -> f32 {
@@ -75,11 +44,6 @@ fn hash01(i: u32) -> f32 {
     x = x.wrapping_mul(0x846C_A68B);
     x ^= x >> 16;
     (x >> 8) as f32 / (1u32 << 24) as f32
-}
-
-fn smooth(x: f32) -> f32 {
-    let x = x.clamp(0.0, 1.0);
-    x * x * (3.0 - 2.0 * x)
 }
 
 /// Closest point on a stem's axis to `q`: (arc-length fraction 0..1, the point).
@@ -103,157 +67,219 @@ pub fn locate(st: &Stem, q: Vec3) -> (f32, Vec3) {
     (best_arc / acc.max(1e-6), best_p)
 }
 
-/// When every stem and leaf grows, as fractions of the whole growth (0..1). Every stem
-/// reaches its full size at 1.
-#[derive(Clone, Serialize, Debug)]
+fn polyline_length(st: &Stem) -> f32 {
+    st.points.windows(2).map(|w| w[0].distance(w[1])).sum()
+}
+
+/// For a stem growing out of a parent: the arc fraction of its first axis point outside the
+/// parent's bark. The part before it is the joint (inside the parent, welded to it): it is
+/// there as soon as the stem starts, and the stem grows out from there.
+fn joint_fraction(sk: &Skeleton, i: usize) -> f32 {
+    let st = &sk.stems[i];
+    let Some(p) = st.parent else { return 0.0 };
+    let par = &sk.stems[p];
+    let (a, _) = locate(par, st.points[0]);
+    let rp = radius_at(par, &Axis::new(par), a);
+    let total = polyline_length(st).max(1e-6);
+    let mut acc = 0.0f32;
+    for (k, q) in st.points.iter().enumerate() {
+        if k > 0 {
+            acc += st.points[k - 1].distance(*q);
+        }
+        let (_, on) = locate(par, *q);
+        if on.distance(*q) >= rp {
+            return (acc / total).min(0.5);
+        }
+    }
+    0.5
+}
+
+/// The growth settings of generator `gen` (defaults when it is gone).
+fn settings(doc: &Document, gen: u32) -> (GenGrowth, GenKind) {
+    doc.get(gen).map(|g| (g.params.growth.clone(), g.kind)).unwrap_or_else(|| (GenGrowth::default(), GenKind::Branches))
+}
+
+/// When every stem and leaf grows, as fractions of the whole growth (0..1): each starts at
+/// its start and is done after its time. The last part is done at 1.
+#[derive(Clone, Serialize, Debug, Default)]
 pub struct Timing {
-    /// Per stem: when it starts to grow (it grows until the end).
     pub stem_start: Vec<f32>,
-    /// Per stem: when it would start without the stages' Count settings.
-    #[serde(skip)]
-    pub auto_start: Vec<f32>,
-    /// Per leaf: when it starts to unfold.
+    pub stem_time: Vec<f32>,
     pub leaf_start: Vec<f32>,
-    /// How long a leaf takes to unfold.
-    pub leaf_time: f32,
+    pub leaf_time: Vec<f32>,
+}
+
+/// One part's growth: (start, time), and when its parent reaches a point.
+struct Clock<'a> {
+    start: &'a [f32],
+    time: &'a [f32],
+    curve: &'a [GrowthCurve],
+    size0: &'a [f32],
+    joint: &'a [f32],
+}
+
+impl Clock<'_> {
+    /// When stem `p` has grown out to arc fraction `a`.
+    fn reaches(&self, p: usize, a: f32) -> f32 {
+        let (ss, j) = (self.size0[p], self.joint[p]);
+        let a = ((a - j) / (1.0 - j).max(1e-6)).clamp(0.0, 1.0);
+        if a <= ss {
+            return self.start[p];
+        }
+        let y = ((a - ss) / (1.0 - ss).max(1e-6)).clamp(0.0, 1.0);
+        self.start[p] + self.time[p] * self.curve[p].inverse(y)
+    }
 }
 
 impl Timing {
-    pub fn new(sk: &Skeleton, growth: &Growth) -> Timing {
+    pub fn new(doc: &Document, sk: &Skeleton) -> Timing {
         let n = sk.stems.len();
-        let spread = if growth.branching.is_finite() { growth.branching.clamp(0.0, 1.0) } else { 0.0 };
-        let mut start = vec![f32::NAN; n];
-        fn visit(i: usize, sk: &Skeleton, start: &mut [f32]) {
-            if !start[i].is_nan() {
-                return;
-            }
-            let st = &sk.stems[i];
-            start[i] = match st.parent {
-                None => 0.0,
-                Some(p) => {
-                    visit(p, sk, start);
-                    let (a, _) = locate(&sk.stems[p], st.points[0]);
-                    let b = start[p];
-                    (b + (1.0 - b) * (BIRTH_MIN + BIRTH_ALONG * a)).min(LAST_BIRTH)
-                }
-            };
-        }
-        for i in 0..n {
-            visit(i, sk, &mut start);
-        }
-        // New branches: each generator's side stems move (by New branches) toward starting one
-        // after another at an even pace from its first one until BIRTH_END, in the same order
-        // (bottom up, inside out, a little mixed), so new ones keep appearing while the tree
-        // grows; a stem still starts after the stem it grows on. Roots are left as they are.
-        if spread > 0.0 {
-            let mut by_gen: HashMap<u32, Vec<usize>> = HashMap::new();
-            for (i, st) in sk.stems.iter().enumerate() {
-                // roots keep their early start: they hold the young trunk's foot
-                if st.parent.is_some() && !st.root {
-                    by_gen.entry(st.gen).or_default().push(i);
-                }
-            }
-            let mut gens: Vec<_> = by_gen.into_iter().collect();
-            gens.sort_by_key(|(g, _)| *g);
-            for (_, mut idx) in gens {
-                let key = |i: usize| start[i] + BIRTH_MIX * hash01(i as u32);
-                idx.sort_by(|&a, &b| key(a).total_cmp(&key(b)));
-                let orig: Vec<f32> = idx.iter().map(|&i| start[i]).collect();
-                let first = orig.iter().copied().fold(1.0f32, f32::min);
-                let n = idx.len() as f32;
-                for (r, &i) in idx.iter().enumerate() {
-                    let even = first + (BIRTH_END - first).max(0.0) * (r as f32 + 0.5) / n;
-                    start[i] = (orig[r] + spread * (even - orig[r])).clamp(0.0, LAST_BIRTH);
-                }
-            }
-            after_parents(sk, &mut start);
-        }
-        let auto_start = start.clone();
-        Self::stage_counts(sk, growth, &mut start);
-        let leaf_start = Self::leaves(sk, &start);
-        Timing { stem_start: start, auto_start, leaf_start, leaf_time: LEAF_TIME }
-    }
-
-    /// Re-time the side stems of generators whose share started is set at some stage: they
-    /// keep their order, and the set share has started by each stage.
-    fn stage_counts(sk: &Skeleton, growth: &Growth, start: &mut [f32]) {
-        let mut stages: Vec<&crate::model::GrowthStage> = growth.stages.iter().filter(|s| s.at < 0.999).collect();
-        stages.sort_by(|a, b| a.at.total_cmp(&b.at));
-        let mut ids: Vec<u32> = stages.iter().flat_map(|s| s.generators.iter().filter(|g| g.count.is_some()).map(|g| g.gen)).collect();
-        ids.sort();
-        ids.dedup();
-        if ids.is_empty() {
-            return;
-        }
-        for gen in ids {
-            let mut order: Vec<usize> = (0..sk.stems.len()).filter(|&i| sk.stems[i].gen == gen && sk.stems[i].parent.is_some()).collect();
-            if order.is_empty() {
-                continue;
-            }
-            order.sort_by(|&a, &b| start[a].total_cmp(&start[b]));
-            let n = order.len() as f32;
-            let sorted: Vec<f32> = order.iter().map(|&i| start[i]).collect();
-            let auto_at = |g: f32| sorted.partition_point(|&s| s < g) as f32 / n;
-            let mut k = vec![(0.0f32, 0.0f32)];
-            for st in &stages {
-                let v = st.shape(gen).and_then(|s| s.count).unwrap_or_else(|| auto_at(st.at));
-                k.push((st.at, v));
-            }
-            k.push((1.0, 1.0));
-            for j in 1..k.len() {
-                k[j].1 = k[j].1.max(k[j - 1].1);
-            }
-            for (r, &i) in order.iter().enumerate() {
-                let target = (r as f32 + 0.5) / n;
-                let j = (1..k.len()).find(|&j| k[j].1 >= target).unwrap_or(k.len() - 1);
-                let (a, b) = (k[j - 1], k[j]);
-                let f = if b.1 > a.1 { (target - a.1) / (b.1 - a.1) } else { 0.0 };
-                start[i] = (a.0 + (b.0 - a.0) * f.clamp(0.0, 1.0)).min(LAST_BIRTH);
-            }
-        }
-        after_parents(sk, start);
-    }
-
-    /// Leaves start a little after their stem, later the further out they sit on it.
-    fn leaves(sk: &Skeleton, stem_start: &[f32]) -> Vec<f32> {
-        sk.leaves
+        let len: Vec<f32> = sk.stems.iter().map(polyline_length).collect();
+        // the trunk's pace: the first trunk grows in 1 at speed 1
+        let leader = sk.stems.iter().position(|s| s.parent.is_none() && !s.root);
+        let pace = leader.map(|i| len[i]).or_else(|| len.iter().copied().reduce(f32::max)).unwrap_or(1.0).max(0.01);
+        let gs: Vec<(GenGrowth, GenKind)> = sk.stems.iter().map(|s| settings(doc, s.gen)).collect();
+        let mut start = vec![0.0f32; n];
+        let mut time: Vec<f32> = (0..n).map(|i| (len[i] / (pace * gs[i].0.speed)).max(1e-3)).collect();
+        let curve: Vec<GrowthCurve> = gs.iter().map(|g| g.0.speed_curve).collect();
+        let size0: Vec<f32> = gs.iter().map(|g| g.0.start_size).collect();
+        let joint: Vec<f32> = (0..n).map(|i| joint_fraction(sk, i)).collect();
+        // a stem starts once its parent has grown past its joint: where it comes out plus
+        // the collar around it (JOINT_REACH times its base radius along the parent)
+        let attach: Vec<f32> = sk
+            .stems
             .iter()
-            .map(|l| {
-                let Some(&b) = stem_start.get(l.stem) else { return 0.0 };
-                let (t, _) = locate(&sk.stems[l.stem], l.pos);
-                (b + (1.0 - b) * (0.01 + 0.06 * t)).min(1.0 - LEAF_TIME)
+            .map(|st| match st.parent {
+                Some(p) => {
+                    let a = locate(&sk.stems[p], st.points[0]).0;
+                    let rc = st.radii.first().copied().unwrap_or(0.0);
+                    (a + JOINT_REACH * rc / len[p].max(1e-6)).min(1.0)
+                }
+                None => 0.0,
             })
-            .collect()
+            .collect();
+        // generators in tree order, so parents are timed before their children
+        let mut order: Vec<u32> = doc.ordered().iter().map(|&(id, _)| id).collect();
+        for st in &sk.stems {
+            if !order.contains(&st.gen) {
+                order.push(st.gen);
+            }
+        }
+        let mut done = vec![false; n];
+        for gen in &order {
+            let mine: Vec<usize> = (0..n).filter(|&i| sk.stems[i].gen == *gen).collect();
+            // stems of one generator can grow on each other (rarely); time parents first
+            let mut pending = mine.clone();
+            let mut rounds = 0;
+            while !pending.is_empty() && rounds < 64 {
+                rounds += 1;
+                let ready: Vec<usize> = pending.iter().copied().filter(|&i| sk.stems[i].parent.map_or(true, |p| done[p] || sk.stems[p].gen != *gen)).collect();
+                let ready = if ready.is_empty() { pending.clone() } else { ready };
+                pending.retain(|i| !ready.contains(i));
+                let clock = Clock { start: &start, time: &time, curve: &curve, size0: &size0, joint: &joint };
+                let mut plan: Vec<(usize, f32, f32)> = vec![];
+                // siblings start together: as early and as late as all of them can
+                let (g0, kind) = &gs[ready[0]];
+                let place = |i: usize| sk.stems[i].parent.map(|p| clock.reaches(p, attach[i])).unwrap_or(0.0);
+                let parent_end = |i: usize| sk.stems[i].parent.map(|p| start[p] + time[p]).unwrap_or(0.0);
+                let sync = resolve(g0.sync, *kind, sk.stems[ready[0]].root);
+                let (early, late) = (ready.iter().map(|&i| place(i)).fold(0.0f32, f32::max), ready.iter().map(|&i| parent_end(i)).fold(0.0f32, f32::max));
+                for &i in &ready {
+                    let g = &gs[i].0;
+                    let pl = place(i);
+                    let (mut s, mut d) = (pl, time[i]);
+                    if let Some(p) = sk.stems[i].parent {
+                        match sync {
+                            GrowthSync::Parent | GrowthSync::Auto => s = pl.max(start[p] + g.start_pct * time[p]),
+                            GrowthSync::InPlace => s = pl,
+                            GrowthSync::Siblings => s = (early + g.start_pct * (late - early)).max(pl),
+                            GrowthSync::ParentStartEnd => {
+                                s = pl.max(start[p]);
+                                d = (start[p] + time[p] - s).max(0.25 * time[i]);
+                            }
+                        }
+                        s += g.offset + g.offset_variation * hash01(2 * i as u32);
+                    }
+                    plan.push((i, s, d));
+                }
+                for (i, s, d) in plan {
+                    start[i] = s;
+                    time[i] = d;
+                    done[i] = true;
+                }
+            }
+        }
+        // leaves
+        let clock = Clock { start: &start, time: &time, curve: &curve, size0: &size0, joint: &joint };
+        let nl = sk.leaves.len();
+        let lg: Vec<(GenGrowth, GenKind)> = sk.leaves.iter().map(|l| settings(doc, l.gen)).collect();
+        let lplace: Vec<f32> = sk.leaves.iter().map(|l| if l.stem < n { clock.reaches(l.stem, locate(&sk.stems[l.stem], l.pos).0) } else { 0.0 }).collect();
+        let mut by_gen: HashMap<u32, (f32, f32)> = HashMap::new();
+        for (i, l) in sk.leaves.iter().enumerate() {
+            let e = by_gen.entry(l.gen).or_insert((0.0, 0.0));
+            e.0 = e.0.max(lplace[i]);
+            if l.stem < n {
+                e.1 = e.1.max(start[l.stem] + time[l.stem]);
+            }
+        }
+        let mut leaf_start = vec![0.0f32; nl];
+        let mut leaf_time = vec![0.0f32; nl];
+        for (i, l) in sk.leaves.iter().enumerate() {
+            let g = &lg[i].0;
+            let pl = lplace[i];
+            let mut d = LEAF_TIME / g.speed;
+            let mut s = pl;
+            if l.stem < n {
+                let p = l.stem;
+                match resolve(g.sync, GenKind::Leaves, false) {
+                    GrowthSync::Parent | GrowthSync::Auto => s = pl.max(start[p] + g.start_pct * time[p]),
+                    GrowthSync::InPlace => s = pl,
+                    GrowthSync::Siblings => {
+                        let (early, late) = by_gen[&l.gen];
+                        s = (early + g.start_pct * (late - early)).max(pl);
+                    }
+                    GrowthSync::ParentStartEnd => {
+                        s = pl.max(start[p]);
+                        d = (start[p] + time[p] - s).max(0.25 * d);
+                    }
+                }
+            }
+            s += g.offset + g.offset_variation * hash01(2 * i as u32 + 1);
+            leaf_start[i] = s;
+            leaf_time[i] = d.max(1e-3);
+        }
+        // normalise: the last part is done at 1
+        let end = (0..n).map(|i| start[i] + time[i]).chain((0..nl).map(|i| leaf_start[i] + leaf_time[i])).fold(1e-3f32, f32::max);
+        for v in start.iter_mut().chain(time.iter_mut()).chain(leaf_start.iter_mut()).chain(leaf_time.iter_mut()) {
+            *v /= end;
+        }
+        Timing { stem_start: start, stem_time: time, leaf_start, leaf_time }
     }
 
-    /// Size of stem `i` at growth `g`, as a fraction of its full size.
-    pub fn scale(&self, i: usize, g: f32) -> f32 {
-        let b = self.stem_start[i];
-        if g <= b {
-            return 0.0;
+    /// How far stem or leaf with (`start`, `time`) is through its own growth at `g` (None
+    /// before it starts).
+    fn progress(start: f32, time: f32, g: f32) -> Option<f32> {
+        if g < start {
+            return None;
         }
-        let x = ((g - b) / (1.0 - b).max(1e-4)).clamp(0.0, 1.0);
-        if b <= 0.0 {
-            x.powf(TRUNK_PACE)
-        } else {
-            x
-        }
-    }
-
-    /// Size of leaf `i` at growth `g` (0 = not yet, 1 = unfolded).
-    pub fn leaf(&self, i: usize, g: f32) -> f32 {
-        smooth((g - self.leaf_start[i]) / self.leaf_time.max(1e-4))
+        Some(((g - start) / time.max(1e-6)).clamp(0.0, 1.0))
     }
 }
 
-/// The growth points the animation is sampled at: an even spread plus every stage (and the end
-/// of the seedling leaves), always including 0 and 1.
-pub fn keyframes(growth: &Growth) -> Vec<f32> {
+/// Auto: roots start and finish with their parent, the rest follow the parent.
+fn resolve(sync: GrowthSync, kind: GenKind, root: bool) -> GrowthSync {
+    match sync {
+        GrowthSync::Auto if kind == GenKind::Roots || root => GrowthSync::ParentStartEnd,
+        GrowthSync::Auto => GrowthSync::Parent,
+        s => s,
+    }
+}
+
+/// The growth points the animation is sampled at: an even spread plus every stage, always
+/// including 0 and 1.
+pub fn keyframes(growth: &crate::model::Growth) -> Vec<f32> {
     let mut special: Vec<f32> = vec![0.0, 1.0];
     special.extend(growth.stages.iter().map(|s| s.at.clamp(0.0, 1.0)));
-    if growth.seedling_leaves {
-        special.push(seedling_end(growth));
-    }
     let mut keys = special.clone();
     let k = growth.keyframes.max(2);
     let gap = 0.45 / k as f32;
@@ -268,281 +294,165 @@ pub fn keyframes(growth: &Growth) -> Vec<f32> {
     keys
 }
 
-/// Samples of the automatic growth per generator (at g = k / (SAMPLES - 1)).
-const SAMPLES: usize = 65;
-
-/// How far each generator is along the automatic growth, for showing it next to the stage
-/// settings and for turning those settings into timing.
-#[derive(Clone, Default, Debug)]
-pub struct AutoTable {
-    /// Generator id -> (share of its stems' total length grown, share of its leaves out),
-    /// sampled over the growth. Empty when the generator has no stems or no leaves.
-    gens: HashMap<u32, (Vec<f32>, Vec<f32>)>,
-    /// Generator id -> sorted automatic start times of its side stems.
-    born: HashMap<u32, Vec<f32>>,
-}
-
-impl AutoTable {
-    pub fn new(sk: &Skeleton, timing: &Timing) -> AutoTable {
-        let n = sk.stems.len();
-        let mut gens: HashMap<u32, (Vec<f32>, Vec<f32>)> = HashMap::new();
-        let mut stem_count: HashMap<u32, f32> = HashMap::new();
-        for st in &sk.stems {
-            *stem_count.entry(st.gen).or_default() += 1.0;
-        }
-        let mut leaf_count: HashMap<u32, f32> = HashMap::new();
-        for l in &sk.leaves {
-            *leaf_count.entry(l.gen).or_default() += 1.0;
-        }
-        for &g in stem_count.keys().chain(leaf_count.keys()) {
-            gens.entry(g).or_insert_with(|| (vec![], vec![]));
-        }
-        for (g, e) in gens.iter_mut() {
-            if stem_count.contains_key(g) {
-                e.0 = vec![0.0; SAMPLES];
-            }
-            if leaf_count.contains_key(g) {
-                e.1 = vec![0.0; SAMPLES];
-            }
-        }
-        for k in 0..SAMPLES {
-            let gg = k as f32 / (SAMPLES - 1) as f32;
-            // automatic stem sizes: a branch is never further along than the stem it grows on
-            let mut scale = vec![f32::NAN; n];
-            fn sc(i: usize, g: f32, sk: &Skeleton, t: &Timing, out: &mut [f32]) -> f32 {
-                if out[i].is_nan() {
-                    let own = t.scale(i, g);
-                    out[i] = match sk.stems[i].parent {
-                        Some(p) => own.min(sc(p, g, sk, t, out)),
-                        None => own,
-                    };
-                }
-                out[i]
-            }
-            for i in 0..n {
-                let v = sc(i, gg, sk, timing, &mut scale);
-                let st = &sk.stems[i];
-                gens.get_mut(&st.gen).unwrap().0[k] += v / stem_count[&st.gen];
-            }
-            for (i, l) in sk.leaves.iter().enumerate() {
-                if i < timing.leaf_start.len() {
-                    gens.get_mut(&l.gen).unwrap().1[k] += timing.leaf(i, gg) / leaf_count[&l.gen];
-                }
-            }
-        }
-        let mut born: HashMap<u32, Vec<f32>> = HashMap::new();
-        let starts = if timing.auto_start.len() == n { &timing.auto_start } else { &timing.stem_start };
-        for (i, st) in sk.stems.iter().enumerate() {
-            if st.parent.is_some() && i < starts.len() {
-                born.entry(st.gen).or_default().push(starts[i]);
-            }
-        }
-        for v in born.values_mut() {
-            v.sort_by(f32::total_cmp);
-        }
-        AutoTable { gens, born }
-    }
-
-    /// Share of generator `gen`'s side stems started at growth `g` (automatic); None for trunks.
-    pub fn count(&self, gen: u32, g: f32) -> Option<f32> {
-        self.born.get(&gen).filter(|v| !v.is_empty()).map(|v| v.partition_point(|&s| s < g) as f32 / v.len() as f32)
-    }
-
-    fn sample(v: &[f32], g: f32) -> f32 {
-        if v.is_empty() {
-            return 1.0;
-        }
-        let x = g.clamp(0.0, 1.0) * (SAMPLES - 1) as f32;
-        let i = (x.floor() as usize).min(SAMPLES - 2);
-        v[i] + (v[i + 1] - v[i]) * (x - i as f32)
-    }
-
-    /// The growth point where `v` first reaches `target` (v rises from 0 to 1).
-    fn invert(v: &[f32], target: f32) -> f32 {
-        if v.is_empty() || target >= 1.0 {
-            return 1.0;
-        }
-        if target <= 0.0 {
-            // the last moment it is still 0
-            let i = v.iter().rposition(|&x| x <= 0.0).unwrap_or(0);
-            return i as f32 / (SAMPLES - 1) as f32;
-        }
-        let i = v.iter().position(|&x| x >= target).unwrap_or(SAMPLES - 1).max(1);
-        let (a, b) = (v[i - 1], v[i]);
-        let f = if b > a { ((target - a) / (b - a)).clamp(0.0, 1.0) } else { 1.0 };
-        (i as f32 - 1.0 + f) / (SAMPLES - 1) as f32
-    }
-
-    /// Share of generator `gen`'s total stem length grown at growth `g` (automatic).
-    pub fn length(&self, gen: u32, g: f32) -> Option<f32> {
-        self.gens.get(&gen).filter(|e| !e.0.is_empty()).map(|e| Self::sample(&e.0, g))
-    }
-
-    /// Share of generator `gen`'s leaves out at growth `g` (automatic).
-    pub fn leaves(&self, gen: u32, g: f32) -> Option<f32> {
-        self.gens.get(&gen).filter(|e| !e.1.is_empty()).map(|e| Self::sample(&e.1, g))
-    }
-}
-
-/// One setting of one generator over the growth: (growth, value) keys, linear between them.
-#[derive(Clone, Debug)]
-struct Curve(Vec<(f32, f32)>);
-
-impl Curve {
-    fn at(&self, g: f32) -> f32 {
-        let k = &self.0;
-        if g <= k[0].0 {
-            return k[0].1;
-        }
-        for w in k.windows(2) {
-            if g <= w[1].0 {
-                let f = if w[1].0 > w[0].0 { (g - w[0].0) / (w[1].0 - w[0].0) } else { 1.0 };
-                return w[0].1 + (w[1].1 - w[0].1) * f;
-            }
-        }
-        k.last().unwrap().1
-    }
-}
-
-/// The stage settings of one generator, turned into curves over the growth.
-#[derive(Clone, Debug, Default)]
-struct Control {
-    /// Target share of total stem length (remaps the generator's growth clock).
-    length: Option<Curve>,
-    /// Thickness multiplier.
-    thickness: Option<Curve>,
-    /// Target share of leaves out (remaps the leaves' clock).
-    leaves: Option<Curve>,
-    /// Leaf size multiplier.
-    leaf_size: Option<Curve>,
-}
-
-/// One generator's controls evaluated at one growth point.
-#[derive(Clone, Copy)]
-struct Now {
-    stem_clock: f32,
-    length_set: bool,
-    thickness: f32,
-    leaf_clock: f32,
-    leaf_size: f32,
-}
-
-fn controls(growth: &Growth, auto: &AutoTable) -> HashMap<u32, Control> {
-    let mut stages: Vec<&crate::model::GrowthStage> = growth.stages.iter().filter(|s| s.at < 0.999).collect();
-    stages.sort_by(|a, b| a.at.total_cmp(&b.at));
-    let mut ids: Vec<u32> = stages.iter().flat_map(|s| s.generators.iter().map(|g| g.gen)).collect();
-    ids.sort();
-    ids.dedup();
-    let mut out = HashMap::new();
-    for gen in ids {
-        let shape = |st: &crate::model::GrowthStage| st.shape(gen).cloned().unwrap_or_default();
-        // value curves: from nothing to the mature tree, through every stage (automatic where unset)
-        let value = |get: &dyn Fn(&crate::model::StageShape) -> Option<f32>, auto_at: &dyn Fn(f32) -> Option<f32>| -> Option<Curve> {
-            if !stages.iter().any(|st| get(&shape(st)).is_some()) {
-                return None;
-            }
-            let mut k = vec![(0.0, 0.0)];
-            for st in &stages {
-                let v = get(&shape(st)).or_else(|| auto_at(st.at))?;
-                k.push((st.at, v));
-            }
-            k.push((1.0, 1.0));
-            Some(Curve(k))
-        };
-        // multiplier curves: 1 where unset, held before the first stage
-        let mult = |get: &dyn Fn(&crate::model::StageShape) -> Option<f32>| -> Option<Curve> {
-            if !stages.iter().any(|st| get(&shape(st)).is_some()) {
-                return None;
-            }
-            let mut k: Vec<(f32, f32)> = stages.iter().map(|st| (st.at, get(&shape(st)).unwrap_or(1.0))).collect();
-            k.push((1.0, 1.0));
-            Some(Curve(k))
-        };
-        let c = Control {
-            length: value(&|s| s.length, &|g| auto.length(gen, g)),
-            thickness: mult(&|s| s.thickness),
-            leaves: value(&|s| s.leaves, &|g| auto.leaves(gen, g)),
-            leaf_size: mult(&|s| s.leaf_size),
-        };
-        out.insert(gen, c);
-    }
-    out
-}
-
 #[derive(Clone, Copy)]
 enum Bind {
-    /// Grows with the trunk's size only (billboard cards, anything without a stem).
+    /// Grows with the first trunk only (billboard cards, anything without a stem).
     Fixed,
     /// On stem `s` at arc fraction `t`, whose axis passes `c` there.
     Stem { s: u32, t: f32, c: Vec3 },
-    /// On the rim of the opening in stem `s`'s bark where branch `child` comes out.
-    Rim { s: u32, t: f32, c: Vec3, child: u32 },
+    /// Part of the joint where branch `child` comes out of stem `s` (the opening's rim in the
+    /// parent's bark and the branch's rings inside the parent), at arc fraction `t` of the
+    /// parent whose axis passes `c` there.
+    Joint { s: u32, t: f32, c: Vec3, child: u32 },
     /// Part of leaf `l`.
     Leaf { l: u32 },
 }
 
-struct LeafInfo {
-    /// The point of its stem's axis nearest to the stalk, and its arc fraction there.
-    axis: Vec3,
-    t: f32,
-    anchor: Vec3,
-    side: Vec3,
-    dir: Vec3,
-    normal: Vec3,
-    /// Seedling slot: (index among seedling leaves, their count).
-    seedling: Option<(u32, u32)>,
+/// A stem's final axis, for finding points along it.
+struct Axis {
+    points: Vec<Vec3>,
+    /// Arc-length fraction at each point (0..1).
+    arc: Vec<f32>,
 }
-
-/// Where a stem is at one point of the growth.
-#[derive(Clone, Copy, Default)]
-struct Pose {
-    /// Where its base is now, its base at full size, its size and thickness factors.
-    at: Vec3,
-    base: Vec3,
-    scale: f32,
-    thick: f32,
-}
-
-impl Pose {
-    /// Thickness at arc fraction `t`: a young shoot tapers to a point, the full-size stem has
-    /// its own taper.
-    fn thick_at(&self, t: f32) -> f32 {
-        self.thick * (1.0 - (1.0 - self.scale) * 0.95 * t.clamp(0.0, 1.0))
-    }
-
-    /// A point `q` of the full-size stem whose axis passes `c` at arc fraction `t`.
-    fn place(&self, c: Vec3, q: Vec3, t: f32) -> Vec3 {
-        self.at + (c - self.base) * self.scale + (q - c) * self.thick_at(t)
-    }
-}
-
-/// A stem's radius at arc fraction `t`.
-struct Axis;
 
 impl Axis {
-    fn radius(st: &Stem, t: f32) -> f32 {
-        let n = st.points.len();
-        if n < 2 {
-            return st.radii.first().copied().unwrap_or(0.0);
-        }
+    fn new(st: &Stem) -> Axis {
         let mut arc = vec![0.0f32];
         for w in st.points.windows(2) {
             arc.push(arc.last().unwrap() + w[0].distance(w[1]));
         }
-        let want = t.clamp(0.0, 1.0) * arc[n - 1];
-        let i = arc.partition_point(|&a| a <= want).clamp(1, n - 1);
-        let f = if arc[i] > arc[i - 1] { (want - arc[i - 1]) / (arc[i] - arc[i - 1]) } else { 0.0 };
-        st.radii[i - 1] + (st.radii[i] - st.radii[i - 1]) * f.clamp(0.0, 1.0)
+        let total = arc.last().copied().unwrap_or(0.0).max(1e-6);
+        for a in &mut arc {
+            *a /= total;
+        }
+        Axis { points: st.points.clone(), arc }
+    }
+
+    fn seg(&self, t: f32) -> (usize, f32) {
+        let n = self.points.len();
+        if n < 2 {
+            return (0, 0.0);
+        }
+        let i = self.arc.partition_point(|&a| a <= t).clamp(1, n - 1);
+        let span = self.arc[i] - self.arc[i - 1];
+        (i, if span > 0.0 { ((t - self.arc[i - 1]) / span).clamp(0.0, 1.0) } else { 0.0 })
+    }
+
+    fn at(&self, t: f32) -> Vec3 {
+        if self.points.len() < 2 {
+            return self.points.first().copied().unwrap_or(Vec3::ZERO);
+        }
+        let (i, f) = self.seg(t);
+        self.points[i - 1].lerp(self.points[i], f)
+    }
+
+    fn tangent(&self, t: f32) -> Vec3 {
+        if self.points.len() < 2 {
+            return Vec3::Y;
+        }
+        let (i, _) = self.seg(t);
+        (self.points[i] - self.points[i - 1]).normalize_or(Vec3::Y)
     }
 }
 
-/// Where the opening for a branch closes to while the branch is small.
+/// A stem's radius at arc fraction `t`.
+fn radius_at(st: &Stem, ax: &Axis, t: f32) -> f32 {
+    if st.radii.len() < 2 || ax.points.len() < 2 {
+        return st.radii.first().copied().unwrap_or(0.0);
+    }
+    let (i, f) = ax.seg(t);
+    let i = i.min(st.radii.len() - 1);
+    st.radii[i - 1] + (st.radii[i] - st.radii[i - 1]) * f
+}
+
+/// What stays fixed about one stem while it grows.
+struct StemInfo {
+    axis: Axis,
+    base: Vec3,
+    /// Parent, arc fraction and axis point there.
+    parent: Option<(usize, f32, Vec3)>,
+    /// Folding out of the parent: axis and full angle (radians).
+    fold: (Vec3, f32),
+    /// Final radius at each axis point, and the length in metres.
+    radii: Vec<f32>,
+    length: f32,
+    /// Arc fraction where it comes out of its parent's bark (see `joint_fraction`).
+    joint: f32,
+    g: GenGrowth,
+}
+
+impl StemInfo {
+    /// The final radius at arc fraction `t`.
+    fn final_radius(&self, t: f32) -> f32 {
+        if self.radii.len() < 2 || self.axis.points.len() < 2 {
+            return self.radii.first().copied().unwrap_or(0.0);
+        }
+        let (i, f) = self.axis.seg(t);
+        let i = i.min(self.radii.len() - 1);
+        self.radii[i - 1] + (self.radii[i] - self.radii[i - 1]) * f
+    }
+
+    /// Where the final stem's arc fraction `t` is now and how much of its final radius it has:
+    /// the stem's own taper, from base to tip, spread over the length grown so far, times the
+    /// radius growth.
+    fn factor(&self, st: &State, t: f32) -> (f32, f32) {
+        let at = st.map(t);
+        if st.len <= 0.0 || t > st.len {
+            return (at, 0.0);
+        }
+        let want = self.final_radius((at / st.len).min(1.0));
+        let have = self.final_radius(t);
+        let shape = if have > 1e-6 { (want / have).clamp(0.0, 1.0) } else { 0.0 };
+        let r = st.radius * shape;
+        // the growing tip is a short cone (TIP_SLOPE times as long as the stem is thick there),
+        // which turns into the stem's own tip shape as it finishes
+        let radius_m = have * r;
+        let behind = (st.len - at) * self.length;
+        let cone = if radius_m > 1e-6 { (behind / (TIP_SLOPE * radius_m)).clamp(0.0, 1.0) } else { 1.0 };
+        let cone = cone * (2.0 - cone);
+        let done = st.x.powi(4);
+        (at, r * (cone + (1.0 - cone) * done))
+    }
+
+    /// Point `q` of the final stem (axis point `c` at arc fraction `t`) where it is now, before
+    /// the stem's own origin and turn.
+    fn moved(&self, st: &State, t: f32, c: Vec3, q: Vec3) -> Vec3 {
+        let (at, r) = self.factor(st, t);
+        if (at - t).abs() < 1e-6 {
+            return c + (q - c) * r;
+        }
+        self.axis.at(at)
+    }
+}
+
+/// One stem at one point of the growth.
 #[derive(Clone, Copy)]
-struct Opening {
-    /// Centre of the rim (full size), and the parent's axis point and arc fraction there.
-    centre: Vec3,
-    c: Vec3,
+struct State {
+    /// Grown length (arc fraction), radius factor, and how far through its own growth.
+    len: f32,
+    radius: f32,
+    x: f32,
+    /// Where its base is, and how it is turned.
+    origin: Vec3,
+    rot: Quat,
+}
+
+impl State {
+    /// Where the part of the final stem at arc fraction `t` is now, as an arc fraction along
+    /// the final path: the grown part keeps its place, the rest waits at the growing tip.
+    fn map(&self, t: f32) -> f32 {
+        t.clamp(0.0, self.len.max(0.0))
+    }
+}
+
+struct LeafInfo {
+    stem: usize,
     t: f32,
+    axis: Vec3,
+    anchor: Vec3,
+    /// Turning the leaf from lying along its stem into place.
+    fold: Quat,
+    g: GenGrowth,
 }
 
 /// Moves the vertices of one mesh (built from `sk`) to any point of the growth.
@@ -550,40 +460,28 @@ pub struct Grower {
     pub timing: Timing,
     base: Vec<Vec3>,
     bind: Vec<Bind>,
-    /// Per stem: parent, and the parent's axis point and arc fraction where it starts.
-    parents: Vec<Option<(usize, Vec3, f32)>>,
-    /// Per stem: the opening in its parent's bark, if it was joined with one.
-    openings: Vec<Option<Opening>>,
-    stem_base: Vec<Vec3>,
+    stems: Vec<StemInfo>,
+    /// Per stem: where it comes out of its parent's bark, and the parent's arc fraction and
+    /// axis point there.
+    openings: Vec<Option<(Vec3, f32, Vec3)>>,
     leaves: Vec<LeafInfo>,
-    /// Per leaf: the stem it grows on.
-    leaf_stems: Vec<usize>,
-    /// The stem seedling leaves sit on (the first trunk), with its axis.
     leader: Option<usize>,
-    /// Where the seedling leaves are gone.
-    seedling_end: f32,
-    leader_axis: Vec<Vec3>,
-    /// Size of the whole tree for vertices that belong to no stem.
-    trunk_pose: Option<usize>,
-    /// Per stem and per leaf: its generator.
-    stem_gen: Vec<u32>,
-    leaf_gen: Vec<u32>,
-    /// Per stem: the most its relative thickness may be so it stays within its parent where
-    /// it comes out of it.
-    max_thick: Vec<f32>,
-    auto: AutoTable,
-    controls: HashMap<u32, Control>,
 }
 
 impl Grower {
     /// `timing` should come from the full tree so every level of detail grows alike; the
     /// levels share its stems (reduced meshes keep every stem, but only some leaves).
-    pub fn new(settings: &Growth, sk: &Skeleton, m: &Mesh, timing: &Timing) -> Grower {
+    pub fn new(doc: &Document, sk: &Skeleton, m: &Mesh, timing: &Timing) -> Grower {
         let mut timing = timing.clone();
-        if timing.stem_start.len() != sk.stems.len() {
-            timing = Timing::new(sk, settings);
-        } else if timing.leaf_start.len() != sk.leaves.len() {
-            timing.leaf_start = Timing::leaves(sk, &timing.stem_start);
+        if timing.stem_start.len() != sk.stems.len() || timing.leaf_start.len() != sk.leaves.len() {
+            let own = Timing::new(doc, sk);
+            if timing.stem_start.len() != sk.stems.len() {
+                timing = own;
+            } else {
+                // same stems, fewer leaves: keep the stems' timing, time these leaves alone
+                timing.leaf_start = own.leaf_start;
+                timing.leaf_time = own.leaf_time;
+            }
         }
         let mut bind = vec![Bind::Fixed; m.pos.len()];
         for (li, &first) in m.leaf_first.iter().enumerate() {
@@ -592,166 +490,149 @@ impl Grower {
                 bind[v as usize] = Bind::Leaf { l: li as u32 };
             }
         }
+        let axes: Vec<Axis> = sk.stems.iter().map(Axis::new).collect();
+        // tube rings sit at the axis points: a vertex belongs to the ring nearest to where it
+        // projects, so a whole ring appears at once even where the stem curves
+        let ring = |s: usize, q: Vec3| -> (f32, Vec3) {
+            let (t, _) = locate(&sk.stems[s], q);
+            let ax = &axes[s];
+            match ax.arc.iter().enumerate().min_by(|a, b| (a.1 - t).abs().total_cmp(&(b.1 - t).abs())) {
+                Some((i, &a)) => (a, ax.points[i]),
+                None => locate(&sk.stems[s], q),
+            }
+        };
         for v in 0..m.pos.len() {
             if matches!(bind[v], Bind::Leaf { .. }) || m.leaf.get(v).copied().unwrap_or(false) {
                 continue;
             }
             let s = m.stem.get(v).copied().unwrap_or(u32::MAX);
             if (s as usize) < sk.stems.len() {
-                let (t, c) = locate(&sk.stems[s as usize], m.pos[v]);
+                let (t, c) = ring(s as usize, m.pos[v]);
                 bind[v] = Bind::Stem { s, t, c };
             }
         }
-        // openings cut into the parents' bark: their rims close while the branch is small
-        let mut openings: Vec<Option<Opening>> = vec![None; sk.stems.len()];
-        let mut rims: Vec<Vec<u32>> = vec![vec![]; sk.stems.len()];
+        // joints: the opening's rim in the parent's bark and the branch's rings inside the
+        // parent stay on the parent's bark and close towards the opening's centre while the
+        // branch is thinner (relative to its final size) than the parent around it
+        let joints: Vec<f32> = (0..sk.stems.len()).map(|i| joint_fraction(sk, i)).collect();
+        let mut claimed = vec![false; m.pos.len()];
+        let on_parent = |child: usize, q: Vec3| -> Option<Bind> {
+            let p = sk.stems[child].parent?;
+            let (t, c) = locate(&sk.stems[p], q);
+            Some(Bind::Joint { s: p as u32, t, c, child: child as u32 })
+        };
         for &(v, child) in &m.joint_rim {
-            if (child as usize) < sk.stems.len() && (v as usize) < m.pos.len() {
-                rims[child as usize].push(v);
-            }
-        }
-        for (child, rim) in rims.iter().enumerate() {
-            let Some(p) = sk.stems[child].parent else { continue };
-            if rim.is_empty() {
+            let (v, child) = (v as usize, child as usize);
+            if child >= sk.stems.len() || v >= m.pos.len() || claimed[v] {
                 continue;
             }
-            let centre = rim.iter().map(|&v| m.pos[v as usize]).sum::<Vec3>() / rim.len() as f32;
-            let (t, c) = locate(&sk.stems[p], centre);
-            openings[child] = Some(Opening { centre, c, t });
-            for &v in rim {
-                // a vertex shared by two openings closes with the first
-                if let Bind::Stem { s, t, c } = bind[v as usize] {
-                    if s as usize == p {
-                        bind[v as usize] = Bind::Rim { s, t, c, child: child as u32 };
+            if let (Bind::Stem { s, .. }, Some(p)) = (bind[v], sk.stems[child].parent) {
+                if s as usize == p {
+                    if let Some(b) = on_parent(child, m.pos[v]) {
+                        bind[v] = b;
+                        claimed[v] = true;
                     }
                 }
             }
         }
-        let parents = sk
-            .stems
-            .iter()
-            .map(|st| {
-                st.parent.map(|p| {
-                    let (t, c) = locate(&sk.stems[p], st.points[0]);
-                    (p, c, t)
-                })
-            })
-            .collect();
-        let stem_base = sk.stems.iter().map(|st| st.points[0]).collect();
-        let leader = sk.stems.iter().position(|s| s.parent.is_none() && !s.root);
-        // seedling leaves: some of the leaves that come late, spread over the whole set
-        let mut seedling = vec![None; sk.leaves.len()];
-        if settings.seedling_leaves && leader.is_some() {
-            let late: Vec<usize> = (0..sk.leaves.len()).filter(|&i| timing.leaf_start[i] >= seedling_end(settings) + 0.02).collect();
-            let want = (sk.leaves.len() / 40).clamp(4, 14).min(late.len());
-            for k in 0..want {
-                let i = late[k * late.len() / want.max(1)];
-                seedling[i] = Some((k as u32, want as u32));
+        for v in 0..m.pos.len() {
+            if let Bind::Stem { s, t, .. } = bind[v] {
+                let s = s as usize;
+                if sk.stems[s].parent.is_some() && t < joints[s] - 1e-6 {
+                    if let Some(b) = on_parent(s, m.pos[v]) {
+                        bind[v] = b;
+                    }
+                }
             }
         }
+        let openings: Vec<Option<(Vec3, f32, Vec3)>> = (0..sk.stems.len())
+            .map(|i| {
+                let p = sk.stems[i].parent?;
+                let centre = Axis::new(&sk.stems[i]).at(joints[i]);
+                let (t, c) = locate(&sk.stems[p], centre);
+                Some((centre, t, c))
+            })
+            .collect();
+        let stems: Vec<StemInfo> = sk
+            .stems
+            .iter()
+            .enumerate()
+            .map(|(i, st)| {
+                let base = st.points.first().copied().unwrap_or(Vec3::ZERO);
+                let (parent, fold) = match st.parent {
+                    Some(p) => {
+                        let (a, c) = locate(&sk.stems[p], base);
+                        let tp = axes[p].tangent(a);
+                        let d = axes[i].tangent(0.0);
+                        let angle = tp.angle_between(d);
+                        let axis = tp.cross(d).try_normalize().unwrap_or_else(|| tp.any_orthonormal_vector());
+                        (Some((p, a, c)), (axis, if angle.is_finite() { angle } else { 0.0 }))
+                    }
+                    None => (None, (Vec3::X, 0.0)),
+                };
+                StemInfo { axis: Axis::new(st), base, parent, fold, radii: st.radii.clone(), length: polyline_length(st), joint: joint_fraction(sk, i), g: settings(doc, st.gen).0 }
+            })
+            .collect();
         let leaves = sk
             .leaves
             .iter()
-            .enumerate()
-            .map(|(i, l)| {
+            .map(|l| {
+                let stem = l.stem.min(sk.stems.len().saturating_sub(1));
+                let (t, axis) = if sk.stems.is_empty() { (0.0, l.pos) } else { locate(&sk.stems[stem], l.pos) };
+                let along = if sk.stems.is_empty() { Vec3::Y } else { axes[stem].tangent(t) };
                 let dir = l.dir.normalize_or(Vec3::Y);
-                let normal = l.normal.normalize_or(Vec3::Z);
-                let (t, axis) = locate(&sk.stems[l.stem], l.pos);
-                LeafInfo { axis, t, anchor: l.pos, side: normal.cross(dir).normalize_or(Vec3::X), dir, normal, seedling: seedling[i] }
+                LeafInfo { stem, t, axis, anchor: l.pos, fold: Quat::from_rotation_arc(dir, along), g: settings(doc, l.gen).0 }
             })
             .collect();
-        let leader_axis = leader.map(|i| sk.stems[i].points.clone()).unwrap_or_default();
-        let leaf_stems = sk.leaves.iter().map(|l| l.stem).collect();
-        let auto = AutoTable::new(sk, &timing);
-        let controls = controls(settings, &auto);
-        let max_thick = sk
-            .stems
-            .iter()
-            .map(|st| match st.parent {
-                Some(p) => {
-                    let (t, _) = locate(&sk.stems[p], st.points[0]);
-                    let rp = Axis::radius(&sk.stems[p], t);
-                    let rc = st.radii.first().copied().unwrap_or(0.0);
-                    if rc > 1e-6 { (rp / rc).max(1.0) } else { f32::MAX }
-                }
-                None => f32::MAX,
-            })
-            .collect();
-        Grower {
-            timing,
-            base: m.pos.clone(),
-            bind,
-            parents,
-            openings,
-            stem_base,
-            leaves,
-            leaf_stems,
-            leader,
-            seedling_end: seedling_end(settings),
-            leader_axis,
-            trunk_pose: leader,
-            stem_gen: sk.stems.iter().map(|s| s.gen).collect(),
-            leaf_gen: sk.leaves.iter().map(|l| l.gen).collect(),
-            max_thick,
-            auto,
-            controls,
-        }
+        let leader = sk.stems.iter().position(|s| s.parent.is_none() && !s.root);
+        Grower { timing, base: m.pos.clone(), bind, stems, openings, leaves, leader }
     }
 
-    /// The stage settings of every generator at growth `g`.
-    fn now(&self, g: f32) -> HashMap<u32, Now> {
-        self.controls
-            .iter()
-            .map(|(&gen, c)| {
-                let stem_clock = match (&c.length, self.auto.gens.get(&gen)) {
-                    (Some(cv), Some(e)) if !e.0.is_empty() => AutoTable::invert(&e.0, cv.at(g)),
-                    _ => g,
-                };
-                let leaf_clock = match (&c.leaves, self.auto.gens.get(&gen)) {
-                    (Some(cv), Some(e)) if !e.1.is_empty() => AutoTable::invert(&e.1, cv.at(g)),
-                    _ => g,
-                };
-                let n = Now {
-                    stem_clock,
-                    length_set: c.length.is_some(),
-                    thickness: c.thickness.as_ref().map(|cv| cv.at(g)).unwrap_or(1.0),
-                    leaf_clock,
-                    leaf_size: c.leaf_size.as_ref().map(|cv| cv.at(g)).unwrap_or(1.0),
-                };
-                (gen, n)
-            })
-            .collect()
-    }
-
-    /// Every stem's pose at growth `g` (parents come before their children in a skeleton,
-    /// but this does not rely on it).
-    fn poses(&self, g: f32, now: &HashMap<u32, Now>) -> Vec<Pose> {
-        let n = self.stem_base.len();
-        let mut out: Vec<Option<Pose>> = vec![None; n];
-        fn pose(i: usize, g: f32, gr: &Grower, now: &HashMap<u32, Now>, out: &mut [Option<Pose>]) -> Pose {
-            if let Some(p) = out[i] {
-                return p;
+    /// Every stem's state at growth `g`.
+    fn states(&self, g: f32) -> Vec<State> {
+        let n = self.stems.len();
+        let mut out: Vec<Option<State>> = vec![None; n];
+        fn state(i: usize, g: f32, gr: &Grower, out: &mut [Option<State>]) -> State {
+            if let Some(s) = out[i] {
+                return s;
             }
-            let base = gr.stem_base[i];
-            let ctl = now.get(&gr.stem_gen[i]);
-            let own = gr.timing.scale(i, ctl.map(|c| c.stem_clock).unwrap_or(g));
-            let mult = ctl.map(|c| c.thickness).unwrap_or(1.0);
-            let p = match gr.parents[i] {
-                None => Pose { at: base, base, scale: own, thick: own.powf(0.85) * mult },
-                Some((p, c, t)) => {
-                    let pp = pose(p, g, gr, now, out);
-                    // automatically a branch is never further along than the stem it grows on;
-                    // a length set for its stage wins
-                    let scale = if ctl.map(|c| c.length_set).unwrap_or(false) { own } else { own.min(pp.scale) };
-                    // never thicker than the stem it comes out of
-                    let thick = (scale.powf(0.85) * mult).min(pp.thick_at(t) * gr.max_thick[i]);
-                    Pose { at: pp.place(c, base, t), base, scale, thick }
+            let si = &gr.stems[i];
+            let gs = &si.g;
+            let x = Timing::progress(gr.timing.stem_start[i], gr.timing.stem_time[i], g);
+            let (len, mut radius, fold) = match x {
+                None => (0.0, 0.0, 0.0),
+                Some(x) => {
+                    let ss = gs.start_size;
+                    let grown = ss + (1.0 - ss) * gs.speed_curve.at(x);
+                    (si.joint + (1.0 - si.joint) * grown, ss + (1.0 - ss) * gs.radius_curve.at(x), gs.start_angle + (1.0 - gs.start_angle) * gs.speed_curve.at(x))
                 }
             };
-            out[i] = Some(p);
-            p
+            let st = match si.parent {
+                None => State { len, radius, x: x.unwrap_or(0.0), origin: si.base, rot: Quat::IDENTITY },
+                Some((p, a, c)) => {
+                    let ps = state(p, g, gr, out);
+                    let pr = gr.stems[p].factor(&ps, a).1;
+                    // never further along in thickness than the parent where it comes out, so its
+                    // joint stays inside the parent's bark
+                    radius = radius.min(pr);
+                    // its base sits on the parent's surface as it is now (at the parent's growing
+                    // tip while the parent has not reached it yet)
+                    let on = gr.stems[p].moved(&ps, a, c, si.base);
+                    let origin = ps.origin + ps.rot * (on - gr.stems[p].base);
+                    let rot = ps.rot * Quat::from_axis_angle(si.fold.0, -(1.0 - fold) * si.fold.1);
+                    State { len, radius, x: x.unwrap_or(0.0), origin, rot }
+                }
+            };
+            out[i] = Some(st);
+            st
         }
-        (0..n).map(|i| pose(i, g, self, now, &mut out)).collect()
+        (0..n).map(|i| state(i, g, self, &mut out)).collect()
+    }
+
+    /// Point `q` of stem `s` (axis point `c` at arc fraction `t`) at its state.
+    fn place(&self, s: usize, st: &State, t: f32, c: Vec3, q: Vec3) -> Vec3 {
+        let info = &self.stems[s];
+        st.origin + st.rot * (info.moved(st, t, c, q) - info.base)
     }
 
     /// Vertex positions at growth `g` (1 = the mature mesh).
@@ -760,57 +641,44 @@ impl Grower {
         if g >= 1.0 {
             return self.base.clone();
         }
-        let now = self.now(g);
-        let poses = self.poses(g, &now);
-        let tree = self.trunk_pose.map(|i| poses[i].scale).unwrap_or_else(|| g.powf(TRUNK_PACE));
-        // seedling leaves: present from the start, gone at seedling_end
-        let end = self.seedling_end;
-        let seed_k = if g < end { smooth(g / 0.03) * (1.0 - smooth((g - (end - 0.12)) / 0.12)) } else { 0.0 };
+        let states = self.states(g);
+        let tree = self.leader.map(|i| states[i].len).unwrap_or(g);
         let mut out = Vec::with_capacity(self.base.len());
         for (v, b) in self.bind.iter().enumerate() {
             let p0 = self.base[v];
             let p = match *b {
                 Bind::Fixed => p0 * tree,
-                Bind::Stem { s, t, c } => poses[s as usize].place(c, p0, t),
-                Bind::Rim { s, t, c, child } => {
-                    // the opening is as wide as the branch is thick now, relative to its parent
-                    let pose = poses[s as usize];
-                    let here = pose.place(c, p0, t);
+                Bind::Stem { s, t, c } => self.place(s as usize, &states[s as usize], t, c, p0),
+                Bind::Joint { s, t, c, child } => {
+                    let st = &states[s as usize];
+                    let here = self.place(s as usize, st, t, c, p0);
                     match self.openings[child as usize] {
-                        Some(o) => {
-                            let centre = pose.place(o.c, o.centre, o.t);
-                            let k = (poses[child as usize].thick / pose.thick_at(o.t).max(1e-6)).clamp(0.0, 1.0);
-                            centre + (here - centre) * k
+                        Some((centre, ot, oc)) => {
+                            let at = self.place(s as usize, st, ot, oc, centre);
+                            let pr = self.stems[s as usize].factor(st, ot).1;
+                            let k = if pr > 1e-6 { (states[child as usize].radius / pr).clamp(0.0, 1.0) } else { 0.0 };
+                            at + (here - at) * k
                         }
                         None => here,
                     }
                 }
                 Bind::Leaf { l } => {
                     let li = &self.leaves[l as usize];
-                    let d = p0 - li.anchor;
-                    match (li.seedling, self.leader) {
-                        (Some((k, n)), Some(ls)) if g < end => {
-                            // on the young shoot, spiralling up below its tip
-                            let f = 1.0 - 0.35 * (k as f32 + 0.5) / n as f32;
-                            let ax = &self.leader_axis;
-                            let c = ax[0].lerp(*ax.last().unwrap(), f);
-                            let at = poses[ls].place(c, c, f);
-                            let phi = k as f32 * 2.399_963;
-                            let dir = Vec3::new(phi.cos(), 0.9, phi.sin()).normalize();
-                            let normal = (Vec3::Y - dir * dir.y).normalize_or(Vec3::X);
-                            let side = normal.cross(dir);
-                            let local = side * d.dot(li.side) + dir * d.dot(li.dir) + normal * d.dot(li.normal);
-                            at + local * (seed_k * 0.6)
-                        }
-                        _ => {
-                            let st = self.leaf_stem(l as usize);
-                            let pose = poses[st];
-                            let (clock, size) = match now.get(&self.leaf_gen[l as usize]) {
-                                Some(c) => (c.leaf_clock, c.leaf_size),
-                                None => (g, 1.0),
-                            };
-                            let k = self.timing.leaf(l as usize, clock) * (0.45 + 0.55 * pose.scale) * size;
-                            pose.place(li.axis, li.anchor, li.t) + d * k
+                    if self.stems.is_empty() {
+                        p0 * tree
+                    } else {
+                        let st = &states[li.stem];
+                        let anchor = self.place(li.stem, st, li.t, li.axis, li.anchor);
+                        let gs = &li.g;
+                        match Timing::progress(self.timing.leaf_start[l as usize], self.timing.leaf_time[l as usize], g) {
+                            None => anchor,
+                            Some(x) => {
+                                let size = gs.start_size + (1.0 - gs.start_size) * gs.speed_curve.at(x);
+                                let xo = (x / gs.orientation_time).min(1.0);
+                                let turned = gs.start_angle + (1.0 - gs.start_angle) * gs.speed_curve.at(xo);
+                                let r = Quat::IDENTITY.slerp(li.fold, 1.0 - turned);
+                                anchor + st.rot * (r * ((p0 - li.anchor) * size))
+                            }
                         }
                     }
                 }
@@ -818,10 +686,6 @@ impl Grower {
             out.push(p);
         }
         out
-    }
-
-    fn leaf_stem(&self, l: usize) -> usize {
-        self.leaf_stems[l]
     }
 
     /// The mesh at growth `g`: positions moved, everything else as in `m`.
@@ -841,12 +705,12 @@ pub struct Animation {
 
 /// Samples the growth of every mesh at the keyframes. `meshes` pairs each mesh with the
 /// skeleton it was built from (an empty skeleton for the billboard).
-pub fn animate(growth: &Growth, timing: &Timing, meshes: &[(&Mesh, &Skeleton)]) -> Animation {
-    let keys = keyframes(growth);
+pub fn animate(doc: &Document, timing: &Timing, meshes: &[(&Mesh, &Skeleton)]) -> Animation {
+    let keys = keyframes(&doc.growth);
     let shapes = meshes
         .iter()
         .map(|(m, sk)| {
-            let gr = Grower::new(growth, sk, m, timing);
+            let gr = Grower::new(doc, sk, m, timing);
             keys.iter().map(|&g| gr.positions(g)).collect()
         })
         .collect();
@@ -855,7 +719,7 @@ pub fn animate(growth: &Growth, timing: &Timing, meshes: &[(&Mesh, &Skeleton)]) 
 
 /// Stage clips: (name, from, to). "Grow" runs from nothing to the mature tree; the first
 /// stage's clip grows from nothing to it, the others from the stage before.
-pub fn clips(growth: &Growth) -> Vec<(String, f32, f32)> {
+pub fn clips(growth: &crate::model::Growth) -> Vec<(String, f32, f32)> {
     let mut order: Vec<usize> = (0..growth.stages.len()).collect();
     order.sort_by(|&a, &b| growth.stages[a].at.total_cmp(&growth.stages[b].at));
     let mut out = vec![("Grow".to_string(), 0.0, 1.0)];
@@ -878,148 +742,90 @@ mod tests {
     use crate::grow::{build_mesh, grow};
     use crate::model::preset;
 
+    fn shown_leaves(m: &Mesh, p: &[Vec3]) -> usize {
+        (0..m.leaf_first.len())
+            .filter(|&i| {
+                let a = m.leaf_first[i] as usize;
+                p[a].distance(p[a + 2]) > 1e-4
+            })
+            .count()
+    }
+
     #[test]
     fn grows_from_nothing_to_the_mature_tree() {
-        let doc = preset("Oak").unwrap();
-        let sk = grow(&doc, 0);
-        let m = build_mesh(&doc, &sk, 0);
-        let timing = Timing::new(&sk, &doc.growth);
-        assert!(timing.leaf_start.iter().all(|s| s + timing.leaf_time <= 1.0 + 1e-4));
-        let gr = Grower::new(&doc.growth, &sk, &m, &timing);
-        // the mature tree is the mesh as designed, and very close to it just before
-        assert_eq!(gr.positions(1.0), m.pos);
-        let late = gr.positions(0.9999);
-        assert!(late.iter().zip(&m.pos).all(|(a, b)| a.distance(*b) < 0.01));
-        // height of what is visible (parts not grown yet are collapsed to points)
-        let h = |p: &[Vec3]| {
-            m.tris.iter().filter(|t| (p[t[1] as usize] - p[t[0] as usize]).cross(p[t[2] as usize] - p[t[0] as usize]).length() > 1e-7).flat_map(|t| t.iter()).fold(0.0f32, |a, &i| a.max(p[i as usize].y))
-        };
-        let hs: Vec<f32> = [0.0, 0.12, 0.38, 0.68, 0.999].iter().map(|&g| h(&gr.positions(g))).collect();
-        // grows taller all the way, from nothing to a sprout to the tree
-        assert!(hs.windows(2).all(|w| w[0] <= w[1] + 1e-4), "{hs:?}");
-        assert!(hs[0] < 0.01 * m.height, "{hs:?}");
-        assert!(hs[1] < 0.15 * m.height, "{hs:?}");
-        // leaves: a few at the sprout (seedling leaves), more on the sapling (New branches keeps
-        // adding twigs and their leaves after it), all on the mature tree
-        let shown = |p: &[Vec3]| (0..m.leaf_first.len()).filter(|&i| {
-            let a = m.leaf_first[i] as usize;
-            p[a].distance(p[a + 2]) > 1e-4
-        }).count();
-        let n = m.leaf_first.len();
-        let (sprout, sapling) = (shown(&gr.positions(0.12)), shown(&gr.positions(0.38)));
-        assert!(sprout > 0 && sprout < n / 10, "{sprout} of {n}");
-        assert!(sapling > n / 8 && sapling > 4 * sprout, "{sapling} of {n}");
-        let young = shown(&gr.positions(0.68));
-        assert!(young > 2 * sapling, "{young} of {n}");
-    }
-
-    #[test]
-    fn stage_settings_shape_the_growth() {
-        let mut doc = preset("Oak").unwrap();
-        let sk = grow(&doc, 0);
-        let m = build_mesh(&doc, &sk, 0);
-        let timing = Timing::new(&sk, &doc.growth);
-        let auto = AutoTable::new(&sk, &timing);
-        let trunk = doc.generators.iter().find(|g| g.parent.is_none()).unwrap().id;
-        let leaves = doc.generators.iter().find(|g| g.kind == crate::model::GenKind::Leaves).unwrap().id;
-        let a = auto.length(trunk, 0.38).unwrap();
-        assert!(a > 0.05 && a < 0.6, "{a}");
-        assert!(auto.leaves(leaves, 0.0).unwrap() < 1e-3 && (auto.leaves(leaves, 1.0).unwrap() - 1.0).abs() < 1e-3);
-        let height = |gr: &Grower, g: f32| gr.positions(g).iter().zip(&m.leaf).filter(|(_, &l)| !l).fold(0.0f32, |h, (p, _)| h.max(p.y));
-        let plain = Grower::new(&doc.growth, &sk, &m, &timing);
-        let (h0, w0) = (height(&plain, 0.38), plain.positions(0.38));
-        // a taller trunk at the Sapling stage
-        let st = doc.growth.stages.iter_mut().find(|s| s.name == "Sapling").unwrap();
-        st.shape_mut(trunk).length = Some(0.8);
-        let tall = Grower::new(&doc.growth, &sk, &m, &timing);
-        assert!(height(&tall, 0.38) > h0 * 1.3, "{} vs {h0}", height(&tall, 0.38));
-        // the mature tree is untouched
-        assert_eq!(tall.positions(1.0), m.pos);
-        // no leaves at the sapling stage
-        let st = doc.growth.stages.iter_mut().find(|s| s.name == "Sapling").unwrap();
-        st.shape_mut(trunk).length = None;
-        st.shape_mut(leaves).leaves = Some(0.0);
-        let bare = Grower::new(&doc.growth, &sk, &m, &timing);
-        let p = bare.positions(0.38);
-        let out = (0..m.leaf_first.len()).filter(|&i| {
-            let a = m.leaf_first[i] as usize;
-            p[a].distance(p[a + 2]) > 1e-4
-        }).count();
-        assert!(out <= 20, "{out} leaves out (seedling leaves aside)");
-        // a thinner trunk
-        let st = doc.growth.stages.iter_mut().find(|s| s.name == "Sapling").unwrap();
-        st.generators.clear();
-        st.shape_mut(trunk).thickness = Some(0.5);
-        let thin = Grower::new(&doc.growth, &sk, &m, &timing);
-        let base_width = |p: &[Vec3]| (0..m.pos.len()).filter(|&v| m.stem[v] == 0 && !m.leaf[v] && m.pos[v].y > 0.3 && m.pos[v].y < 0.6).map(|v| (p[v].x * p[v].x + p[v].z * p[v].z).sqrt()).fold(0.0f32, f32::max);
-        assert!(base_width(&thin.positions(0.38)) < base_width(&w0) * 0.7);
-    }
-
-    #[test]
-    fn keyframes_hold_the_stages() {
-        let g = Growth::default();
-        let k = keyframes(&g);
-        assert_eq!(*k.first().unwrap(), 0.0);
-        assert_eq!(*k.last().unwrap(), 1.0);
-        for st in &g.stages {
-            assert!(k.contains(&st.at));
-        }
-        assert!(k.contains(&seedling_end(&g)));
-        assert!(k.windows(2).all(|w| w[0] < w[1]));
-        let c = clips(&g);
-        assert_eq!(c[0].0, "Grow");
-        assert_eq!(c[1], ("Sprout".to_string(), 0.0, 0.12));
-        assert_eq!(c[2].0, "Sprout to Sapling");
-        assert_eq!(c.len(), 5);
-    }
-}
-
-#[cfg(test)]
-mod branching_tests {
-    use super::*;
-    use crate::grow::grow;
-
-    fn born(t: &Timing, sk: &Skeleton, gen: Option<u32>, g: f32) -> f32 {
-        let idx: Vec<usize> = (0..sk.stems.len()).filter(|&i| sk.stems[i].parent.is_some() && gen.map_or(true, |x| sk.stems[i].gen == x)).collect();
-        idx.iter().filter(|&&i| t.stem_start[i] < g).count() as f32 / idx.len() as f32
-    }
-
-    #[test]
-    fn new_branches_keep_appearing() {
         for name in ["Oak", "Pine", "Birch"] {
-            let mut doc = crate::model::preset(name).unwrap();
+            let doc = preset(name).unwrap();
             let sk = grow(&doc, 0);
-            doc.growth.branching = 0.0;
-            let early = Timing::new(&sk, &doc.growth);
-            assert!(born(&early, &sk, None, 0.45) > 0.97, "{name}");
-            doc.growth.branching = 0.6;
-            let t = Timing::new(&sk, &doc.growth);
-            let (a, b, c) = (born(&t, &sk, None, 0.3), born(&t, &sk, None, 0.5), born(&t, &sk, None, 0.7));
-            assert!(a > 0.08 && a < 0.4 && b > a + 0.2 && c > b + 0.2 && c < 1.0 + 1e-6, "{name}: {a} {b} {c}");
-            // every stem still starts after the stem it grows on
-            for (i, st) in sk.stems.iter().enumerate() {
-                if let Some(p) = st.parent {
-                    assert!(t.stem_start[i] > t.stem_start[p], "{name}");
-                }
+            let m = build_mesh(&doc, &sk, 0);
+            let timing = Timing::new(&doc, &sk);
+            let last = timing.stem_start.iter().zip(&timing.stem_time).map(|(s, t)| s + t).chain(timing.leaf_start.iter().zip(&timing.leaf_time).map(|(s, t)| s + t)).fold(0.0f32, f32::max);
+            assert!((last - 1.0).abs() < 1e-4, "{name}: {last}");
+            let gr = Grower::new(&doc, &sk, &m, &timing);
+            // the mature tree is the mesh as designed, and very close to it just before
+            assert_eq!(gr.positions(1.0), m.pos);
+            let late = gr.positions(0.9999);
+            assert!(late.iter().zip(&m.pos).all(|(a, b)| a.distance(*b) < 0.02), "{name}");
+            // nothing pokes out of the mature tree's bounds
+            let (lo, hi) = m.pos.iter().fold((Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)), |(a, b), p| (a.min(*p), b.max(*p)));
+            let pad = (hi - lo) * 0.03 + Vec3::splat(0.05);
+            for g in [0.1, 0.3, 0.5, 0.7, 0.9] {
+                assert!(gr.positions(g).iter().all(|p| p.cmpge(lo - pad).all() && p.cmple(hi + pad).all()), "{name} at {g}");
+            }
+            // grows taller all the way, and leaves keep coming
+            let h = |p: &[Vec3]| m.tris.iter().filter(|t| (p[t[1] as usize] - p[t[0] as usize]).cross(p[t[2] as usize] - p[t[0] as usize]).length() > 1e-7).flat_map(|t| t.iter()).fold(0.0f32, |a, &i| a.max(p[i as usize].y));
+            let gs = [0.0, 0.1, 0.3, 0.5, 0.7, 0.999];
+            let hs: Vec<f32> = gs.iter().map(|&g| h(&gr.positions(g))).collect();
+            assert!(hs.windows(2).all(|w| w[0] <= w[1] + 1e-3), "{name} {hs:?}");
+            assert!(hs[0] < 0.01 * m.height, "{name} {hs:?}");
+            let ls: Vec<usize> = gs.iter().map(|&g| shown_leaves(&m, &gr.positions(g))).collect();
+            assert!(ls.windows(2).all(|w| w[0] <= w[1]), "{name} {ls:?}");
+            assert!(ls[0] == 0 && ls[3] > 0 && ls[3] < m.leaf_first.len(), "{name} {ls:?}");
+        }
+    }
+
+    #[test]
+    fn nothing_starts_before_its_parent_reaches_it() {
+        let mut doc = preset("Oak").unwrap();
+        for g in &mut doc.generators {
+            g.params.growth.offset_variation = 0.0;
+        }
+        let sk = grow(&doc, 0);
+        let t = Timing::new(&doc, &sk);
+        for (i, st) in sk.stems.iter().enumerate() {
+            if let Some(p) = st.parent {
+                assert!(t.stem_start[i] >= t.stem_start[p] - 1e-5);
+                assert!(t.stem_start[i] <= t.stem_start[p] + t.stem_time[p] + 1e-5);
+            }
+        }
+        // later Start % on the twigs: they start later
+        let twigs = doc.generators.iter().find(|g| g.name == "Twigs").unwrap().id;
+        let mean = |t: &Timing| {
+            let v: Vec<f32> = (0..sk.stems.len()).filter(|&i| sk.stems[i].gen == twigs).map(|i| t.stem_start[i]).collect();
+            v.iter().sum::<f32>() / v.len() as f32
+        };
+        let before = mean(&t);
+        doc.generators.iter_mut().find(|g| g.id == twigs).unwrap().params.growth.start_pct = 0.8;
+        let later = Timing::new(&doc, &sk);
+        assert!(mean(&later) > before, "{} vs {before}", mean(&later));
+        for (i, st) in sk.stems.iter().enumerate() {
+            if let (Some(p), true) = (st.parent, st.gen == twigs) {
+                assert!(later.stem_start[i] >= later.stem_start[p] + 0.8 * later.stem_time[p] - 1e-4);
             }
         }
     }
 
     #[test]
-    fn stage_count_sets_the_share_started() {
-        let mut doc = crate::model::preset("Oak").unwrap();
-        let sk = grow(&doc, 0);
-        let twigs = doc.generators.iter().find(|g| g.name == "Twigs").unwrap().id;
-        let st = doc.growth.stages.iter_mut().find(|s| s.name == "Sapling").unwrap();
-        st.shape_mut(twigs).count = Some(0.05);
-        let st = doc.growth.stages.iter_mut().find(|s| s.name == "Young").unwrap();
-        st.shape_mut(twigs).count = Some(0.95);
-        let t = Timing::new(&sk, &doc.growth);
-        let (sapling, young) = (born(&t, &sk, Some(twigs), 0.38), born(&t, &sk, Some(twigs), 0.6801));
-        assert!(sapling <= 0.08, "{sapling}");
-        assert!(young >= 0.9, "{young}");
-        let auto = AutoTable::new(&sk, &t);
-        let a = auto.count(twigs, 0.38).unwrap();
-        assert!(a > 0.1 && a < 0.6, "{a}");
+    fn keyframes_hold_the_stages() {
+        let g = crate::model::Growth::default();
+        let k = keyframes(&g);
+        assert_eq!(*k.first().unwrap(), 0.0);
+        assert_eq!(*k.last().unwrap(), 1.0);
+        for st in &g.stages {
+            assert!(k.iter().any(|x| (x - st.at).abs() < 1e-4));
+        }
+        let c = clips(&g);
+        assert_eq!(c[0].0, "Grow");
+        assert_eq!(c[1].0, "Sprout");
+        assert_eq!(c[2].0, "Sprout to Sapling");
     }
 }

@@ -193,6 +193,162 @@ pub struct GenParams {
     pub break_length: f32,
     /// Curves that shape a value along the parent or along the stem itself; see CURVE_REFERENCE.
     pub curves: BTreeMap<String, Curve>,
+    /// How this generator's parts grow in the growth animation.
+    pub growth: GenGrowth,
+}
+
+/// The shape of a growth curve over one stem's or leaf's own growth (0 = starts, 1 = done).
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum GrowthCurve {
+    /// Steady.
+    #[default]
+    Linear,
+    /// Slow at first, then faster.
+    EaseIn,
+    /// Fast at first, then slower.
+    EaseOut,
+    /// Slow, fast, slow.
+    SCurve,
+}
+
+impl GrowthCurve {
+    pub const ALL: [GrowthCurve; 4] = [GrowthCurve::Linear, GrowthCurve::EaseIn, GrowthCurve::EaseOut, GrowthCurve::SCurve];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            GrowthCurve::Linear => "Linear",
+            GrowthCurve::EaseIn => "Ease in (slow start)",
+            GrowthCurve::EaseOut => "Ease out (slow end)",
+            GrowthCurve::SCurve => "S-curve",
+        }
+    }
+
+    /// The curve's value at `x` (0..1 -> 0..1).
+    pub fn at(self, x: f32) -> f32 {
+        let x = x.clamp(0.0, 1.0);
+        match self {
+            GrowthCurve::Linear => x,
+            GrowthCurve::EaseIn => x * x,
+            GrowthCurve::EaseOut => 1.0 - (1.0 - x) * (1.0 - x),
+            GrowthCurve::SCurve => x * x * (3.0 - 2.0 * x),
+        }
+    }
+
+    /// Where the curve reaches `y` (the inverse of `at`).
+    pub fn inverse(self, y: f32) -> f32 {
+        let y = y.clamp(0.0, 1.0);
+        match self {
+            GrowthCurve::Linear => y,
+            GrowthCurve::EaseIn => y.sqrt(),
+            GrowthCurve::EaseOut => 1.0 - (1.0 - y).sqrt(),
+            GrowthCurve::SCurve => {
+                let (mut lo, mut hi) = (0.0f32, 1.0f32);
+                for _ in 0..24 {
+                    let m = 0.5 * (lo + hi);
+                    if self.at(m) < y {
+                        lo = m;
+                    } else {
+                        hi = m;
+                    }
+                }
+                0.5 * (lo + hi)
+            }
+        }
+    }
+}
+
+/// When a stem or leaf starts to grow.
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum GrowthSync {
+    /// Parent for branches and leaves, Parent's start and end for roots.
+    #[default]
+    Auto,
+    /// Start % of the way through the parent's growth (never before the parent reaches it).
+    Parent,
+    /// All of this generator's stems or leaves start together: Start % between as early and as
+    /// late as all of them can.
+    Siblings,
+    /// Start and finish together with the parent (good for roots).
+    ParentStartEnd,
+    /// Exactly when the parent reaches the point it grows from.
+    InPlace,
+}
+
+impl GrowthSync {
+    pub const ALL: [GrowthSync; 5] = [GrowthSync::Auto, GrowthSync::Parent, GrowthSync::Siblings, GrowthSync::ParentStartEnd, GrowthSync::InPlace];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            GrowthSync::Auto => "Auto",
+            GrowthSync::Parent => "Parent",
+            GrowthSync::Siblings => "Siblings",
+            GrowthSync::ParentStartEnd => "Parent's start and end",
+            GrowthSync::InPlace => "In place",
+        }
+    }
+}
+
+/// How one generator's stems or leaves grow in the growth animation. Each stem grows out along
+/// its final path from its base to its tip, at a speed, while its radius grows; it starts when
+/// its parent allows (see `sync`).
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct GenGrowth {
+    /// Speed scale: stems grow `speed` times as fast as the trunk's pace (a stem as long as
+    /// the first trunk takes 1 / speed of the trunk's time); leaves unfold in 0.15 / speed of it.
+    pub speed: f32,
+    /// How the length (leaves: the size) grows over the part's own growth.
+    pub speed_curve: GrowthCurve,
+    /// Stems: how the radius grows over the stem's own growth.
+    pub radius_curve: GrowthCurve,
+    /// Share of its final size a part has as soon as it appears (0 = grows from nothing).
+    pub start_size: f32,
+    /// Stems: share of the final angle to the parent when the stem starts (below 1 it folds
+    /// out of the parent). Leaves: share of the final orientation (below 1 they turn into place
+    /// from lying along the twig).
+    pub start_angle: f32,
+    /// Leaves: how long turning into place takes, relative to unfolding (1 = together).
+    pub orientation_time: f32,
+    pub sync: GrowthSync,
+    /// With Parent or Siblings: 0 = as early as possible, 1 = as late.
+    pub start_pct: f32,
+    /// Delay added to every start, in shares of the trunk's growth time.
+    pub offset: f32,
+    /// Random extra delay of up to this much per stem or leaf, so neighbours do not start
+    /// together.
+    pub offset_variation: f32,
+}
+
+impl Default for GenGrowth {
+    fn default() -> Self {
+        GenGrowth {
+            speed: 1.0,
+            speed_curve: GrowthCurve::Linear,
+            radius_curve: GrowthCurve::Linear,
+            start_size: 0.0,
+            start_angle: 1.0,
+            orientation_time: 1.0,
+            sync: GrowthSync::Auto,
+            start_pct: 0.0,
+            offset: 0.0,
+            offset_variation: 0.1,
+        }
+    }
+}
+
+impl GenGrowth {
+    pub fn clamp(&mut self) {
+        let f = |v: f32, lo: f32, hi: f32, d: f32| if v.is_finite() { v.clamp(lo, hi) } else { d };
+        self.speed = f(self.speed, 0.05, 10.0, 1.0);
+        self.start_size = f(self.start_size, 0.0, 1.0, 0.0);
+        self.start_angle = f(self.start_angle, 0.0, 1.0, 1.0);
+        self.orientation_time = f(self.orientation_time, 0.1, 5.0, 1.0);
+        self.start_pct = f(self.start_pct, 0.0, 1.0, 0.0);
+        self.offset = f(self.offset, 0.0, 3.0, 0.0);
+        self.offset_variation = f(self.offset_variation, 0.0, 3.0, 0.0);
+    }
 }
 
 /// A shaping curve: control points (x 0..1 along the parent, the stem or the tree's height,
@@ -438,6 +594,7 @@ impl GenParams {
             break_chance: 0.0,
             break_length: 0.2,
             curves: BTreeMap::new(),
+            growth: GenGrowth::default(),
         };
         match kind {
             GenKind::Trunk => GenParams {
@@ -535,6 +692,7 @@ impl GenParams {
         self.weld = self.weld.clamp(0.0, 1.0);
         self.break_chance = self.break_chance.clamp(0.0, 1.0);
         self.break_length = self.break_length.clamp(0.03, 0.9);
+        self.growth.clamp();
         self.curves.retain(|k, _| curve_applies(k, kind));
         for c in self.curves.values_mut() {
             c.clamp();
@@ -725,80 +883,24 @@ pub struct Document {
 }
 
 /// One moment of the growth animation (0 = nothing above ground, 1 = the mature tree), with an
-/// optional name and optional shape settings per generator.
+/// optional name. Exports get a clip per stage.
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct GrowthStage {
     /// Optional; unnamed stages are called "Stage 1", "Stage 2", ... by their place.
     pub name: String,
     pub at: f32,
-    /// How far each generator's parts are at this stage, where set; the rest follow the
-    /// automatic growth.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub generators: Vec<StageShape>,
 }
 
 impl Default for GrowthStage {
     fn default() -> Self {
-        GrowthStage { name: String::new(), at: 1.0, generators: vec![] }
+        GrowthStage { name: String::new(), at: 1.0 }
     }
 }
 
 impl GrowthStage {
     pub fn named(name: &str, at: f32) -> Self {
-        GrowthStage { name: name.into(), at, generators: vec![] }
-    }
-
-    /// The settings for generator `gen` at this stage, if any.
-    pub fn shape(&self, gen: u32) -> Option<&StageShape> {
-        self.generators.iter().find(|s| s.gen == gen)
-    }
-
-    /// The settings for generator `gen`, added if missing.
-    pub fn shape_mut(&mut self, gen: u32) -> &mut StageShape {
-        if let Some(i) = self.generators.iter().position(|s| s.gen == gen) {
-            return &mut self.generators[i];
-        }
-        self.generators.push(StageShape { gen, ..Default::default() });
-        self.generators.last_mut().unwrap()
-    }
-}
-
-/// The shape of one generator's parts at a growth stage, relative to the mature tree (1 = as
-/// designed). Unset values follow the automatic growth.
-#[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Default)]
-#[serde(default)]
-pub struct StageShape {
-    /// Generator id.
-    pub gen: u32,
-    /// Stems: how far they have grown out, as a share of their total mature length (0..1).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub length: Option<f32>,
-    /// Stems: thickness relative to what the automatic growth gives at this stage (0.05..2).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub thickness: Option<f32>,
-    /// Side stems: share of them that have started to grow (0..1).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub count: Option<f32>,
-    /// Leaves: share of the leaves that are out (0..1).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub leaves: Option<f32>,
-    /// Leaves: size relative to what the automatic growth gives at this stage (0.05..2).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub leaf_size: Option<f32>,
-}
-
-impl StageShape {
-    pub fn is_empty(&self) -> bool {
-        self.count.is_none() && self.length.is_none() && self.thickness.is_none() && self.leaves.is_none() && self.leaf_size.is_none()
-    }
-
-    pub fn clamp(&mut self) {
-        self.count = self.count.map(|v| v.clamp(0.0, 1.0));
-        self.length = self.length.map(|v| v.clamp(0.0, 1.0));
-        self.thickness = self.thickness.map(|v| v.clamp(0.05, 2.0));
-        self.leaves = self.leaves.map(|v| v.clamp(0.0, 1.0));
-        self.leaf_size = self.leaf_size.map(|v| v.clamp(0.05, 2.0));
+        GrowthStage { name: name.into(), at }
     }
 }
 
@@ -817,10 +919,6 @@ pub struct Growth {
     pub duration: f32,
     /// Shapes the animation is sampled at (morph targets); more is smoother and larger.
     pub keyframes: u32,
-    /// A few leaves on the young shoot before the first side branches grow.
-    pub seedling_leaves: bool,
-    /// How long new branches keep appearing (0 = all start early, 1 = until the end).
-    pub branching: f32,
 }
 
 impl Default for Growth {
@@ -835,8 +933,6 @@ impl Default for Growth {
             ],
             duration: 12.0,
             keyframes: 16,
-            seedling_leaves: true,
-            branching: 0.6,
         }
     }
 }
@@ -862,13 +958,8 @@ impl Growth {
         for st in &mut self.stages {
             st.at = st.at.clamp(0.01, 1.0);
             st.name = st.name.trim().chars().take(40).collect();
-            for g in &mut st.generators {
-                g.clamp();
-            }
-            st.generators.retain(|g| !g.is_empty());
         }
         self.stages.sort_by(|a, b| a.at.total_cmp(&b.at));
-        self.branching = if self.branching.is_finite() { self.branching.clamp(0.0, 1.0) } else { 0.6 };
         self.duration = self.duration.clamp(0.5, 600.0);
         self.keyframes = self.keyframes.clamp(4, 48);
     }
@@ -1241,10 +1332,6 @@ impl Document {
     pub fn clamp_all(&mut self) {
         self.settings.clamp();
         self.growth.clamp();
-        let ids: Vec<u32> = self.generators.iter().map(|g| g.id).collect();
-        for st in &mut self.growth.stages {
-            st.generators.retain(|g| ids.contains(&g.gen));
-        }
         self.pruning.clamp();
         self.tidy_nodes();
         for f in &mut self.forces {
@@ -1693,6 +1780,17 @@ pub const PARAM_REFERENCE: &[(&str, &str, &str, &str)] = &[
     ("break_length", "branches", "0.03..0.9", "Length of broken stubs relative to the full branch."),
     ("weld", "branches", "0..1", "Welding: the branch base swells into a collar that blends into the parent instead of a hard joint."),
     ("curves", "all", "{key: {points: [[x,y],...]}}", "Shaping curves, see curve_reference / set_curve."),
+    ("growth", "all", "{speed, speed_curve, radius_curve, start_size, start_angle, orientation_time, sync, start_pct, offset, offset_variation}", "How this generator's stems or leaves grow in the growth animation; see the growth.* rows."),
+    ("growth.speed", "all", "0.05..10", "Speed scale. Stems grow out along their final path at this many times the trunk's pace (a stem as long as the trunk takes 1/speed of the trunk's growth time); leaves unfold in 0.15/speed of it."),
+    ("growth.speed_curve", "all", "linear, ease_in, ease_out, s_curve", "How the length (leaves: the size) grows over the part's own growth: steady, slow start, slow end, or slow-fast-slow."),
+    ("growth.radius_curve", "trunk, branches, roots", "linear, ease_in, ease_out, s_curve", "How the radius grows over the stem's own growth. A branch is never thicker than its parent where it comes out."),
+    ("growth.start_size", "all", "0..1", "Share of its final size a stem or leaf has as soon as it appears (0 = grows from nothing)."),
+    ("growth.start_angle", "all", "0..1", "Stems: share of the final angle to the parent at the start (below 1 they fold out of the parent). Leaves: share of the final orientation (below 1 they turn into place from lying along the twig)."),
+    ("growth.orientation_time", "leaves", "0.1..5", "How long leaves take to turn into place, relative to unfolding (1 = together)."),
+    ("growth.sync", "branches, roots, leaves", "auto, parent, siblings, parent_start_end, in_place", "When a part starts: parent = Start % through the parent's growth; siblings = all of this generator together; parent_start_end = start and finish with the parent (roots); in_place = exactly when the parent reaches its spot; auto = parent (roots: parent_start_end). Nothing starts before its parent reaches it."),
+    ("growth.start_pct", "branches, roots, leaves", "0..1", "With sync parent or siblings: 0 = start as early as possible, 1 = as late."),
+    ("growth.offset", "branches, roots, leaves", "0..3", "Delay added to every start, in shares of the trunk's growth time."),
+    ("growth.offset_variation", "branches, roots, leaves", "0..3", "Random extra delay of up to this much per stem or leaf, so neighbours do not all start together."),
     ("buried", "roots", "0..1", "How deep roots sink into the ground: 0 lies on top, 1 just under the surface."),
     ("force_response", "trunk, branches", "0..3", "How strongly the tree's forces (add_force) bend this generator; 0 ignores them."),
 ];
@@ -1719,16 +1817,9 @@ pub const SETTINGS_REFERENCE: &[(&str, &str, &str)] = &[
     ("budget.levels", "[LOD0, LOD1, LOD2, LOD3], 0..5000000", "Most triangles per level when set per level; 0 = no limit for that level."),
     ("budget.fit", "on/off", "On: a level over its budget gets fewer sides, rings and (larger) leaves until it fits. Off: levels keep their usual detail and the ones over budget are reported."),
     ("growth.export", "on/off", "Exports carry the growth animation: GLB gets morph targets with a Grow clip and one clip per stage, OBJ one file per stage, JSON the growth timing of every stem and leaf."),
-    ("growth.stages", "[{name, at 0.01..1, generators}], up to 8", "Moments of the growth (0 = nothing above ground, 1 = the mature tree), for example Sprout 0.12, Sapling 0.38, Young 0.68, Mature 1. Names are optional; unnamed stages are called Stage 1, Stage 2, ... by their place."),
-    ("growth.branching", "0..1", "How long new branches keep appearing while the tree grows: 0 = every branch starts early, 1 = new branches, twigs and leaves keep sprouting until the tree is mature."),
-    ("growth.stages.count", "0..1 or auto", "Per stage and side-stem generator (branches, twigs, roots): share of its stems that have started to grow at this stage. Auto follows New branches."),
-    ("growth.stages.length", "0..1 or auto", "Per stage and stem generator: share of the stems' total mature length grown out at this stage. Auto follows the automatic growth."),
-    ("growth.stages.thickness", "0.05..2 (1 = auto)", "Per stage and stem generator: thickness relative to the automatic growth. A branch never gets thicker than the stem it comes out of."),
-    ("growth.stages.leaves", "0..1 or auto", "Per stage and Leaves generator: share of the leaves that are out at this stage."),
-    ("growth.stages.leaf_size", "0.05..2 (1 = auto)", "Per stage and Leaves generator: leaf size relative to the automatic growth."),
+    ("growth.stages", "[{name, at 0.01..1}], up to 8", "Moments of the growth (0 = nothing above ground, 1 = the mature tree), for example Sprout 0.12, Sapling 0.38, Young 0.68, Mature 1. Names are optional; unnamed stages are called Stage 1, Stage 2, ... by their place."),
     ("growth.duration", "0.5..600 s", "Seconds the whole growth animation takes."),
     ("growth.keyframes", "4..48", "Shapes the animation is sampled at (morph targets). More is smoother and makes larger files."),
-    ("growth.seedling_leaves", "on/off", "A few leaves on the young shoot until the first side branches carry their own."),
 ];
 
 /// (field, range, meaning) for materials — shown over MCP.

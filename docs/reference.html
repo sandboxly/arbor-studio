@@ -74,6 +74,22 @@
 <tr><td>Face the sky</td><td><code>leaf_face_up</code></td><td>0–1</td><td>Turns the upper side of the leaves towards the sky.</td></tr>
 </table>
 
+<h2 id="growth">Growth (per generator)</h2>
+<p>How the generator's parts grow in the <a href="growth.html">growth animation</a>. Names are under <code>growth</code> in the parameters.</p>
+<table class="ref">
+<tr><th>Label</th><th>Name</th><th>For</th><th>Range</th><th>Effect</th></tr>
+<tr><td>Speed</td><td><code>growth.speed</code></td><td>all</td><td>0.05–10</td><td>Growth speed relative to the trunk's pace.</td></tr>
+<tr><td>Length curve / Size curve</td><td><code>growth.speed_curve</code></td><td>all</td><td>linear, ease_in, ease_out, s_curve</td><td>How the length (leaves: size) grows over the part's own growth.</td></tr>
+<tr><td>Radius curve</td><td><code>growth.radius_curve</code></td><td>trunk, branches, roots</td><td>linear, ease_in, ease_out, s_curve</td><td>How the radius grows.</td></tr>
+<tr><td>Start size</td><td><code>growth.start_size</code></td><td>all</td><td>0–1</td><td>Size when a part appears.</td></tr>
+<tr><td>Start angle / Start orientation</td><td><code>growth.start_angle</code></td><td>branches, roots, leaves</td><td>0–1</td><td>Share of the final angle (leaves: orientation) at the start; below 1 parts fold out or turn into place.</td></tr>
+<tr><td>Orientation time</td><td><code>growth.orientation_time</code></td><td>leaves</td><td>0.1–5</td><td>How long leaves take to turn into place, relative to unfolding.</td></tr>
+<tr><td>Sync with</td><td><code>growth.sync</code></td><td>branches, roots, leaves</td><td>auto, parent, siblings, parent_start_end, in_place</td><td>What a part's start follows.</td></tr>
+<tr><td>Start %</td><td><code>growth.start_pct</code></td><td>branches, roots, leaves</td><td>0–1</td><td>With parent or siblings: early (0) to late (1).</td></tr>
+<tr><td>Offset</td><td><code>growth.offset</code></td><td>branches, roots, leaves</td><td>0–3</td><td>Delay added to every start, in shares of the trunk's growth time.</td></tr>
+<tr><td>Offset variation</td><td><code>growth.offset_variation</code></td><td>branches, roots, leaves</td><td>0–3</td><td>Random extra delay per part.</td></tr>
+</table>
+
 <h2 id="settings">Tree settings</h2>
 <table class="ref">
 <tr><th>Label</th><th>Name</th><th>Range</th><th>Effect</th></tr>
@@ -100,15 +116,8 @@
 <tr><td>LOD0 to LOD3</td><td><code>budget.levels</code></td><td>0–5,000,000 each</td><td>Most triangles per level; 0 = no limit.</td></tr>
 <tr><td>Reduce detail to fit</td><td><code>budget.fit</code></td><td>on, off</td><td>On: levels over budget get less detail until they fit. Off: they are only reported.</td></tr>
 <tr><td>Growth: Stages</td><td><code>growth.stages</code></td><td>up to 8, each 0.01–1</td><td>Moments of the growth animation, optionally named. See <a href="growth.html">Growth animation</a>.</td></tr>
-<tr><td>Growth: New branches</td><td><code>growth.branching</code></td><td>0–1</td><td>How long new branches, twigs and leaves keep appearing while the tree grows.</td></tr>
-<tr><td>Growth: Stage count</td><td><code>growth.stages[].generators[].count</code></td><td>0–1 or auto</td><td>Per stage and branch or root generator: share of its stems that have started to grow.</td></tr>
-<tr><td>Growth: Stage length</td><td><code>growth.stages[].generators[].length</code></td><td>0–1 or auto</td><td>Per stage and stem generator: share of the stems' mature length grown out.</td></tr>
-<tr><td>Growth: Stage thickness</td><td><code>growth.stages[].generators[].thickness</code></td><td>0.05–2 (1 = auto)</td><td>Per stage and stem generator: thickness relative to the automatic growth.</td></tr>
-<tr><td>Growth: Stage leaves</td><td><code>growth.stages[].generators[].leaves</code></td><td>0–1 or auto</td><td>Per stage and Leaves generator: share of the leaves that are out.</td></tr>
-<tr><td>Growth: Stage leaf size</td><td><code>growth.stages[].generators[].leaf_size</code></td><td>0.05–2 (1 = auto)</td><td>Per stage and Leaves generator: leaf size relative to the automatic growth.</td></tr>
 <tr><td>Growth: Duration</td><td><code>growth.duration</code></td><td>0.5–600 s</td><td>Length of the whole growth animation.</td></tr>
 <tr><td>Growth: Keyframes</td><td><code>growth.keyframes</code></td><td>4–48</td><td>Shapes the growth is sampled at (morph targets); every stage gets one.</td></tr>
-<tr><td>Growth: Seedling leaves</td><td><code>growth.seedling_leaves</code></td><td>on, off</td><td>A few leaves on the young shoot until the side branches carry their own.</td></tr>
 <tr><td>Growth: Export</td><td><code>growth.export</code></td><td>on, off</td><td>Exports include the growth animation.</td></tr>
 </table>
 

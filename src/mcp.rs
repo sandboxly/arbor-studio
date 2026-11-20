@@ -185,6 +185,18 @@ fn params_schema() -> Value {
             "wiggle": {"type": "number"}, "segments": {"type": "integer"}, "radius": {"type": "number"},
             "taper": {"type": "number"}, "flare": {"type": "number"}, "sides": {"type": "integer"},
             "leaf_size": {"type": "number"}, "leaf_size_variation": {"type": "number"},
+            "growth": {"type": "object", "description": "How this generator grows in the growth animation (see get_parameter_reference growth.*)", "properties": {
+                "speed": {"type": "number", "minimum": 0.05, "maximum": 10},
+                "speed_curve": {"type": "string", "enum": ["linear", "ease_in", "ease_out", "s_curve"]},
+                "radius_curve": {"type": "string", "enum": ["linear", "ease_in", "ease_out", "s_curve"]},
+                "start_size": {"type": "number", "minimum": 0, "maximum": 1},
+                "start_angle": {"type": "number", "minimum": 0, "maximum": 1},
+                "orientation_time": {"type": "number", "minimum": 0.1, "maximum": 5},
+                "sync": {"type": "string", "enum": ["auto", "parent", "siblings", "parent_start_end", "in_place"]},
+                "start_pct": {"type": "number", "minimum": 0, "maximum": 1},
+                "offset": {"type": "number", "minimum": 0, "maximum": 3},
+                "offset_variation": {"type": "number", "minimum": 0, "maximum": 3}
+            }},
             "leaf_shape": {"type": "string", "enum": ["broad", "narrow", "needle", "round", "frond"]},
             "leaf_aspect": {"type": "number"}
         }
@@ -344,20 +356,10 @@ pub fn tool_list() -> Vec<Value> {
         tool("set_growth", "Set growth", "The growth animation: the tree grows from a sprout to the mature tree on one mesh (trunk and branches lengthen and thicken along their final shape, side branches sprout as their parent passes them, leaves unfold), so engines play it as morph targets. Stages are named moments of the growth, from 0 (nothing above ground) to 1 (the mature tree); exports get a Grow clip and one clip per stage (first stage: from nothing; then '<A> to <B>'). Only the given fields change. Returns the settings, the keyframes and the clips with their times. Preview with render_preview growth/growth_stage or set_view.", json!({
             "stages": {"type": "array", "maxItems": 8, "items": {"type": "object", "properties": {
                 "name": {"type": "string", "description": "Optional; unnamed stages are called 'Stage <n>' by their place"},
-                "at": {"type": "number", "minimum": 0.01, "maximum": 1},
-                "generators": {"type": "array", "description": "Shape of the tree at this stage, per generator (see get_tree for ids). Unset or null values follow the automatic growth; the mature tree (at 1) is always as designed.", "items": {"type": "object", "properties": {
-                    "id": {"type": "integer", "description": "Generator id"},
-                    "count": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "Branches/Roots (not trunks): share of the generator's stems that have started to grow at this stage"},
-                    "length": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "Trunk/Branches/Roots: share of their total mature length grown out at this stage"},
-                    "thickness": {"type": ["number", "null"], "minimum": 0.05, "maximum": 2, "description": "Trunk/Branches/Roots: thickness relative to the automatic growth (1 = automatic)"},
-                    "leaves": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "Leaves: share of the leaves out at this stage"},
-                    "leaf_size": {"type": ["number", "null"], "minimum": 0.05, "maximum": 2, "description": "Leaves: leaf size relative to the automatic growth (1 = automatic)"}
-                }, "required": ["id"]}}
-            }, "required": ["at"]}, "description": "The stages in growing order; replaces all stages. E.g. [{name: Sprout, at: 0.12}, {name: Sapling, at: 0.38, generators: [{id: 1, length: 0.5, thickness: 0.8}, {id: 4, leaves: 0.2}]}, {name: Young, at: 0.68}, {name: Mature, at: 1}]. growth_info (returned) shows the automatic values per stage and generator."},
+                "at": {"type": "number", "minimum": 0.01, "maximum": 1}
+            }, "required": ["at"]}, "description": "The stages in growing order; replaces all stages. E.g. [{name: Sprout, at: 0.12}, {name: Sapling, at: 0.38}, {at: 0.68}, {name: Mature, at: 1}]. How each part grows is set per generator: update_generator params.growth."},
             "duration": {"type": "number", "minimum": 0.5, "maximum": 600, "description": "Seconds the whole growth takes in the exported animation"},
             "keyframes": {"type": "integer", "minimum": 4, "maximum": 48, "description": "Shapes the growth is sampled at (morph targets); stages always get one"},
-            "seedling_leaves": {"type": "boolean", "description": "A few leaves on the young shoot until the side branches carry their own"},
-            "branching": {"type": "number", "minimum": 0, "maximum": 1, "description": "New branches: how long new branches, twigs and leaves keep appearing while the tree grows (0 = all start early, 1 = until near the end; default 0.6)"},
             "export": {"type": "boolean", "description": "Exports include the growth animation by default"}
         }), &[]),
         tool("set_pruning", "Set pruning", "Trim branches and leaves to a volume (topiary, hedges, fitting a tree into a space). Branches stop at the surface; trunks are only cut at the top; roots are never pruned. fit_to_tree places a volume slightly smaller than the current crown.", json!({
@@ -450,48 +452,6 @@ fn growth_arg(a: &Value, g: &crate::model::Growth) -> Result<Option<f32>, String
         return Ok(Some(g.stages[i].at));
     }
     Ok(arg_f32(a, "growth").map(|x| x.clamp(0.0, 1.0)))
-}
-
-/// growth_info plus, per stage, every generator's shape there: the set value or the automatic one.
-pub fn growth_detail(doc: &crate::model::Document) -> Value {
-    let mut v = growth_info(&doc.growth);
-    let sk = grow(doc, 0);
-    let auto = crate::growth::AutoTable::new(&sk, &crate::growth::Timing::new(&sk, &doc.growth));
-    let g = &doc.growth;
-    let r2 = |x: f32| (x * 1000.0).round() / 1000.0;
-    let stages: Vec<Value> = (0..g.stages.len())
-        .map(|i| {
-            let st = &g.stages[i];
-            let gens: Vec<Value> = doc
-                .generators
-                .iter()
-                .filter_map(|gen| {
-                    let set = st.shape(gen.id).cloned().unwrap_or_default();
-                    let mut o = Map::new();
-                    o.insert("id".into(), json!(gen.id));
-                    o.insert("generator".into(), json!(gen.name));
-                    if let Some(a) = auto.count(gen.id, st.at) {
-                        o.insert("count".into(), json!(r2(set.count.unwrap_or(a))));
-                        o.insert("count_auto".into(), json!(set.count.is_none()));
-                    }
-                    if let Some(a) = auto.length(gen.id, st.at) {
-                        o.insert("length".into(), json!(r2(set.length.unwrap_or(a))));
-                        o.insert("length_auto".into(), json!(set.length.is_none()));
-                        o.insert("thickness".into(), json!(r2(set.thickness.unwrap_or(1.0))));
-                    }
-                    if let Some(a) = auto.leaves(gen.id, st.at) {
-                        o.insert("leaves".into(), json!(r2(set.leaves.unwrap_or(a))));
-                        o.insert("leaves_auto".into(), json!(set.leaves.is_none()));
-                        o.insert("leaf_size".into(), json!(r2(set.leaf_size.unwrap_or(1.0))));
-                    }
-                    (o.len() > 2).then_some(Value::Object(o))
-                })
-                .collect();
-            json!({"label": g.label(i), "at": st.at, "generators": if st.at >= 0.999 { json!("the mature tree, as designed") } else { json!(gens) }})
-        })
-        .collect();
-    v["stages"] = json!(stages);
-    v
 }
 
 /// The growth settings with their keyframes and clips (times in seconds).
@@ -835,7 +795,6 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
         "set_growth" => {
             let mut sh = lock();
             let mut doc = sh.doc.clone();
-            let kinds: Vec<(u32, GenKind)> = doc.generators.iter().map(|g| (g.id, g.kind)).collect();
             let g = &mut doc.growth;
             if let Some(list) = a.get("stages") {
                 let list = list.as_array().ok_or("stages must be a list of {name, at, generators}")?;
@@ -843,25 +802,7 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
                 for st in list {
                     let name = st.get("name").and_then(|v| v.as_str()).unwrap_or("");
                     let at = st.get("at").and_then(|v| v.as_f64()).ok_or("every stage needs at (0.01..1)")? as f32;
-                    let mut stage = crate::model::GrowthStage::named(name, at);
-                    if let Some(gens) = st.get("generators") {
-                        for gv in gens.as_array().ok_or("generators must be a list of {id, length, thickness, leaves, leaf_size}")? {
-                            let id = gv.get("id").and_then(|v| v.as_u64()).ok_or("every generators item needs an id")? as u32;
-                            let leaves = kinds.iter().find(|(i, _)| *i == id).ok_or_else(|| format!("no generator {id}"))?.1 == GenKind::Leaves;
-                            let num = |k: &str| gv.get(k).and_then(|v| v.as_f64()).map(|v| v as f32);
-                            let sh = stage.shape_mut(id);
-                            for k in ["count", "length", "thickness", "leaves", "leaf_size"] {
-                                if gv.get(k).is_some_and(|v| !v.is_null()) && leaves != (k == "leaves" || k == "leaf_size") {
-                                    return Err(format!("generator {id} is {}: {}", if leaves { "a Leaves generator (use leaves, leaf_size)" } else { "a stem generator (use length, thickness)" }, k));
-                                }
-                            }
-                            sh.count = num("count");
-                            sh.length = num("length");
-                            sh.thickness = num("thickness");
-                            sh.leaves = num("leaves");
-                            sh.leaf_size = num("leaf_size");
-                        }
-                    }
+                    let stage = crate::model::GrowthStage::named(name, at);
                     stages.push(stage);
                 }
                 if stages.is_empty() {
@@ -875,12 +816,6 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             if let Some(v) = arg_u32(a, "keyframes") {
                 g.keyframes = v;
             }
-            if let Some(v) = arg_f32(a, "branching") {
-                g.branching = v;
-            }
-            if let Some(v) = a.get("seedling_leaves").and_then(|v| v.as_bool()) {
-                g.seedling_leaves = v;
-            }
             if let Some(v) = a.get("export").and_then(|v| v.as_bool()) {
                 g.export = v;
             }
@@ -888,7 +823,7 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             sh.doc = doc.clone();
             sh.commit();
             drop(sh);
-            Ok(pretty(&growth_detail(&doc)))
+            Ok(pretty(&growth_info(&doc.growth)))
         }
         "check_triangle_budget" => {
             let doc = lock().doc.clone();
@@ -1129,8 +1064,8 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             let lm = crate::billboard::lod_mesh(&doc, lod);
             let growth = growth_arg(a, &doc.growth)?.unwrap_or(1.0);
             let m = if growth < 1.0 {
-                let timing = crate::growth::Timing::new(&lm.skeleton, &doc.growth);
-                crate::growth::Grower::new(&doc.growth, &lm.skeleton, &lm.mesh, &timing).mesh_at(&lm.mesh, growth)
+                let timing = crate::growth::Timing::new(&doc, &lm.skeleton);
+                crate::growth::Grower::new(&doc, &lm.skeleton, &lm.mesh, &timing).mesh_at(&lm.mesh, growth)
             } else {
                 lm.mesh
             };

@@ -11,61 +11,66 @@
 <nav id="nav"></nav>
 <main>
 <h1>Growth animation</h1>
-<p class="lead">A tree can grow in your game: from a sprout to the mature tree you designed, through stages such as Sprout, Sapling, Young and Mature. You choose how many stages there are, where they sit and, per stage, how long, thick and leafy each part of the tree is. ArborStudio animates the growth on the tree's own mesh and exports it as morph targets with one animation clip per stage, which Godot, Unity and Unreal play without a plugin.</p>
+<p class="lead">A tree can grow in your game: from nothing to the mature tree you designed, through stages such as Sprout, Sapling, Young and Mature. Like dedicated tree modelling tools, ArborStudio grows every branch out along its final path at its own speed, thickens it as it grows, and starts each branch, twig and leaf when its parent reaches it. You tune this per generator. The growth is animated on the tree's own mesh and exported as morph targets with one animation clip per stage, which Godot, Unity and Unreal play without a plugin.</p>
 
 <div class="gallery wide">
-<figure><img src="images/growth-012.jpg" alt="The oak preset as a sprout: a short shoot with a few leaves"><figcaption>Sprout (0.12)</figcaption></figure>
-<figure><img src="images/growth-025.jpg" alt="The oak at a quarter of its growth: a small trunk with the first side branches"><figcaption>0.25</figcaption></figure>
-<figure><img src="images/growth-038.jpg" alt="The oak as a sapling: a small leafy tree"><figcaption>Sapling (0.38)</figcaption></figure>
-<figure><img src="images/growth-068.jpg" alt="The oak as a young tree with a full crown"><figcaption>Young (0.68)</figcaption></figure>
+<figure><img src="images/growth-012.jpg" alt="The oak preset at 12 percent: a short young trunk tapering to a point"><figcaption>Sprout (0.12)</figcaption></figure>
+<figure><img src="images/growth-025.jpg" alt="The oak at a quarter of its growth: a taller trunk with the first branches coming out"><figcaption>0.25</figcaption></figure>
+<figure><img src="images/growth-038.jpg" alt="The oak at 38 percent: the lower branches have grown out with twigs and the first leaves"><figcaption>Sapling (0.38)</figcaption></figure>
+<figure><img src="images/growth-068.jpg" alt="The oak at 68 percent: a young tree with a leafy crown, the top still growing"><figcaption>Young (0.68)</figcaption></figure>
 <figure><img src="images/growth-100.jpg" alt="The mature oak"><figcaption>Mature (1.0)</figcaption></figure>
 </div>
-<p>The Oak preset at five points of its growth, all from the same camera.</p>
+<p>The Oak preset at five points of its growth, all from the same camera, with the default growth settings.</p>
 
 <h2>How a tree grows</h2>
 <p>Growth runs from <strong>0</strong> (nothing above the ground) to <strong>1</strong> (the tree as designed). On the way:</p>
 <ul>
-<li>Every branch is a small copy of its final shape that grows to full size. It lengthens from the point where it leaves its parent and thickens as it grows, and it carries its own twigs and leaves with it.</li>
-<li>The trunk grows the whole time, slowly at first. Side branches and twigs start later the further out along their parent they sit, so lower branches are older and larger, and the crown fills in from the bottom up and from the inside out.</li>
-<li>New branches keep appearing while the tree grows: a sapling has a few branches, a young tree more, and new twigs (with their leaves) sprout until the tree is nearly mature. <strong>New branches</strong> sets how long this goes on; at 0 every branch starts early and the tree mostly just gets bigger. Roots always start early, so the young trunk stands on its roots.</li>
-<li>A young shoot tapers to a point; it gets its full-size shape as it grows. Where a branch is joined to its parent (<a href="joints.html">Branch joints</a>), the opening in the parent's bark is only as wide as the branch is thick, so the joint stays closed and smooth at every stage.</li>
-<li>Leaves unfold from their stalk soon after their twig starts.</li>
-<li>With <strong>Seedling leaves</strong> on, a few leaves sit on the young shoot before the first side branches carry their own, so the sprout is green. They shrink away by 0.4 of the growth, a little later with New branches up, as the crown's own leaves come later then.</li>
+<li>Every stem (trunk, branch, twig, root) grows out along its final path, from its base to its tip. Nothing slides or shrinks: the part that has grown is where it is in the mature tree. A stem as long as the trunk takes as long as the trunk at the same speed, so long branches take longer than short twigs.</li>
+<li>Its radius grows while it grows out, and the stem's own taper is spread over the part that has grown, so a young shoot is slim and ends in a short point. A branch is never thicker, relative to its final size, than its parent where it comes out.</li>
+<li>A branch starts when its parent has grown past the point it comes out of (with the joint around it). It can start later: <strong>Sync with</strong> and <strong>Start %</strong> set when, and <strong>Offset</strong> with a random <strong>Offset variation</strong> spreads neighbours out. Nothing ever starts before its parent has reached it.</li>
+<li>Where a branch is joined to its parent (<a href="joints.html">Branch joints</a>), the joint stays on the parent's bark and opens only as far as the branch is thick, so it is closed before the branch starts and smooth while it grows.</li>
+<li>Leaves unfold from their stalk once their twig has reached them, at their own speed; they can also turn into place.</li>
+<li>Roots start and finish together with the trunk, so the young trunk stands on its roots.</li>
 </ul>
-<p>The mesh never changes its triangles; only its points move. At 1 it is exactly the tree you export without growth. This is what lets engines play the growth as morph targets (also called blend shapes or shape keys).</p>
+<p>The whole growth is scaled so it ends at 1 when the last part is done. The mesh never changes its triangles; only its points move. At 1 it is exactly the tree you export without growth. This is what lets engines play the growth as morph targets (also called blend shapes or shape keys).</p>
 <p><strong>Age</strong> in <a href="tree-settings.html">Tree settings</a> is different: it grows a new, younger tree with fewer branches, as a separate model. The growth animation always ends at the tree you designed.</p>
+
+<h2>Growth settings per generator</h2>
+<p>Select a generator and open <strong>Growth</strong> at the end of its properties. Every generator has these settings; the defaults give the growth shown above.</p>
+<figure><img src="images/ui-gen-growth.jpg" alt="The Growth group of the Main branches generator: Speed times 1.00, Length curve Linear, Radius curve Linear, Start size 0 percent, Start angle 100 percent, Sync with Auto, Start % 0 percent, Offset 0.00 and Offset variation 0.10"><figcaption>The Growth group of a branches generator.</figcaption></figure>
+<table>
+<tr><th>Setting</th><th>For</th><th>Range</th><th>Meaning</th></tr>
+<tr><td>Speed</td><td>all</td><td>×0.05–×10</td><td>How fast this generator's parts grow, relative to the trunk's pace. At ×1 a branch as long as the trunk takes as long as the trunk. Leaves unfold in about a seventh of the trunk's time at ×1.</td></tr>
+<tr><td>Length curve (leaves: Size curve)</td><td>all</td><td>Linear, Ease in, Ease out, S-curve</td><td>How the length (or the leaf size) grows over the part's own growth: steadily, slow at first, slow at the end, or slow-fast-slow.</td></tr>
+<tr><td>Radius curve</td><td>trunk, branches, roots</td><td>Linear, Ease in, Ease out, S-curve</td><td>How the radius grows. <em>Ease in</em> keeps young stems slim for longer.</td></tr>
+<tr><td>Start size</td><td>all</td><td>0–100%</td><td>The size a part has as soon as it appears. 0 grows it from nothing; higher values make parts pop in partly grown.</td></tr>
+<tr><td>Start angle (leaves: Start orientation)</td><td>branches, roots, leaves</td><td>0–100%</td><td>Below 100%, branches start folded towards their parent and fold out as they grow; leaves start lying along their twig and turn into place.</td></tr>
+<tr><td>Orientation time</td><td>leaves</td><td>×0.1–×5</td><td>How long leaves take to turn into place, relative to unfolding.</td></tr>
+<tr><td>Sync with</td><td>branches, roots, leaves</td><td>Auto, Parent, Siblings, Parent's start and end, In place</td><td><em>Parent</em>: start Start % of the way through the parent's growth. <em>Siblings</em>: all of this generator's parts start together, Start % between as early and as late as all of them can. <em>Parent's start and end</em>: start and finish with the parent. <em>In place</em>: exactly when the parent reaches the spot. <em>Auto</em> is Parent, and Parent's start and end for roots.</td></tr>
+<tr><td>Start %</td><td>with Parent or Siblings</td><td>0–100%</td><td>0 starts as early as possible, 100% as late.</td></tr>
+<tr><td>Offset</td><td>branches, roots, leaves</td><td>0–3</td><td>A delay added to every start, in shares of the trunk's growth time.</td></tr>
+<tr><td>Offset variation</td><td>branches, roots, leaves</td><td>0–3</td><td>A random extra delay of up to this much per part, so neighbours do not all start at once.</td></tr>
+</table>
+<p>Examples: for a tree whose crown fills in late, give the twigs <strong>Start %</strong> 60%. For leaves that come out all together in spring, set the leaves to <strong>Siblings</strong>. For a tall, slim sapling, give the trunk <strong>Radius curve</strong> Ease in.</p>
 
 <h2>Previewing the growth</h2>
 <p>Click <strong>▶ Grow</strong> in the toolbar to play the growth in the viewport. The <strong>Growth</strong> section at the end of the Properties panel has the same button, a slider to scrub through the growth, and one button per stage to jump to it. The viewport header shows the point of the growth and the stage, for example <em>Growth 38% (Sapling)</em>. Wind plays during the growth too.</p>
-<figure><img src="images/ui-growth.jpg" alt="The Growth section: Grow button and slider at 38 percent, stage buttons Sprout, Sapling, Young, Mature and + Stage. Below, the Sapling stage: its name, a Remove button, its place at 0.38, and Shape at this stage: Length and Thickness for Trunk; Count, Length and Thickness for Roots, Side roots, Main branches and Twigs; Leaves and Leaf size for Leaves. Trunk length is set to 40 percent, twig count to 20 percent, leaves to 50 percent and leaf size to 0.8; the rest show auto. Then Duration, Keyframes, New branches 0.60, Seedling leaves and Export."><figcaption>The Growth section with the Sapling stage selected: a taller trunk, a fifth of the twigs and half the leaves out, the rest automatic.</figcaption></figure>
+<figure><img src="images/ui-growth.jpg" alt="The Growth section: Grow button and slider at 38 percent, a note that each generator's growth is set in its Growth group, stage buttons Sprout, Sapling, Young, Mature and + Stage, the Sapling stage with its name, a Remove button and its place at 0.38, then Duration 12 seconds, Keyframes 16 and the Export checkbox"><figcaption>The Growth section with the Sapling stage selected.</figcaption></figure>
 
 <h2>Stages</h2>
-<p>Click a stage's button to show the tree there and edit the stage below the buttons:</p>
+<p>Stages are the moments of the growth your game uses; exports get one clip per stage. Click a stage's button to show the tree there and edit it:</p>
 <ul>
 <li><strong>+ Stage</strong> adds a stage where the preview slider stands (or in the middle of the largest gap when a stage is already there). Move the slider first to add a stage at a chosen point. Up to 8 stages.</li>
 <li><strong>Name</strong> is optional. A stage without a name is called by its place, for example <em>Stage 2</em>; that label is also its clip and file name in exports.</li>
 <li><strong>At</strong> moves the stage along the growth; <strong>Remove</strong> deletes it.</li>
 </ul>
-<h3>Shape at this stage</h3>
-<p>Each stage lists the generators of your tree, like the Generation panel. Every value starts as <em>auto</em>: what the automatic growth gives there, shown greyed. Drag a slider to set your own value; <strong>↺</strong> returns it to auto.</p>
-<table>
-<tr><th>Control</th><th>For</th><th>Range</th><th>Meaning</th></tr>
-<tr><td>Count</td><td>Branches, Roots</td><td>0–100%</td><td>The share of this generator's branches (or twigs, or roots) that have started to grow. 20% on the twigs at the Sapling stage gives a sapling with few twigs; the rest sprout later, in their usual order.</td></tr>
-<tr><td>Length</td><td>Trunk, Branches, Roots</td><td>0–100%</td><td>How far the stems of this generator have grown out, as a share of their total mature length. 40% on the trunk at the Sapling stage makes a tall, slender sapling.</td></tr>
-<tr><td>Thickness</td><td>Trunk, Branches, Roots</td><td>×0.05–×2</td><td>Thickness relative to the automatic growth at this stage. A branch never gets thicker than the stem it grows out of.</td></tr>
-<tr><td>Leaves</td><td>Leaves</td><td>0–100%</td><td>The share of the leaves that are out. 0% gives bare branches at this stage.</td></tr>
-<tr><td>Leaf size</td><td>Leaves</td><td>×0.05–×2</td><td>Leaf size relative to the automatic growth at this stage.</td></tr>
-</table>
-<p>Between stages the tree moves smoothly from one shape to the next. The stage at 1 is always the mature tree as you designed it, so it has no shape controls. Seedling leaves are not affected by the leaf controls.</p>
 
 <h2>Settings</h2>
 <table>
 <tr><th>Setting</th><th>Range</th><th>Meaning</th></tr>
-<tr><td>Stages</td><td>up to 8, each 0.01–1</td><td>Moments of the growth, in growing order, each with an optional name and its shape per generator (see Stages above). The last stage is normally the mature tree at 1.</td></tr>
+<tr><td>Stages</td><td>up to 8, each 0.01–1</td><td>Moments of the growth, in growing order, each with an optional name. The last stage is normally the mature tree at 1.</td></tr>
 <tr><td>Duration</td><td>0.5–600 s</td><td>How long the whole growth takes in the exported animation and the preview.</td></tr>
 <tr><td>Keyframes</td><td>4–48</td><td>How many shapes the growth is sampled at. Every stage always gets one. More keyframes play more smoothly and make larger files.</td></tr>
-<tr><td>New branches</td><td>0–1 (0.6)</td><td>How long new branches, twigs and leaves keep appearing while the tree grows: 0 = all start early, 1 = new ones until near the end. Stage Count settings override it per generator.</td></tr>
-<tr><td>Seedling leaves</td><td>on, off</td><td>A few leaves on the young shoot until the side branches carry their own.</td></tr>
 <tr><td>Export</td><td>on, off</td><td>Exports include the growth animation.</td></tr>
 </table>
 
@@ -75,14 +80,14 @@
 <tr><th>Format</th><th>Growth</th></tr>
 <tr><td>GLB</td><td>Every mesh level gets one morph target per keyframe (morph target <em>k</em> is the tree at keyframe <em>k</em>; all weights 0 is the mature tree), and animations that drive the morph weights: <strong>Grow</strong> from nothing to the mature tree, and one clip per stage: the first stage's clip grows from nothing to it (<strong>Sprout</strong>), the others from the stage before (<strong>Sprout to Sapling</strong>, <strong>Sapling to Young</strong>, …). The file's extras list the stages, keyframes and clip times under <code>growth</code>.</td></tr>
 <tr><td>OBJ</td><td>One more file per stage before the mature tree, for example <code>oak_Sprout.obj</code> and <code>oak_Sapling.obj</code>, for engines or tools that swap static models.</td></tr>
-<tr><td>JSON</td><td>The growth timing of every stem and leaf (<code>growth.timing</code>) and how to apply it, for your own engine code or plugins.</td></tr>
+<tr><td>JSON</td><td>When every stem and leaf starts and how long it grows (<code>growth.timing</code>), with each generator's growth settings, for your own engine code or plugins.</td></tr>
 </table>
 <p>The GLB meshes also get a skin with a single bone that moves nothing. Some engines, Unreal among them, keep morph targets only on skinned meshes; the bone makes them import as such.</p>
-<p>Each keyframe stores every point of the mesh once more. With 16 keyframes, the Oak preset with all levels and the billboard is about 15 MB as GLB instead of about 4 MB. Lower the keyframes, or export the growth without lower levels of detail, to keep files small.</p>
+<p>Between two keyframes an engine blends the points in straight lines, so a part that appears between them grows in a little less exactly than in the preview. More keyframes follow the preview more closely. Each keyframe stores every point of the mesh once more: with 16 keyframes, the Oak preset with all levels and the billboard is about 15 MB as GLB instead of about 4 MB.</p>
 
 <h2>In the engine</h2>
 <ul>
-<li><strong>Godot 4</strong>: the imported scene has an AnimationPlayer with <em>Grow</em> and the stage clips. Play a clip to grow to the next stage, or seek <em>Grow</em> to a time to show a stage. Tested by importing an exported Oak in Godot 4: 17 blend shapes per level and the five clips arrive.</li>
+<li><strong>Godot 4</strong>: the imported scene has an AnimationPlayer with <em>Grow</em> and the stage clips. Play a clip to grow to the next stage, or seek <em>Grow</em> to a time to show a stage. Tested by importing an exported Oak in Godot 4: the blend shapes per level and the five clips arrive.</li>
 <li><strong>Blender</strong>: the meshes arrive with shape keys and one action per clip. Tested by importing and rendering the Grow action.</li>
 <li><strong>Unity</strong>: with a glTF importer package (for example glTFast), the meshes import with blend shapes on a SkinnedMeshRenderer and the clips as animations.</li>
 <li><strong>Unreal</strong>: import the GLB as a skeletal mesh; the morph targets and the clips' morph curves come with it.</li>
@@ -91,10 +96,9 @@
 <p>Regrowing a tree (after it was cut down, for example) is the same animation played again from the start.</p>
 
 <h2>Growth for agents</h2>
-<p><code>set_growth</code> changes the stages (with their shape per generator: <code>count</code>, <code>length</code>, <code>thickness</code>, <code>leaves</code>, <code>leaf_size</code>, or null for auto), duration, keyframes, <code>branching</code> (New branches), seedling leaves and the export default. It returns every stage with each generator's value there (set or automatic), the keyframes and the clips with their lengths in seconds. <code>render_preview</code> and <code>set_view</code> take <code>growth</code> (0–1) or <code>growth_stage</code> (a stage name or label such as <em>Stage 2</em>); <code>set_view</code> also takes <code>growth_playing</code>. <code>export_tree</code> and <code>export_variations</code> take <code>include_growth</code>.</p>
-<pre><code>set_growth {"stages": [{"name": "Sprout", "at": 0.1},
-  {"name": "Sapling", "at": 0.35, "generators": [{"id": 1, "length": 0.4}, {"id": 6, "leaves": 0.5}]},
-  {"at": 0.7}, {"name": "Grown", "at": 1}], "duration": 20}
+<p>Each generator's growth settings are in its parameters under <code>growth</code>: <code>update_generator</code> with <code>params.growth</code> (<code>speed</code>, <code>speed_curve</code>, <code>radius_curve</code>, <code>start_size</code>, <code>start_angle</code>, <code>orientation_time</code>, <code>sync</code>, <code>start_pct</code>, <code>offset</code>, <code>offset_variation</code>). <code>set_growth</code> changes the stages, duration, keyframes and the export default, and returns the keyframes and the clips with their lengths in seconds. <code>render_preview</code> and <code>set_view</code> take <code>growth</code> (0–1) or <code>growth_stage</code> (a stage name or label such as <em>Stage 2</em>); <code>set_view</code> also takes <code>growth_playing</code>. <code>export_tree</code> and <code>export_variations</code> take <code>include_growth</code>.</p>
+<pre><code>update_generator {"id": 5, "params": {"growth": {"sync": "parent", "start_pct": 0.6, "offset_variation": 0.2}}}
+set_growth {"stages": [{"name": "Sprout", "at": 0.1}, {"name": "Sapling", "at": 0.35}, {"at": 0.7}, {"name": "Grown", "at": 1}], "duration": 20}
 render_preview {"growth_stage": "Sapling"}
 export_tree {"path": "/path/to/Assets/oak.glb", "include_lods": true, "include_growth": true}</code></pre>
 </main>
