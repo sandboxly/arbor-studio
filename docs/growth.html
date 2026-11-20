@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Growth animation · ArborStudio Help</title>
+<link rel="stylesheet" href="style.css">
+<script src="nav.js" defer></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main>
+<h1>Growth animation</h1>
+<p class="lead">A tree can grow in your game: from a sprout to the mature tree you designed, through named stages such as Sprout, Sapling, Young and Mature. ArborStudio animates the growth on the tree's own mesh and exports it as morph targets with one animation clip per stage, which Godot, Unity and Unreal play without a plugin.</p>
+
+<div class="gallery wide">
+<figure><img src="images/growth-012.jpg" alt="The oak preset as a sprout: a short shoot with a few leaves"><figcaption>Sprout (0.12)</figcaption></figure>
+<figure><img src="images/growth-025.jpg" alt="The oak at a quarter of its growth: a small trunk with the first side branches"><figcaption>0.25</figcaption></figure>
+<figure><img src="images/growth-038.jpg" alt="The oak as a sapling: a small leafy tree"><figcaption>Sapling (0.38)</figcaption></figure>
+<figure><img src="images/growth-068.jpg" alt="The oak as a young tree with a full crown"><figcaption>Young (0.68)</figcaption></figure>
+<figure><img src="images/growth-100.jpg" alt="The mature oak"><figcaption>Mature (1.0)</figcaption></figure>
+</div>
+<p>The Oak preset at five points of its growth, all from the same camera.</p>
+
+<h2>How a tree grows</h2>
+<p>Growth runs from <strong>0</strong> (nothing above the ground) to <strong>1</strong> (the tree as designed). On the way:</p>
+<ul>
+<li>Every branch is a small copy of its final shape that grows to full size. It lengthens from the point where it leaves its parent and thickens as it grows, and it carries its own twigs and leaves with it.</li>
+<li>The trunk grows the whole time, slowly at first. Side branches, twigs and roots start later the further out along their parent they sit, so lower branches are older and larger, and the crown fills in from the bottom up and from the inside out.</li>
+<li>Leaves unfold from their stalk soon after their twig starts.</li>
+<li>With <strong>Seedling leaves</strong> on, a few leaves sit on the young shoot before the first side branches carry their own, so the sprout is green. They shrink away by 0.4 of the growth.</li>
+</ul>
+<p>The mesh never changes its triangles; only its points move. At 1 it is exactly the tree you export without growth. This is what lets engines play the growth as morph targets (also called blend shapes or shape keys).</p>
+<p><strong>Age</strong> in <a href="tree-settings.html">Tree settings</a> is different: it grows a new, younger tree with fewer branches, as a separate model. The growth animation always ends at the tree you designed.</p>
+
+<h2>Previewing the growth</h2>
+<p>Click <strong>▶ Grow</strong> in the toolbar to play the growth in the viewport. The <strong>Growth</strong> section at the end of the Properties panel has the same button, a slider to scrub through the growth, and one button per stage to jump to it. The viewport header shows the point of the growth and the stage, for example <em>Growth 38% (Sapling)</em>. Wind plays during the growth too.</p>
+<figure><img src="images/ui-growth.jpg" alt="The Growth section: Grow button and slider at 38 percent, stage buttons Sprout, Sapling, Young and Mature, a row per stage with its name, a slider and a delete button, then Duration 12 seconds, Keyframes 16, Seedling leaves on and the Export checkbox"><figcaption>The Growth section, showing the Sapling stage.</figcaption></figure>
+
+<h2>Settings</h2>
+<table>
+<tr><th>Setting</th><th>Range</th><th>Meaning</th></tr>
+<tr><td>Stages</td><td>up to 8, each 0.01–1</td><td>Named moments of the growth, in growing order. Moving a stage's slider shows the tree there. The last stage is normally the mature tree at 1.</td></tr>
+<tr><td>Duration</td><td>0.5–600 s</td><td>How long the whole growth takes in the exported animation and the preview.</td></tr>
+<tr><td>Keyframes</td><td>4–48</td><td>How many shapes the growth is sampled at. Every stage always gets one. More keyframes play more smoothly and make larger files.</td></tr>
+<tr><td>Seedling leaves</td><td>on, off</td><td>A few leaves on the young shoot until the side branches carry their own.</td></tr>
+<tr><td>Export</td><td>on, off</td><td>Exports include the growth animation.</td></tr>
+</table>
+
+<h2>What gets exported</h2>
+<p>Turn on <strong>Include the growth in exports</strong>, then export as usual (<a href="export.html">Exporting</a>). Levels of detail and the billboard grow along with LOD0.</p>
+<table>
+<tr><th>Format</th><th>Growth</th></tr>
+<tr><td>GLB</td><td>Every mesh level gets one morph target per keyframe (morph target <em>k</em> is the tree at keyframe <em>k</em>; all weights 0 is the mature tree), and animations that drive the morph weights: <strong>Grow</strong> from nothing to the mature tree, and one clip per stage: the first stage's clip grows from nothing to it (<strong>Sprout</strong>), the others from the stage before (<strong>Sprout to Sapling</strong>, <strong>Sapling to Young</strong>, …). The file's extras list the stages, keyframes and clip times under <code>growth</code>.</td></tr>
+<tr><td>OBJ</td><td>One more file per stage before the mature tree, for example <code>oak_Sprout.obj</code> and <code>oak_Sapling.obj</code>, for engines or tools that swap static models.</td></tr>
+<tr><td>JSON</td><td>The growth timing of every stem and leaf (<code>growth.timing</code>) and how to apply it, for your own engine code or plugins.</td></tr>
+</table>
+<p>The GLB meshes also get a skin with a single bone that moves nothing. Some engines, Unreal among them, keep morph targets only on skinned meshes; the bone makes them import as such.</p>
+<p>Each keyframe stores every point of the mesh once more. With 16 keyframes, the Oak preset with all levels and the billboard is about 15 MB as GLB instead of about 4 MB. Lower the keyframes, or export the growth without lower levels of detail, to keep files small.</p>
+
+<h2>In the engine</h2>
+<ul>
+<li><strong>Godot 4</strong>: the imported scene has an AnimationPlayer with <em>Grow</em> and the stage clips. Play a clip to grow to the next stage, or seek <em>Grow</em> to a time to show a stage. Tested by importing an exported Oak in Godot 4: 17 blend shapes per level and the five clips arrive.</li>
+<li><strong>Blender</strong>: the meshes arrive with shape keys and one action per clip. Tested by importing and rendering the Grow action.</li>
+<li><strong>Unity</strong>: with a glTF importer package (for example glTFast), the meshes import with blend shapes on a SkinnedMeshRenderer and the clips as animations.</li>
+<li><strong>Unreal</strong>: import the GLB as a skeletal mesh; the morph targets and the clips' morph curves come with it.</li>
+</ul>
+<p>Unity and Unreal were not tested with these files yet.</p>
+<p>Regrowing a tree (after it was cut down, for example) is the same animation played again from the start.</p>
+
+<h2>Growth for agents</h2>
+<p><code>set_growth</code> changes the stages, duration, keyframes, seedling leaves and the export default, and returns the keyframes and the clips with their lengths in seconds. <code>render_preview</code> and <code>set_view</code> take <code>growth</code> (0–1) or <code>growth_stage</code> (a stage name); <code>set_view</code> also takes <code>growth_playing</code>. <code>export_tree</code> and <code>export_variations</code> take <code>include_growth</code>.</p>
+<pre><code>set_growth {"stages": [{"name": "Sprout", "at": 0.1}, {"name": "Sapling", "at": 0.35}, {"name": "Grown", "at": 1}], "duration": 20}
+render_preview {"growth_stage": "Sapling"}
+export_tree {"path": "/path/to/Assets/oak.glb", "include_lods": true, "include_growth": true}</code></pre>
+</main>
+</body>
+</html>

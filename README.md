@@ -4,9 +4,10 @@ A procedural tree modeller with a built-in MCP server, so a coding agent can bui
 
 ## Download
 
-Ready-to-run builds for Windows, macOS (Apple silicon and Intel) and Linux are attached to each release on
-the GitHub **Releases** page. Unpack and start `arbor_studio` (macOS may ask you to allow it under
-System Settings > Privacy & Security the first time, because the build is not signed).
+Ready-to-run builds are attached to each release on the GitHub **Releases** page: a disk image for macOS
+(Apple silicon and Intel; drag ArborStudio to Applications), an installer for Windows (`.msi`) and a `.tar.gz`
+for Linux. macOS may ask you to allow the app under System Settings > Privacy & Security the first time,
+because the build is not notarised yet.
 
 ## Build from source
 
@@ -60,7 +61,7 @@ The window's **Agent → Connect a coding agent…** shows these with copy butto
 
 get_tree, get_parameter_reference, list_presets, load_preset, new_tree, add_generator, update_generator,
 remove_generator, set_curve, list_nodes, edit_node, clear_node_edits, add_force, update_force, remove_force, set_pruning,
-set_collision, set_triangle_budget, check_triangle_budget, list_materials, add_material, update_material, remove_material, assign_material, update_settings, randomize_seed, select_generator, set_view, get_stats, render_preview,
+set_collision, set_triangle_budget, check_triangle_budget, set_growth, list_materials, add_material, update_material, remove_material, assign_material, update_settings, randomize_seed, select_generator, set_view, get_stats, render_preview,
 capture_window, export_tree, export_variations, save_project, open_project, undo, redo.
 
 ## Releases (maintainers)
@@ -69,9 +70,14 @@ The repository builds itself on GitHub: every change on `main` is compiled on Li
 (`.github/workflows/ci.yml`), and a version tag such as `v0.1.0` builds the downloads and creates the
 release with them (`.github/workflows/release.yml`).
 
-macOS releases are one `ArborStudio.app` for Apple silicon and Intel (`macos/bundle.sh` makes it; it
-also works locally: `sh macos/bundle.sh target/release/arbor_studio <empty folder>`). They build with no
-setup and carry an ad-hoc signature, so Mac users confirm the first start once under System Settings >
+The downloads are a disk image for macOS (`ArborStudio-macos-universal.dmg`), an installer for Windows
+(`arbor_studio-windows-x86_64.msi`, made with WiX Toolset 5 from `windows/ArborStudio.wxs`) and a
+`.tar.gz` for Linux. Running the Release workflow by hand with an existing tag rebuilds that version's
+downloads.
+
+macOS releases hold one `ArborStudio.app` for Apple silicon and Intel (`macos/bundle.sh` makes it,
+`macos/dmg.sh` puts it on the disk image; both work locally:
+`sh macos/bundle.sh target/release/arbor_studio <empty folder>`). They build with no setup and carry an ad-hoc signature, so Mac users confirm the first start once under System Settings >
 Privacy & Security. To have them signed and notarised by Apple (opens with no warning), a paid Apple
 Developer Program membership is needed. With the "Developer ID Application" certificate on your Mac, one
 command sets everything up once the repository is on GitHub (it asks for your Apple Account email and an
@@ -105,6 +111,11 @@ Optional: `MACOS_BUNDLE_ID` (default `io.github.arbor-studio`) and an icon at `m
 * **Collision**: capsules fitted to the trunk and thick branches, exported as convex hulls. Naming `neutral`
   (`<Tree>_Collision_NN`), `unreal` (`UCX_<mesh>_NN`) or `godot` (`-convcolonly`); capsule data in GLB node
   extras and in the JSON file.
+* **Growth animation** (Properties › Growth): the tree grows from a sprout to the mature tree on its own mesh,
+  through named stages (Sprout, Sapling, Young, Mature by default). GLB gets one morph target per keyframe, a
+  one-bone skin (so engines that keep morph targets only on skinned meshes import them) and animations driving
+  the morph weights: `Grow` plus one clip per stage. OBJ gets one file per stage; JSON the growth timing of every
+  stem and leaf. Tested by importing in Godot 4 and Blender.
 * **Variations**: `export_variations` (File menu too) writes several seeds of the species as `<Tree>_v01..`.
 * **JSON**: the full skeleton (stem polylines with radii, leaf positions/directions/normals/sizes) plus the
   generator settings, for custom engines.

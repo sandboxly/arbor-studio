@@ -5,6 +5,12 @@
 //!
 //! Wind data: GLB stores per-vertex sway weights in TEXCOORD_1 (UV2):
 //! u = branch sway (0 at the ground .. 1 at crown tips), v = leaf flutter (0..1).
+//!
+//! Growth (when `growth.export` is on): GLB meshes get one morph target per keyframe of the
+//! growth (POSITION offsets from the mature tree), a one-bone skin (so engines that only keep
+//! morph targets on skinned meshes, such as Unreal, import them) and animations that drive the
+//! morph weights: "Grow" from nothing to the mature tree, and one clip per stage. OBJ gets one
+//! extra file per stage; JSON gets the growth timing of every stem and leaf.
 
 use crate::grow::{grow, Mesh, Stats};
 use crate::model::Document;
@@ -38,6 +44,8 @@ pub struct ExportResult {
     pub lods: Vec<Stats>,
     /// Each exported mesh level against its triangle budget.
     pub budget: Vec<crate::budget::LevelFit>,
+    /// The growth animation that went out (keyframes, clips), when it was included.
+    pub growth: Option<serde_json::Value>,
 }
 
 impl ExportResult {
@@ -99,22 +107,47 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
         stats.push(bb.mesh.stats(&sk));
         meshes.push((crate::billboard::BILLBOARD_LOD, bb.mesh, sk));
     }
+    // growth animation: every level grows on the full tree's timing
+    let growth = doc.growth.export.then(|| {
+        let timing = crate::growth::Timing::new(&full);
+        let pairs: Vec<(&Mesh, &crate::grow::Skeleton)> = meshes.iter().map(|(_, m, sk)| (m, sk)).collect();
+        (timing.clone(), crate::growth::animate(&doc.growth, &timing, &pairs))
+    });
+    let growth_info = growth.as_ref().map(|_| crate::mcp::growth_info(&doc.growth));
     let files = match format {
         Format::Obj => {
             let mut f = write_obj(doc, &name, path, &meshes, with_lods, bb_texture.as_deref(), &caps)?;
+            // one more file per stage before the mature tree: <file>_<Stage>.obj
+            if let Some((_, anim)) = &growth {
+                let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| name.clone());
+                for st in doc.growth.stages.iter().filter(|s| s.at < 1.0) {
+                    let Some(k) = anim.keys.iter().position(|&g| (g - st.at).abs() < 1e-4) else { continue };
+                    let staged: Vec<(u32, Mesh, crate::grow::Skeleton)> = meshes
+                        .iter()
+                        .enumerate()
+                        .map(|(i, (l, m, sk))| {
+                            let mut m = m.clone();
+                            m.pos = anim.shapes[i][k].clone();
+                            (*l, m, sk.clone())
+                        })
+                        .collect();
+                    let p = path.with_file_name(format!("{stem}_{}.obj", safe_name(&st.name)));
+                    f.extend(write_obj(doc, &name, &p, &staged, with_lods, bb_texture.as_deref(), &[])?);
+                }
+            }
             f.extend(extra_files);
             f
         }
         Format::Glb => {
             let refs: Vec<(u32, &Mesh)> = meshes.iter().map(|(l, m, _)| (*l, m)).collect();
-            write_glb(doc, &name, path, &refs, with_lods, bb_texture.as_deref(), &caps)?;
+            write_glb(doc, &name, path, &refs, with_lods, bb_texture.as_deref(), &caps, growth.as_ref().map(|(_, a)| a))?;
             let mut f = vec![path.to_path_buf()];
             f.extend(extra_files);
             f
         }
         Format::Json => {
             let (_, m, sk) = &meshes[0];
-            let v = json!({
+            let mut v = json!({
                 "format": "arbor-tree",
                 "version": 1,
                 "units": "metres",
@@ -125,11 +158,17 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
                 "collision": caps,
                 "note": "stems: polylines with per-point radius; leaves: position, direction (base->tip), normal, size; collision: capsules (cap centres a, b and radius). 'document' holds the generator settings so the tree can be regrown.",
             });
+            if let (Some((timing, _)), Some(info)) = (&growth, &growth_info) {
+                let mut g = info.clone();
+                g["timing"] = json!(timing);
+                g["note"] = json!("Growth g runs from 0 (nothing above ground) to 1 (this tree). Stem i is a scaled copy of its full shape: from timing.stem_start[i] to 1 its size goes from 0 to 1 (linearly; trunks as x^1.3), its thickness is size^0.75, and its base follows the point of its parent it grows from. Leaf i unfolds from timing.leaf_start[i] over timing.leaf_time (smoothstep), at 0.45 + 0.55 x its stem's size.");
+                v["growth"] = g;
+            }
             std::fs::write(path, serde_json::to_string_pretty(&v).unwrap()).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
             vec![path.to_path_buf()]
         }
     };
-    Ok(ExportResult { files, lods: stats, budget: fits })
+    Ok(ExportResult { files, lods: stats, budget: fits, growth: growth_info })
 }
 
 /// Export `count` individuals of the same species (seeds `first_seed`, `first_seed + 1`, ...)
@@ -355,7 +394,7 @@ fn write_obj(doc: &Document, name: &str, path: &Path, meshes: &[(u32, Mesh, crat
     Ok(files)
 }
 
-fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], with_lods: bool, bb_texture: Option<&str>, caps: &[crate::collision::Capsule]) -> Result<(), String> {
+fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], with_lods: bool, bb_texture: Option<&str>, caps: &[crate::collision::Capsule], growth: Option<&crate::growth::Animation>) -> Result<(), String> {
     let mesh_refs: Vec<&Mesh> = meshes.iter().map(|(_, m)| *m).collect();
     let slots = slots(doc, &mesh_refs, bb_texture);
     let mut bin: Vec<u8> = Vec::new();
@@ -423,7 +462,10 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
         materials.push(mat);
     }
 
-    for (l, m) in meshes {
+    // growth: one morph target per keyframe before the mature tree (the base mesh)
+    let n_targets = growth.map(|a| a.keys.iter().filter(|&&g| g < 1.0).count()).unwrap_or(0);
+    let mut growth_nodes = vec![];
+    for (mesh_i, (l, m)) in meshes.iter().enumerate() {
         // shared vertex attributes for all primitives
         let n = m.pos.len();
         let (mut mn, mut mx) = ([f32::MAX; 3], [f32::MIN; 3]);
@@ -451,6 +493,34 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
         let cv = push_view(&mut bin, &mut views, &f32s(m.col.iter().flat_map(|c| [c[0], c[1], c[2]])), Some(34962));
         accessors.push(json!({"bufferView": cv, "componentType": 5126, "count": n, "type": "VEC3"}));
         let col_acc = accessors.len() - 1;
+        // growth: morph targets (position offsets) and the one-bone skin
+        let mut targets = vec![];
+        let mut skin_attrs = None;
+        if let Some(anim) = growth {
+            for (k, &g) in anim.keys.iter().enumerate() {
+                if g >= 1.0 {
+                    continue;
+                }
+                let shape = &anim.shapes[mesh_i][k];
+                let d: Vec<glam::Vec3> = shape.iter().zip(&m.pos).map(|(s, b)| *s - *b).collect();
+                let (mut mn, mut mx) = ([f32::MAX; 3], [f32::MIN; 3]);
+                for p in &d {
+                    for c in 0..3 {
+                        mn[c] = mn[c].min(p[c]);
+                        mx[c] = mx[c].max(p[c]);
+                    }
+                }
+                let tv = push_view(&mut bin, &mut views, &f32s(d.iter().flat_map(|p| [p.x, p.y, p.z])), Some(34962));
+                accessors.push(json!({"bufferView": tv, "componentType": 5126, "count": n, "type": "VEC3", "min": mn, "max": mx}));
+                targets.push(json!({"POSITION": accessors.len() - 1}));
+            }
+            let jv = push_view(&mut bin, &mut views, &vec![0u8; n * 4], Some(34962));
+            accessors.push(json!({"bufferView": jv, "componentType": 5121, "count": n, "type": "VEC4"}));
+            let joints = accessors.len() - 1;
+            let wv = push_view(&mut bin, &mut views, &f32s((0..n).flat_map(|_| [1.0f32, 0.0, 0.0, 0.0])), Some(34962));
+            accessors.push(json!({"bufferView": wv, "componentType": 5126, "count": n, "type": "VEC4"}));
+            skin_attrs = Some((joints, accessors.len() - 1));
+        }
 
         let mut prims = vec![];
         for (mi, slot) in slots.iter().enumerate() {
@@ -464,16 +534,63 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
             let count = idx.len() / 4;
             let iv = push_view(&mut bin, &mut views, &idx, Some(34963));
             accessors.push(json!({"bufferView": iv, "componentType": 5125, "count": count, "type": "SCALAR"}));
-            prims.push(json!({
+            let mut prim = json!({
                 "attributes": {"POSITION": pos_acc, "NORMAL": nrm_acc, "TEXCOORD_0": uv_acc, "TEXCOORD_1": wind_acc, "COLOR_0": col_acc},
                 "indices": accessors.len() - 1,
                 "material": mi,
-            }));
+            });
+            if let Some((j, w)) = skin_attrs {
+                prim["attributes"]["JOINTS_0"] = json!(j);
+                prim["attributes"]["WEIGHTS_0"] = json!(w);
+                prim["targets"] = json!(targets);
+            }
+            prims.push(prim);
         }
         let mname = level_name(name, *l, with_lods);
-        gl_meshes.push(json!({"name": mname, "primitives": prims}));
-        nodes.push(json!({"name": mname, "mesh": gl_meshes.len() - 1}));
+        let mut gm = json!({"name": mname, "primitives": prims});
+        let mut node = json!({"name": mname, "mesh": gl_meshes.len()});
+        if let Some(anim) = growth {
+            let names: Vec<String> = anim.keys.iter().filter(|&&g| g < 1.0).map(|g| format!("growth_{:03.0}", g * 100.0)).collect();
+            gm["weights"] = json!(vec![0.0f32; n_targets]);
+            gm["extras"] = json!({"targetNames": names});
+            node["skin"] = json!(0);
+        }
+        gl_meshes.push(gm);
+        nodes.push(node);
         child_nodes.push(nodes.len() - 1);
+        growth_nodes.push(nodes.len() - 1);
+    }
+    // growth: the bone of the skin, and one animation per clip driving the morph weights
+    let mut skins = vec![];
+    let mut animations = vec![];
+    if let Some(anim) = growth {
+        nodes.push(json!({"name": format!("{name}_Root")}));
+        let joint = nodes.len() - 1;
+        child_nodes.push(joint);
+        skins.push(json!({"name": format!("{name}_Growth"), "joints": [joint], "skeleton": joint}));
+        let g = &doc.growth;
+        for (clip, from, to) in crate::growth::clips(g) {
+            let ks: Vec<usize> = (0..anim.keys.len()).filter(|&k| anim.keys[k] >= from - 1e-4 && anim.keys[k] <= to + 1e-4).collect();
+            if ks.len() < 2 {
+                continue;
+            }
+            let times: Vec<f32> = ks.iter().map(|&k| (anim.keys[k] - from).max(0.0) * g.duration).collect();
+            let tv = push_view(&mut bin, &mut views, &f32s(times.iter().copied()), None);
+            accessors.push(json!({"bufferView": tv, "componentType": 5126, "count": times.len(), "type": "SCALAR", "min": [times[0]], "max": [*times.last().unwrap()]}));
+            let input = accessors.len() - 1;
+            // keyframe k shows morph target k at full weight (the mature tree: all weights 0)
+            let mut w = vec![];
+            for &k in &ks {
+                for t in 0..n_targets {
+                    w.push(if t == k && anim.keys[k] < 1.0 { 1.0f32 } else { 0.0 });
+                }
+            }
+            let ov = push_view(&mut bin, &mut views, &f32s(w.iter().copied()), None);
+            accessors.push(json!({"bufferView": ov, "componentType": 5126, "count": w.len(), "type": "SCALAR"}));
+            let output = accessors.len() - 1;
+            let channels: Vec<serde_json::Value> = growth_nodes.iter().map(|&nd| json!({"sampler": 0, "target": {"node": nd, "path": "weights"}})).collect();
+            animations.push(json!({"name": clip, "samplers": [{"input": input, "output": output, "interpolation": "LINEAR"}], "channels": channels}));
+        }
     }
     // collision hulls (no material) grouped under one node, capsule data in extras
     if !caps.is_empty() {
@@ -523,6 +640,12 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
             "color_attribute": "COLOR_0: material colour/tint with per-leaf variation and baked ambient occlusion; multiplies the base colour texture",
         },
     });
+    if growth.is_some() {
+        gltf["skins"] = json!(skins);
+        gltf["animations"] = json!(animations);
+        gltf["extras"]["growth"] = crate::mcp::growth_info(&doc.growth);
+        gltf["extras"]["growth_note"] = json!("Morph target k is the tree at growth keyframes[k] (0 = nothing above ground); weights all 0 = the mature tree. Play the 'Grow' animation, or one clip per stage. The one-bone skin only lets engines that keep morph targets on skinned meshes import them; it does not move anything.");
+    }
     if !images.is_empty() {
         gltf["images"] = json!(images);
         gltf["textures"] = json!(textures);

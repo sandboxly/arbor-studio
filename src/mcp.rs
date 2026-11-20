@@ -246,6 +246,9 @@ pub fn tool_list() -> Vec<Value> {
             "fov": {"type": "number"},
             "mode": {"type": "string", "enum": ["shaded", "wireframe", "skeleton"]},
             "wind_playing": {"type": "boolean"}, "lod": {"type": "integer", "minimum": 0, "maximum": 4, "description": "0-3 = full to reduced geometry, 4 = billboard"},
+            "growth": {"type": "number", "minimum": 0, "maximum": 1, "description": "Preview the growth animation at this point (0 = nothing above ground, 1 = the mature tree)"},
+            "growth_stage": {"type": "string", "description": "Preview the growth at this stage (by name, see set_growth)"},
+            "growth_playing": {"type": "boolean", "description": "Play the growth in the window (from the start when at the mature tree)"},
             "show_grid": {"type": "boolean"}, "show_leaves": {"type": "boolean"}, "frame": {"type": "boolean"},
             "show_helpers": {"type": "boolean", "description": "Draw forces and the pruning volume"},
             "show_collision": {"type": "boolean", "description": "Draw the collision capsules"},
@@ -259,14 +262,17 @@ pub fn tool_list() -> Vec<Value> {
             "target": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3, "description": "Point to look at in metres, e.g. [0,0.3,0] for a close look at the roots"},
             "width": {"type": "integer", "minimum": 64, "maximum": 2048}, "height": {"type": "integer", "minimum": 64, "maximum": 2048},
             "yaw": {"type": "number"}, "pitch": {"type": "number"}, "distance": {"type": "number"},
-            "lod": {"type": "integer", "minimum": 0, "maximum": 4}, "save_to": {"type": "string", "description": "Optional absolute path to also save the PNG"}
+            "lod": {"type": "integer", "minimum": 0, "maximum": 4}, "save_to": {"type": "string", "description": "Optional absolute path to also save the PNG"},
+            "growth": {"type": "number", "minimum": 0, "maximum": 1, "description": "Render the tree at this point of its growth (0 = nothing above ground, 1 = mature; default 1). The camera still frames the mature tree unless distance/target are given."},
+            "growth_stage": {"type": "string", "description": "Render the tree at this growth stage (by name, see set_growth)"}
         }), &[]),
         tool("capture_window", "Capture window", "Take a picture of the whole application window (panels and viewport) as PNG. The window must be open and visible.", json!({"save_to": {"type": "string"}}), &[]),
         tool("export_tree", "Export tree", "Export the tree for a game engine or DCC tool. format obj (+mtl) or glb work in Unity, Unreal and Godot; json is the raw skeleton + settings for custom engines. include_lods adds LOD0-3 meshes named <Tree>_LOD0..3. include_billboard adds a billboard LOD (LOD4, or <Tree>_Billboard without LODs) and saves its atlas picture as <name>_billboard.png next to the file. Wind sway weights are stored in UV2 (TEXCOORD_1) in glb.", json!({
             "path": {"type": "string", "description": "Absolute output path, e.g. /Users/me/Game/Assets/Trees/oak.glb"},
             "format": {"type": "string", "enum": ["obj", "glb", "json"]},
             "include_lods": {"type": "boolean"},
-            "include_billboard": {"type": "boolean"}
+            "include_billboard": {"type": "boolean"},
+            "include_growth": {"type": "boolean", "description": "Add the growth animation (default: the tree's growth.export setting). glb: morph targets with a Grow clip and one clip per stage; obj: one extra file per stage (<name>_<Stage>.obj); json: growth timing per stem and leaf. See set_growth."}
         }), &["path"]),
         tool("export_variations", "Export variations", "Export several individuals of the current species (different seeds) into a folder, one file each: <Tree>_v01.glb, <Tree>_v02.glb, ... Mesh names carry the same suffix. Node edits are not applied to variations.", json!({
             "folder": {"type": "string", "description": "Absolute output folder"},
@@ -274,7 +280,8 @@ pub fn tool_list() -> Vec<Value> {
             "first_seed": {"type": "integer", "description": "Seed of the first variation (default: the current seed)"},
             "format": {"type": "string", "enum": ["obj", "glb", "json"]},
             "include_lods": {"type": "boolean"},
-            "include_billboard": {"type": "boolean"}
+            "include_billboard": {"type": "boolean"},
+            "include_growth": {"type": "boolean", "description": "Add the growth animation to every file (default: the tree's growth.export setting)"}
         }), &["folder", "count"]),
         tool("add_force", "Add force", "Add a force that bends stems while they grow. kind 'direction' pushes every stem along direction [x,y,z] (wind-swept or leaning trees); kind 'attractor' pulls stems towards position [x,y,z] in metres (light seeking), negative strength pushes them away (obstacles). Each generator's force_response parameter scales the effect (roots default to 0).", json!({
             "kind": {"type": "string", "enum": ["direction", "attractor"]},
@@ -333,6 +340,13 @@ pub fn tool_list() -> Vec<Value> {
         }), &[]),
         tool("check_triangle_budget", "Check triangle budget", "Check the current tree against its triangle budgets: for each mesh level (LOD0..LOD3, or only `lod`) the budget, the triangles it has, the triangles at its usual detail, whether detail was reduced to fit and whether it is over budget. within_budget is true when no level is over. Works when budgets are off too (then there is no budget to be over).", json!({
             "lod": {"type": "integer", "minimum": 0, "maximum": 3, "description": "Check one level only"}
+        }), &[]),
+        tool("set_growth", "Set growth", "The growth animation: the tree grows from a sprout to the mature tree on one mesh (trunk and branches lengthen and thicken along their final shape, side branches sprout as their parent passes them, leaves unfold), so engines play it as morph targets. Stages are named moments of the growth, from 0 (nothing above ground) to 1 (the mature tree); exports get a Grow clip and one clip per stage (first stage: from nothing; then '<A> to <B>'). Only the given fields change. Returns the settings, the keyframes and the clips with their times. Preview with render_preview growth/growth_stage or set_view.", json!({
+            "stages": {"type": "array", "maxItems": 8, "items": {"type": "object", "properties": {"name": {"type": "string"}, "at": {"type": "number", "minimum": 0.01, "maximum": 1}}, "required": ["name", "at"]}, "description": "Named stages in growing order, e.g. [{name: Sprout, at: 0.12}, {name: Sapling, at: 0.38}, {name: Young, at: 0.68}, {name: Mature, at: 1}]"},
+            "duration": {"type": "number", "minimum": 0.5, "maximum": 600, "description": "Seconds the whole growth takes in the exported animation"},
+            "keyframes": {"type": "integer", "minimum": 4, "maximum": 48, "description": "Shapes the growth is sampled at (morph targets); stages always get one"},
+            "seedling_leaves": {"type": "boolean", "description": "A few leaves on the young shoot until the side branches carry their own"},
+            "export": {"type": "boolean", "description": "Exports include the growth animation by default"}
         }), &[]),
         tool("set_pruning", "Set pruning", "Trim branches and leaves to a volume (topiary, hedges, fitting a tree into a space). Branches stop at the surface; trunks are only cut at the top; roots are never pruned. fit_to_tree places a volume slightly smaller than the current crown.", json!({
             "enabled": {"type": "boolean"},
@@ -414,6 +428,32 @@ fn arg_f32(a: &Value, k: &str) -> Option<f32> {
 }
 fn arg_str<'a>(a: &'a Value, k: &str) -> Option<&'a str> {
     a.get(k).and_then(|v| v.as_str())
+}
+
+/// A growth point from `growth` (0..1) or `growth_stage` (a stage name).
+fn growth_arg(a: &Value, g: &crate::model::Growth) -> Result<Option<f32>, String> {
+    if let Some(name) = arg_str(a, "growth_stage") {
+        let st = g.stages.iter().find(|s| s.name.eq_ignore_ascii_case(name)).ok_or_else(|| {
+            format!("no growth stage named {name}; stages: {}", g.stages.iter().map(|s| s.name.as_str()).collect::<Vec<_>>().join(", "))
+        })?;
+        return Ok(Some(st.at));
+    }
+    Ok(arg_f32(a, "growth").map(|x| x.clamp(0.0, 1.0)))
+}
+
+/// The growth settings with their keyframes and clips (times in seconds).
+pub fn growth_info(g: &crate::model::Growth) -> Value {
+    let keys = crate::growth::keyframes(g);
+    let clips: Vec<Value> = crate::growth::clips(g)
+        .iter()
+        .map(|(n, a, b)| json!({"name": n, "from": a, "to": b, "seconds": ((b - a) * g.duration * 100.0).round() / 100.0}))
+        .collect();
+    json!({
+        "growth": g,
+        "keyframes": keys,
+        "morph_targets": keys.len() - 1,
+        "clips": clips,
+    })
 }
 
 /// The tree's levels against their triangle budgets, for set/check_triangle_budget.
@@ -515,7 +555,7 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             Ok(pretty(&tree_json(&sh)))
         }
         "new_tree" => {
-            let mut doc = Document { name: arg_str(a, "name").unwrap_or("New tree").to_string(), settings: TreeSettings::default(), generators: vec![], next_id: 1, materials: vec![], forces: vec![], pruning: Pruning::default(), nodes: vec![], collision: Default::default(), budget: Default::default() };
+            let mut doc = Document { name: arg_str(a, "name").unwrap_or("New tree").to_string(), settings: TreeSettings::default(), generators: vec![], next_id: 1, materials: vec![], forces: vec![], pruning: Pruning::default(), nodes: vec![], collision: Default::default(), budget: Default::default(), growth: Default::default() };
             let t = doc.add(GenKind::Trunk, None, Some("Trunk".into()))?;
             let b = doc.add(GenKind::Branches, Some(t), Some("Branches".into()))?;
             doc.add(GenKind::Leaves, Some(b), Some("Leaves".into()))?;
@@ -739,6 +779,41 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             drop(sh);
             Ok(pretty(&budget_check(&doc, None)))
         }
+        "set_growth" => {
+            let mut sh = lock();
+            let mut doc = sh.doc.clone();
+            let g = &mut doc.growth;
+            if let Some(list) = a.get("stages") {
+                let list = list.as_array().ok_or("stages must be a list of {name, at}")?;
+                let mut stages = vec![];
+                for st in list {
+                    let name = st.get("name").and_then(|v| v.as_str()).ok_or("every stage needs a name")?;
+                    let at = st.get("at").and_then(|v| v.as_f64()).ok_or("every stage needs at (0.01..1)")? as f32;
+                    stages.push(crate::model::GrowthStage { name: name.to_string(), at });
+                }
+                if stages.is_empty() {
+                    return Err("give at least one stage".into());
+                }
+                g.stages = stages;
+            }
+            if let Some(v) = arg_f32(a, "duration") {
+                g.duration = v;
+            }
+            if let Some(v) = arg_u32(a, "keyframes") {
+                g.keyframes = v;
+            }
+            if let Some(v) = a.get("seedling_leaves").and_then(|v| v.as_bool()) {
+                g.seedling_leaves = v;
+            }
+            if let Some(v) = a.get("export").and_then(|v| v.as_bool()) {
+                g.export = v;
+            }
+            g.clamp();
+            sh.doc = doc.clone();
+            sh.commit();
+            drop(sh);
+            Ok(pretty(&growth_info(&doc.growth)))
+        }
         "check_triangle_budget" => {
             let doc = lock().doc.clone();
             let lod = arg_u32(a, "lod").map(|l| l.min(3));
@@ -891,6 +966,7 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
         }
         "set_view" => {
             let mut sh = lock();
+            let doc_growth = sh.doc.growth.clone();
             let v = &mut sh.view;
             if let Some(x) = arg_f32(a, "yaw") {
                 v.camera.yaw = x;
@@ -923,6 +999,16 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             }
             if let Some(b) = a.get("wind_playing").and_then(|v| v.as_bool()) {
                 v.wind_playing = b;
+            }
+            if let Some(g) = growth_arg(a, &doc_growth)? {
+                v.growth = g;
+                v.growth_playing = false;
+            }
+            if let Some(b) = a.get("growth_playing").and_then(|v| v.as_bool()) {
+                if b && !v.growth_playing && v.growth >= 0.999 {
+                    v.growth = 0.0;
+                }
+                v.growth_playing = b;
             }
             if let Some(l) = arg_u32(a, "lod") {
                 v.lod = l.min(4);
@@ -965,13 +1051,22 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             };
             let lod = arg_u32(a, "lod").unwrap_or(view.lod).min(4);
             let lm = crate::billboard::lod_mesh(&doc, lod);
-            let m = lm.mesh;
+            let growth = growth_arg(a, &doc.growth)?.unwrap_or(1.0);
+            let m = if growth < 1.0 {
+                let timing = crate::growth::Timing::new(&lm.skeleton);
+                crate::growth::Grower::new(&doc.growth, &lm.skeleton, &lm.mesh, &timing).mesh_at(&lm.mesh, growth)
+            } else {
+                lm.mesh
+            };
+            // the mature tree's frame (mesh_at keeps its bounds), so growth pictures line up
+            let (frame_h, frame_r) = (m.height, m.radius);
             let w = arg_u32(a, "width").unwrap_or(768).clamp(64, 2048);
             let h = arg_u32(a, "height").unwrap_or(768).clamp(64, 2048);
             // auto-fit the tree unless the caller wants the window's exact camera
             let mut cam = view.camera;
             if !a.get("use_window_camera").and_then(|v| v.as_bool()).unwrap_or(false) {
-                cam.frame(m.height, m.radius);
+                // the mature tree's frame, so growth pictures line up
+                cam.frame(frame_h, frame_r);
             }
             if let Some(x) = arg_f32(a, "yaw") {
                 cam.yaw = x;
@@ -998,6 +1093,9 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             let img = render_offscreen(&doc, &m, &cam, w, h, 0.0, false, None, &tex, lighting);
             let png = png_bytes(&img)?;
             let mut note = format!("{} — {} triangles, height {:.2} m, LOD{}", doc.name, m.tris.len(), m.height, lod);
+            if growth < 1.0 {
+                note.push_str(&format!(", growth {:.0}%", growth * 100.0));
+            }
             if let Some(p) = arg_str(a, "save_to") {
                 let p = expand(p);
                 std::fs::write(&p, &png).map_err(|e| format!("cannot write {}: {e}", p.display()))?;
@@ -1035,11 +1133,17 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             };
             let lods = a.get("include_lods").and_then(|v| v.as_bool()).unwrap_or(false);
             let bb = a.get("include_billboard").and_then(|v| v.as_bool()).unwrap_or(false);
-            let doc = lock().doc.clone();
+            let mut doc = lock().doc.clone();
+            if let Some(g) = a.get("include_growth").and_then(|v| v.as_bool()) {
+                doc.growth.export = g;
+            }
             let r = export::export(&doc, &path, fmt, lods, bb)?;
             let files: Vec<String> = r.files.iter().map(|f| f.display().to_string()).collect();
             lock().log(Source::App, format!("exported {}", files.join(", ")));
             let mut out = json!({"files": files, "lods": r.lods});
+            if let Some(g) = &r.growth {
+                out["growth"] = g.clone();
+            }
             if doc.budget.enabled {
                 out["within_budget"] = json!(r.budget.iter().all(|f| !f.over));
                 if let Some(w) = r.budget_warning(doc.budget.fit) {
@@ -1060,7 +1164,10 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             let count = arg_u32(a, "count").ok_or("count is required")?;
             let lods = a.get("include_lods").and_then(|v| v.as_bool()).unwrap_or(false);
             let bb = a.get("include_billboard").and_then(|v| v.as_bool()).unwrap_or(false);
-            let doc = lock().doc.clone();
+            let mut doc = lock().doc.clone();
+            if let Some(g) = a.get("include_growth").and_then(|v| v.as_bool()) {
+                doc.growth.export = g;
+            }
             let first = arg_u32(a, "first_seed").unwrap_or(doc.settings.seed);
             let v = export::export_variations(&doc, &dir, count, first, fmt, lods, bb)?;
             lock().log(Source::App, format!("exported {} variations to {}", v.len(), dir.display()));

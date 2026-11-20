@@ -99,6 +99,11 @@
 <tr><td>Maximum (LOD0)</td><td><code>budget.max</code></td><td>16–5,000,000</td><td>Most triangles for LOD0 when the budgets are derived.</td></tr>
 <tr><td>LOD0 to LOD3</td><td><code>budget.levels</code></td><td>0–5,000,000 each</td><td>Most triangles per level; 0 = no limit.</td></tr>
 <tr><td>Reduce detail to fit</td><td><code>budget.fit</code></td><td>on, off</td><td>On: levels over budget get less detail until they fit. Off: they are only reported.</td></tr>
+<tr><td>Growth: Stages</td><td><code>growth.stages</code></td><td>up to 8, each 0.01–1</td><td>Named moments of the growth animation. See <a href="growth.html">Growth animation</a>.</td></tr>
+<tr><td>Growth: Duration</td><td><code>growth.duration</code></td><td>0.5–600 s</td><td>Length of the whole growth animation.</td></tr>
+<tr><td>Growth: Keyframes</td><td><code>growth.keyframes</code></td><td>4–48</td><td>Shapes the growth is sampled at (morph targets); every stage gets one.</td></tr>
+<tr><td>Growth: Seedling leaves</td><td><code>growth.seedling_leaves</code></td><td>on, off</td><td>A few leaves on the young shoot until the side branches carry their own.</td></tr>
+<tr><td>Growth: Export</td><td><code>growth.export</code></td><td>on, off</td><td>Exports include the growth animation.</td></tr>
 </table>
 
 <h2 id="materials">Materials</h2>

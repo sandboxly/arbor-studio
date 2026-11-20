@@ -22,7 +22,7 @@ the source or the docs in this repository.
   do something else.
 - For line: For game developers and environment artists who need many distinct trees and would rather
   script them than click out each one.
-- Primary CTA: Download for macOS (12.4 MB) — the label follows the visitor's system: Windows (4.8 MB), Linux (6.2 MB). (from release v0.1.0)
+- Primary CTA: Download for macOS (13.5 MB) — the label follows the visitor's system: Windows (4.2 MB), Linux (6.2 MB). (from release v0.1.0)
 - Next to CTA: Free and open source. MIT licence. Source on GitHub.
 - Secondary (text link): Set up the MCP server →
 - Screenshot: a hand-authored oak supplied by the person (home-folder path in the log and status bar shortened to the file name).
@@ -45,7 +45,7 @@ the source or the docs in this repository.
 - Result caption: Birch_v01.glb to Birch_v12.glb, seeds 1 to 12. Each file holds LOD0 to LOD3 and a
   billboard, plus a 4 × 2 billboard atlas PNG.
 - Note: The agent here was a script driving the MCP server, not a chat client.
-- CTA (middle): Download for macOS (12.4 MB) · Set up the MCP server →
+- CTA (middle): Download for macOS (13.5 MB) · Set up the MCP server →
 
 ## 2. What ends up in the file
 
@@ -96,11 +96,11 @@ the source or the docs in this repository.
 ## 6. Download
 
 - H2: Download v0.1.0.
-- Files: macOS 11 or later, Apple silicon and Intel: ArborStudio-macos-universal.zip, 12.4 MB ·
-  Windows 10 or later, 64-bit: arbor_studio-windows-x86_64.zip, 4.8 MB ·
+- Files: macOS 11 or later, Apple silicon and Intel: ArborStudio-macos-universal.dmg, 13.5 MB ·
+  Windows 10 or later, 64-bit: arbor_studio-windows-x86_64.msi, 4.2 MB ·
   Linux x86-64, X11 or Wayland: arbor_studio-linux-x86_64.tar.gz, 6.2 MB.
 - Source: git clone https://github.com/sandboxly/arbor-studio && cargo build --release
-- Docs teaser: 22 help pages with pictures, from a first tree to the full parameter reference.
+- Docs teaser: 23 help pages with pictures, from a first tree to the full parameter reference.
   F1 in the app opens them. Written in Rust; the source is about one folder of modules you can read.
   → keep only the first two sentences plus "Written in Rust."
 

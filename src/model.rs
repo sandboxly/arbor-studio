@@ -720,6 +720,76 @@ pub struct Document {
     pub collision: Collision,
     /// Triangle budgets for the mesh levels of detail.
     pub budget: TriangleBudget,
+    /// Growth animation from a sprout to the mature tree, with named stages.
+    pub growth: Growth,
+}
+
+/// One named moment of the growth animation (0 = nothing above ground, 1 = the mature tree).
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct GrowthStage {
+    pub name: String,
+    pub at: f32,
+}
+
+impl Default for GrowthStage {
+    fn default() -> Self {
+        GrowthStage { name: "Stage".into(), at: 1.0 }
+    }
+}
+
+/// The growth animation: the same mesh moves from a sprout to the mature tree (trunk and
+/// branches lengthen and thicken, side branches sprout as their parent passes them, leaves
+/// unfold), so engines can play it as morph targets.
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct Growth {
+    /// Exports carry the growth animation (GLB: morph targets and clips; OBJ: one file per
+    /// stage; JSON: the growth timing of every stem and leaf).
+    pub export: bool,
+    /// Named stages, in growing order; the last one is normally the mature tree (1.0).
+    pub stages: Vec<GrowthStage>,
+    /// Seconds the whole animation takes, from nothing to the mature tree.
+    pub duration: f32,
+    /// Shapes the animation is sampled at (morph targets); more is smoother and larger.
+    pub keyframes: u32,
+    /// A few leaves on the young shoot before the first side branches grow.
+    pub seedling_leaves: bool,
+}
+
+impl Default for Growth {
+    fn default() -> Self {
+        Growth {
+            export: false,
+            stages: vec![
+                GrowthStage { name: "Sprout".into(), at: 0.12 },
+                GrowthStage { name: "Sapling".into(), at: 0.38 },
+                GrowthStage { name: "Young".into(), at: 0.68 },
+                GrowthStage { name: "Mature".into(), at: 1.0 },
+            ],
+            duration: 12.0,
+            keyframes: 16,
+            seedling_leaves: true,
+        }
+    }
+}
+
+impl Growth {
+    pub const MAX_STAGES: usize = 8;
+
+    pub fn clamp(&mut self) {
+        self.stages.truncate(Self::MAX_STAGES);
+        for st in &mut self.stages {
+            st.at = st.at.clamp(0.01, 1.0);
+            st.name = st.name.trim().chars().take(40).collect();
+            if st.name.is_empty() {
+                st.name = "Stage".into();
+            }
+        }
+        self.stages.sort_by(|a, b| a.at.total_cmp(&b.at));
+        self.duration = self.duration.clamp(0.5, 600.0);
+        self.keyframes = self.keyframes.clamp(4, 48);
+    }
 }
 
 /// Most triangles each mesh level of detail (LOD0 to LOD3) may have. The billboard (LOD4) is
@@ -1088,6 +1158,7 @@ impl Document {
 
     pub fn clamp_all(&mut self) {
         self.settings.clamp();
+        self.growth.clamp();
         self.pruning.clamp();
         self.tidy_nodes();
         for f in &mut self.forces {
@@ -1128,7 +1199,7 @@ struct B {
 
 impl B {
     fn new(name: &str, settings: TreeSettings) -> Self {
-        B { doc: Document { name: name.into(), settings, generators: vec![], next_id: 1, materials: vec![], forces: vec![], pruning: Pruning::default(), nodes: vec![], collision: Collision::default(), budget: TriangleBudget::default() } }
+        B { doc: Document { name: name.into(), settings, generators: vec![], next_id: 1, materials: vec![], forces: vec![], pruning: Pruning::default(), nodes: vec![], collision: Collision::default(), budget: TriangleBudget::default(), growth: Growth::default() } }
     }
     fn add(&mut self, kind: GenKind, parent: Option<u32>, name: &str, f: impl FnOnce(&mut GenParams)) -> u32 {
         let id = self.doc.add(kind, parent, Some(name.into())).unwrap();
@@ -1561,6 +1632,11 @@ pub const SETTINGS_REFERENCE: &[(&str, &str, &str)] = &[
     ("budget.max", "16..5000000", "Most triangles for LOD0 when the budgets are derived from a maximum."),
     ("budget.levels", "[LOD0, LOD1, LOD2, LOD3], 0..5000000", "Most triangles per level when set per level; 0 = no limit for that level."),
     ("budget.fit", "on/off", "On: a level over its budget gets fewer sides, rings and (larger) leaves until it fits. Off: levels keep their usual detail and the ones over budget are reported."),
+    ("growth.export", "on/off", "Exports carry the growth animation: GLB gets morph targets with a Grow clip and one clip per stage, OBJ one file per stage, JSON the growth timing of every stem and leaf."),
+    ("growth.stages", "[{name, at 0.01..1}], up to 8", "Named moments of the growth (0 = nothing above ground, 1 = the mature tree), for example Sprout 0.12, Sapling 0.38, Young 0.68, Mature 1."),
+    ("growth.duration", "0.5..600 s", "Seconds the whole growth animation takes."),
+    ("growth.keyframes", "4..48", "Shapes the animation is sampled at (morph targets). More is smoother and makes larger files."),
+    ("growth.seedling_leaves", "on/off", "A few leaves on the young shoot until the first side branches carry their own."),
 ];
 
 /// (field, range, meaning) for materials — shown over MCP.

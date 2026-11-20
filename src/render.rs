@@ -166,6 +166,10 @@ pub struct ViewState {
     pub node_mode: bool,
     /// Draw the collision capsules over the tree.
     pub show_collision: bool,
+    /// Growth preview: 0 = nothing above ground, 1 = the mature tree (the tree as designed).
+    pub growth: f32,
+    /// Play the growth in the viewport.
+    pub growth_playing: bool,
 }
 
 impl Default for ViewState {
@@ -182,6 +186,8 @@ impl Default for ViewState {
             show_helpers: true,
             node_mode: false,
             show_collision: false,
+            growth: 1.0,
+            growth_playing: false,
         }
     }
 }

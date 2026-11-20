@@ -15,6 +15,7 @@ mod docshots;
 mod export;
 mod gpu;
 mod grow;
+mod growth;
 mod budget;
 mod help;
 mod leafmesh;

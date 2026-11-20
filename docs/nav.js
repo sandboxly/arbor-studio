@@ -25,6 +25,7 @@ const HELP_PAGES = [
   ]],
   ["Output", [
     ["lod.html", "Levels of detail", "lod billboard atlas reduction silhouette triangle budget polygon count warning"],
+    ["growth.html", "Growth animation", "growth grow animation sprout sapling stage morph target blend shape shape key regrow clip"],
     ["export.html", "Exporting", "export glb gltf obj json unity unreal godot variations engine"],
     ["projects.html", "Projects and files", "save open recent undo redo project arbor.json"],
     ["agents.html", "Coding agents (MCP)", "mcp agent claude tools automation headless"],

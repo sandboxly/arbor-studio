@@ -1446,6 +1446,8 @@ pub struct Mesh {
     /// Skeleton stem index per vertex (leaves: the stem they grow on; u32::MAX = none).
     pub stem: Vec<u32>,
     pub leaf: Vec<bool>,
+    /// First vertex of each skeleton leaf (leaf `i` owns vertices `leaf_first[i]..leaf_first[i + 1]`).
+    pub leaf_first: Vec<u32>,
     /// Bark triangles first, then leaf triangles from `leaf_tri_start`.
     pub tris: Vec<[u32; 3]>,
     pub leaf_tri_start: usize,
@@ -1718,6 +1720,7 @@ pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) ->
     m.leaf_tri_start = m.tris.len();
     let mut rng = Rng::new(&[doc.settings.seed as u64, 77]);
     for l in &sk.leaves {
+        m.leaf_first.push(m.pos.len() as u32);
         let st = &sk.stems[l.stem];
         let sway = (base_sway[l.stem] + 0.3).min(1.0);
         let c = l.color;

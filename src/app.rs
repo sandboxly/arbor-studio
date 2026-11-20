@@ -84,6 +84,10 @@ pub struct ArborApp {
     /// Billboard atlas shown when the viewport is at LOD 4.
     bb_tex: Option<egui::TextureHandle>,
     pending_atlas: Option<std::sync::Arc<image::RgbaImage>>,
+    /// Growth preview: moves the shown mesh's vertices (made when first needed).
+    grower: Option<crate::growth::Grower>,
+    /// The shown mesh at the previewed growth.
+    grown: Option<(f32, Mesh)>,
 }
 
 pub fn setup_style(ctx: &egui::Context) {
@@ -169,6 +173,8 @@ impl ArborApp {
             variation_count: 5,
             bb_tex: None,
             pending_atlas: None,
+            grower: None,
+            grown: None,
         }
     }
 
@@ -190,6 +196,8 @@ impl ArborApp {
             self.stats = self.mesh.stats(&self.skeleton);
             self.fit = lm.fit;
             self.built = Some((sh.doc.clone(), lod));
+            self.grower = None;
+            self.grown = None;
         }
         if sh.frame_camera {
             sh.frame_camera = false;
@@ -548,6 +556,10 @@ impl eframe::App for ArborApp {
                 ui.separator();
                 let wind_label = if sh.view.wind_playing { "⏸ Wind" } else { "▶ Wind" };
                 ui.toggle_value(&mut sh.view.wind_playing, wind_label).on_hover_text("Preview wind animation");
+                let grow_label = if sh.view.growth_playing { "⏸ Grow" } else { "▶ Grow" };
+                if ui.selectable_label(sh.view.growth_playing, grow_label).on_hover_text("Play the growth from a sprout to the mature tree (Tree › Growth)").clicked() {
+                    toggle_growth(&mut sh.view);
+                }
                 ui.separator();
                 ui.label("LOD");
                 for l in 0..4u32 {
@@ -832,6 +844,13 @@ impl eframe::App for ArborApp {
             if sh.view.wind_playing {
                 ctx.request_repaint();
             }
+            if sh.view.growth_playing {
+                sh.view.growth = (sh.view.growth + dt / sh.doc.growth.duration.max(0.5)).min(1.0);
+                if sh.view.growth >= 1.0 {
+                    sh.view.growth_playing = false;
+                }
+                ctx.request_repaint();
+            }
             // briefly flash a newly selected generator in the viewport
             if sh.selected != self.last_selected {
                 if self.last_selected.is_some() || self.frames > 5 {
@@ -847,14 +866,27 @@ impl eframe::App for ArborApp {
             let mut view = sh.view.clone();
             view.highlight_selection = shown.is_some();
             let painter = ui.painter_at(rect);
-            let args = render::DrawArgs { doc: &sh.doc, mesh: &self.mesh, skeleton: &self.skeleton, view: &view, selected: shown, time: self.time, textures: &self.mat_textures, normals: &self.mat_normals, selected_stem: if sh.view.node_mode { sh.selected_node.and_then(|k| self.skeleton.stems.iter().position(|s| s.key == k)).map(|i| i as u32) } else { None }, gpu: if self.has_gl { Some(&self.gpu) } else { None } };
+            let growing = sh.view.growth < 1.0;
+            if growing && self.grown.as_ref().map(|(g, _)| *g) != Some(sh.view.growth) {
+                if self.grower.is_none() {
+                    let timing = crate::growth::Timing::new(&self.skeleton);
+                    self.grower = Some(crate::growth::Grower::new(&sh.doc.growth, &self.skeleton, &self.mesh, &timing));
+                }
+                let gm = self.grower.as_ref().unwrap().mesh_at(&self.mesh, sh.view.growth);
+                self.grown = Some((sh.view.growth, gm));
+            }
+            let shown_mesh = match &self.grown {
+                Some((_, gm)) if growing => gm,
+                _ => &self.mesh,
+            };
+            let args = render::DrawArgs { doc: &sh.doc, mesh: shown_mesh, skeleton: &self.skeleton, view: &view, selected: shown, time: self.time, textures: &self.mat_textures, normals: &self.mat_normals, selected_stem: if sh.view.node_mode { sh.selected_node.and_then(|k| self.skeleton.stems.iter().position(|s| s.key == k)).map(|i| i as u32) } else { None }, gpu: if self.has_gl { Some(&self.gpu) } else { None } };
             self.pick = render::draw(&painter, rect, &args);
             let info = format!(
                 "Perspective · {} · LOD{}{}",
                 sh.view.mode.label(),
                 sh.view.lod,
                 if sh.view.wind_playing { " · Wind" } else { "" }
-            );
+            ) + &growth_label(&sh.doc.growth, sh.view.growth);
             painter.text(rect.left_top() + egui::vec2(12.0, 10.0), egui::Align2::LEFT_TOP, info, egui::FontId::proportional(12.5), Color32::from_gray(230));
             // lighting switches, under the view label
             let light_rect = egui::Rect::from_min_size(rect.left_top() + egui::vec2(8.0, 30.0), egui::vec2(380.0, 22.0));
@@ -1303,7 +1335,109 @@ fn properties_ui(ui: &mut Ui, sh: &mut Shared, stats: &Stats, editing_material: 
         ui.add_space(6.0);
         budget_ui(ui, sh);
     });
+    growth_ui(ui, sh);
+    // room below the last section, so its last rows scroll fully into view
+    ui.add_space(16.0);
     sh.doc.settings.clamp();
+}
+
+/// Start the growth preview (from the start when it is at the mature tree), or pause it.
+fn toggle_growth(v: &mut render::ViewState) {
+    if v.growth_playing {
+        v.growth_playing = false;
+    } else {
+        if v.growth >= 0.999 {
+            v.growth = 0.0;
+        }
+        v.growth_playing = true;
+    }
+}
+
+/// " · Growth 38% (Sapling)" for the viewport label while the growth is previewed.
+fn growth_label(g: &crate::model::Growth, at: f32) -> String {
+    if at >= 1.0 {
+        return String::new();
+    }
+    let stage = g.stages.iter().find(|s| (s.at - at).abs() < 0.002).map(|s| format!(" ({})", s.name)).unwrap_or_default();
+    format!(" · Growth {:.0}%{stage}", at * 100.0)
+}
+
+/// Growth animation: preview, stages and export settings.
+fn growth_ui(ui: &mut Ui, sh: &mut Shared) {
+    egui::CollapsingHeader::new("Growth").default_open(false).open(force_open("Growth")).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            let label = if sh.view.growth_playing { "⏸ Pause" } else { "▶ Grow" };
+            if ui.button(label).on_hover_text("Play the growth in the viewport, from nothing to the mature tree").clicked() {
+                toggle_growth(&mut sh.view);
+            }
+            if ui.add(egui::Slider::new(&mut sh.view.growth, 0.0..=1.0).show_value(false)).on_hover_text("Scrub through the growth: 0 = nothing above ground, 1 = the mature tree").changed() {
+                sh.view.growth_playing = false;
+            }
+            ui.label(RichText::new(format!("{:.0}%", sh.view.growth * 100.0)).color(HEADER));
+        });
+        ui.horizontal_wrapped(|ui| {
+            for st in &sh.doc.growth.stages {
+                let on = (sh.view.growth - st.at).abs() < 0.002;
+                if ui.selectable_label(on, &st.name).on_hover_text(format!("Show the tree at {} ({:.0}% of the growth)", st.name, st.at * 100.0)).clicked() {
+                    sh.view.growth = st.at;
+                    sh.view.growth_playing = false;
+                }
+            }
+        });
+        ui.add_space(6.0);
+        section_title(ui, "Stages");
+        let g = &mut sh.doc.growth;
+        let mut remove = None;
+        let mut jump = None;
+        egui::Grid::new("growth_stages").num_columns(3).show(ui, |ui| {
+            let n = g.stages.len();
+            for (i, st) in g.stages.iter_mut().enumerate() {
+                ui.add_sized([86.0, 20.0], egui::TextEdit::singleline(&mut st.name)).on_hover_text(help_for("growth.stages"));
+                let r = ui.add(egui::Slider::new(&mut st.at, 0.01..=1.0).fixed_decimals(2)).on_hover_text(help_for("growth.stages"));
+                if r.changed() {
+                    jump = Some(st.at);
+                }
+                if n > 1 && ui.small_button("🗑").on_hover_text("Remove this stage").clicked() {
+                    remove = Some(i);
+                }
+                ui.end_row();
+            }
+        });
+        if let Some(i) = remove {
+            g.stages.remove(i);
+        }
+        if let Some(at) = jump {
+            sh.view.growth = at;
+            sh.view.growth_playing = false;
+        }
+        let g = &mut sh.doc.growth;
+        if g.stages.len() < crate::model::Growth::MAX_STAGES && ui.small_button("+ Stage").on_hover_text("Add a stage halfway between the last two").clicked() {
+            let n = g.stages.len();
+            let at = match n {
+                0 => 1.0,
+                1 => g.stages[0].at * 0.5,
+                _ => 0.5 * (g.stages[n - 2].at + g.stages[n - 1].at),
+            };
+            g.stages.push(crate::model::GrowthStage { name: format!("Stage {}", n + 1), at });
+            g.stages.sort_by(|a, b| a.at.total_cmp(&b.at));
+        }
+        ui.add_space(6.0);
+        egui::Grid::new("growth_settings").num_columns(2).show(ui, |ui| {
+            prow(ui, "Duration", "growth.duration", |ui| ui.add(egui::Slider::new(&mut g.duration, 0.5..=120.0).suffix(" s").logarithmic(true)));
+            prow(ui, "Keyframes", "growth.keyframes", |ui| ui.add(egui::Slider::new(&mut g.keyframes, 4..=48)));
+            prow(ui, "Seedling leaves", "growth.seedling_leaves", |ui| ui.checkbox(&mut g.seedling_leaves, ""));
+            prow(ui, "Export", "growth.export", |ui| ui.checkbox(&mut g.export, "Include the growth in exports"));
+        });
+        let keys = crate::growth::keyframes(g).len();
+        ui.label(
+            RichText::new(format!(
+                "GLB: {} morph targets, a Grow clip and one clip per stage. OBJ: one file per stage. JSON: the growth timing of every stem and leaf.",
+                keys - 1
+            ))
+            .size(11.0)
+            .color(HEADER),
+        );
+    });
 }
 
 /// Triangle budget controls and the check of all four mesh levels.
