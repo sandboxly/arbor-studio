@@ -27,15 +27,18 @@ Linux also needs the usual window-system libraries, e.g. on Ubuntu:
     arbor_studio --screenshot out.png       # save a picture of the window and exit
     arbor_studio --shot-script steps.json   # take the help's screenshots (see src/docshots.rs) and exit
 
-## Help
+## Website and help
 
-The user guide is in `docs/` as plain HTML pages with screenshots, published to GitHub Pages at
-https://sandboxly.github.io/arbor-studio/ by `.github/workflows/docs.yml` on every push to `main` that
-changes `docs/`. In the app, F1 or **Help → ArborStudio Help** opens it in the default web browser
-(`src/help.rs`; set `ARBOR_HELP_URL` to point the app at another copy, for example `file:///…/docs/`).
-The pages follow the Arbor Studio design system (`docs/ds/tokens.css` and `docs/ds/components.css`; dark
+The project website is https://sandboxly.github.io/arbor-studio/. `.github/workflows/docs.yml` builds it on
+every push to `main` that changes `site/` or `docs/`: the landing page in `site/` becomes the root and the
+user guide in `docs/` (plain HTML pages with screenshots) is published under `/docs/`. In the app, F1 or
+**Help → ArborStudio Help** opens the guide in the default web browser (`src/help.rs`; set `ARBOR_HELP_URL`
+to point the app at another copy, for example `file:///…/docs/`).
+
+Both follow the Arbor Studio design system (`docs/ds/tokens.css` and `docs/ds/components.css`; dark
 grounds, one forest-green accent, hairline borders) and use its typefaces Space Grotesk, Geist and
-JetBrains Mono, bundled in `docs/fonts` under the SIL Open Font License.
+JetBrains Mono, bundled in `docs/fonts` under the SIL Open Font License. To preview the website locally,
+copy `site/` into an empty folder and `docs/` into its `docs` subfolder, then open `index.html`.
 
 ## Menus and recent projects
 

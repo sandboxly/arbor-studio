@@ -1,11 +1,12 @@
-# Publishes the help pages in docs/ to GitHub Pages.
+# Publishes the project website to GitHub Pages: the landing page in site/ at the root and the
+# help pages in docs/ under /docs/ (the app's F1 opens https://<owner>.github.io/<repo>/docs/).
 # One-time setup: Settings > Pages > Build and deployment > Source: GitHub Actions.
-name: Help pages
+name: Website
 
 on:
   push:
     branches: [main]
-    paths: ["docs/**", ".github/workflows/docs.yml"]
+    paths: ["site/**", "docs/**", ".github/workflows/docs.yml"]
   workflow_dispatch:
 
 permissions:
@@ -25,9 +26,15 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Assemble the site
+        run: |
+          mkdir _site
+          cp -R site/. _site/
+          cp -R docs _site/docs
+          touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

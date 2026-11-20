@@ -41,6 +41,9 @@ const HELP_PAGES = [
   const here = location.pathname.split("/").pop() || "index.html";
   const flat = [];
   let html = '<a class="brand" href="index.html"><span class="brand-name">ArborStudio</span><span class="brand-label">Help</span></a>';
+  // the help is published under docs/ of the project website; offline copies link to the online home
+  const home = location.protocol.startsWith("http") ? "../" : "https://sandboxly.github.io/arbor-studio/";
+  html += `<a class="home" href="${home}">← ArborStudio home</a>`;
   html += '<input type="search" id="nav-filter" placeholder="Filter topics" aria-label="Filter topics">';
   let section = "";
   for (const [group, pages] of HELP_PAGES) {

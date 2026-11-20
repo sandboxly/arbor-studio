@@ -1,8 +1,9 @@
-//! Opens the online help (the `docs` folder, published to GitHub Pages) in the default web browser.
+//! Opens the online help in the default web browser. The `docs` folder is published under
+//! `docs/` of the project website on GitHub Pages; `site/` is the website's landing page.
 
 /// Where the help is published. `ARBOR_HELP_URL` points the app at another copy,
 /// for example a local folder (`file:///…/docs/`) while writing the pages.
-pub const HELP_URL: &str = "https://sandboxly.github.io/arbor-studio/";
+pub const HELP_URL: &str = "https://sandboxly.github.io/arbor-studio/docs/";
 
 /// The address of one help page, for example `shortcuts.html` or `lod.html#billboard`.
 pub fn url(page: &str) -> String {
