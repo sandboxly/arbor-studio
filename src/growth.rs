@@ -152,15 +152,18 @@ pub fn keyframes(growth: &Growth) -> Vec<f32> {
 enum Bind {
     /// Grows with the trunk's size only (billboard cards, anything without a stem).
     Fixed,
-    /// On stem `s`, whose axis passes `c` there.
-    Stem { s: u32, c: Vec3 },
+    /// On stem `s` at arc fraction `t`, whose axis passes `c` there.
+    Stem { s: u32, t: f32, c: Vec3 },
+    /// On the rim of the opening in stem `s`'s bark where branch `child` comes out.
+    Rim { s: u32, t: f32, c: Vec3, child: u32 },
     /// Part of leaf `l`.
     Leaf { l: u32 },
 }
 
 struct LeafInfo {
-    /// The point of its stem's axis nearest to the stalk.
+    /// The point of its stem's axis nearest to the stalk, and its arc fraction there.
     axis: Vec3,
+    t: f32,
     anchor: Vec3,
     side: Vec3,
     dir: Vec3,
@@ -180,10 +183,25 @@ struct Pose {
 }
 
 impl Pose {
-    /// A point of the full-size stem with axis point `c`.
-    fn place(&self, c: Vec3, q: Vec3) -> Vec3 {
-        self.at + (c - self.base) * self.scale + (q - c) * self.thick
+    /// Thickness at arc fraction `t`: a young shoot tapers to a point, the full-size stem has
+    /// its own taper.
+    fn thick_at(&self, t: f32) -> f32 {
+        self.thick * (1.0 - (1.0 - self.scale) * 0.95 * t.clamp(0.0, 1.0))
     }
+
+    /// A point `q` of the full-size stem whose axis passes `c` at arc fraction `t`.
+    fn place(&self, c: Vec3, q: Vec3, t: f32) -> Vec3 {
+        self.at + (c - self.base) * self.scale + (q - c) * self.thick_at(t)
+    }
+}
+
+/// Where the opening for a branch closes to while the branch is small.
+#[derive(Clone, Copy)]
+struct Opening {
+    /// Centre of the rim (full size), and the parent's axis point and arc fraction there.
+    centre: Vec3,
+    c: Vec3,
+    t: f32,
 }
 
 /// Moves the vertices of one mesh (built from `sk`) to any point of the growth.
@@ -191,8 +209,10 @@ pub struct Grower {
     pub timing: Timing,
     base: Vec<Vec3>,
     bind: Vec<Bind>,
-    /// Per stem: parent, and the parent's axis point where it starts.
-    parents: Vec<Option<(usize, Vec3)>>,
+    /// Per stem: parent, and the parent's axis point and arc fraction where it starts.
+    parents: Vec<Option<(usize, Vec3, f32)>>,
+    /// Per stem: the opening in its parent's bark, if it was joined with one.
+    openings: Vec<Option<Opening>>,
     stem_base: Vec<Vec3>,
     leaves: Vec<LeafInfo>,
     /// Per leaf: the stem it grows on.
@@ -227,11 +247,45 @@ impl Grower {
             }
             let s = m.stem.get(v).copied().unwrap_or(u32::MAX);
             if (s as usize) < sk.stems.len() {
-                let (_, c) = locate(&sk.stems[s as usize], m.pos[v]);
-                bind[v] = Bind::Stem { s, c };
+                let (t, c) = locate(&sk.stems[s as usize], m.pos[v]);
+                bind[v] = Bind::Stem { s, t, c };
             }
         }
-        let parents = sk.stems.iter().map(|st| st.parent.map(|p| (p, locate(&sk.stems[p], st.points[0]).1))).collect();
+        // openings cut into the parents' bark: their rims close while the branch is small
+        let mut openings: Vec<Option<Opening>> = vec![None; sk.stems.len()];
+        let mut rims: Vec<Vec<u32>> = vec![vec![]; sk.stems.len()];
+        for &(v, child) in &m.joint_rim {
+            if (child as usize) < sk.stems.len() && (v as usize) < m.pos.len() {
+                rims[child as usize].push(v);
+            }
+        }
+        for (child, rim) in rims.iter().enumerate() {
+            let Some(p) = sk.stems[child].parent else { continue };
+            if rim.is_empty() {
+                continue;
+            }
+            let centre = rim.iter().map(|&v| m.pos[v as usize]).sum::<Vec3>() / rim.len() as f32;
+            let (t, c) = locate(&sk.stems[p], centre);
+            openings[child] = Some(Opening { centre, c, t });
+            for &v in rim {
+                // a vertex shared by two openings closes with the first
+                if let Bind::Stem { s, t, c } = bind[v as usize] {
+                    if s as usize == p {
+                        bind[v as usize] = Bind::Rim { s, t, c, child: child as u32 };
+                    }
+                }
+            }
+        }
+        let parents = sk
+            .stems
+            .iter()
+            .map(|st| {
+                st.parent.map(|p| {
+                    let (t, c) = locate(&sk.stems[p], st.points[0]);
+                    (p, c, t)
+                })
+            })
+            .collect();
         let stem_base = sk.stems.iter().map(|st| st.points[0]).collect();
         let leader = sk.stems.iter().position(|s| s.parent.is_none() && !s.root);
         // seedling leaves: some of the leaves that come late, spread over the whole set
@@ -251,13 +305,13 @@ impl Grower {
             .map(|(i, l)| {
                 let dir = l.dir.normalize_or(Vec3::Y);
                 let normal = l.normal.normalize_or(Vec3::Z);
-                let axis = locate(&sk.stems[l.stem], l.pos).1;
-                LeafInfo { axis, anchor: l.pos, side: normal.cross(dir).normalize_or(Vec3::X), dir, normal, seedling: seedling[i] }
+                let (t, axis) = locate(&sk.stems[l.stem], l.pos);
+                LeafInfo { axis, t, anchor: l.pos, side: normal.cross(dir).normalize_or(Vec3::X), dir, normal, seedling: seedling[i] }
             })
             .collect();
         let leader_axis = leader.map(|i| sk.stems[i].points.clone()).unwrap_or_default();
         let leaf_stems = sk.leaves.iter().map(|l| l.stem).collect();
-        Grower { timing, base: m.pos.clone(), bind, parents, stem_base, leaves, leaf_stems, leader, leader_axis, trunk_pose: leader }
+        Grower { timing, base: m.pos.clone(), bind, parents, openings, stem_base, leaves, leaf_stems, leader, leader_axis, trunk_pose: leader }
     }
 
     /// Every stem's pose at growth `g` (parents come before their children in a skeleton,
@@ -269,13 +323,16 @@ impl Grower {
             if let Some(p) = out[i] {
                 return p;
             }
-            let scale = gr.timing.scale(i, g);
             let base = gr.stem_base[i];
-            let at = match gr.parents[i] {
-                None => base,
-                Some((p, c)) => pose(p, g, gr, out).place(c, base),
+            let (at, scale) = match gr.parents[i] {
+                None => (base, gr.timing.scale(i, g)),
+                Some((p, c, t)) => {
+                    let pp = pose(p, g, gr, out);
+                    // a branch is never further along than the stem it grows on
+                    (pp.place(c, base, t), gr.timing.scale(i, g).min(pp.scale))
+                }
             };
-            let p = Pose { at, base, scale, thick: scale.powf(0.75) };
+            let p = Pose { at, base, scale, thick: scale.powf(0.85) };
             out[i] = Some(p);
             p
         }
@@ -297,7 +354,20 @@ impl Grower {
             let p0 = self.base[v];
             let p = match *b {
                 Bind::Fixed => p0 * tree,
-                Bind::Stem { s, c } => poses[s as usize].place(c, p0),
+                Bind::Stem { s, t, c } => poses[s as usize].place(c, p0, t),
+                Bind::Rim { s, t, c, child } => {
+                    // the opening is as wide as the branch is thick now, relative to its parent
+                    let pose = poses[s as usize];
+                    let here = pose.place(c, p0, t);
+                    match self.openings[child as usize] {
+                        Some(o) => {
+                            let centre = pose.place(o.c, o.centre, o.t);
+                            let k = (poses[child as usize].thick / pose.thick_at(o.t).max(1e-6)).clamp(0.0, 1.0);
+                            centre + (here - centre) * k
+                        }
+                        None => here,
+                    }
+                }
                 Bind::Leaf { l } => {
                     let li = &self.leaves[l as usize];
                     let d = p0 - li.anchor;
@@ -307,7 +377,7 @@ impl Grower {
                             let f = 1.0 - 0.35 * (k as f32 + 0.5) / n as f32;
                             let ax = &self.leader_axis;
                             let c = ax[0].lerp(*ax.last().unwrap(), f);
-                            let at = poses[ls].place(c, c);
+                            let at = poses[ls].place(c, c, f);
                             let phi = k as f32 * 2.399_963;
                             let dir = Vec3::new(phi.cos(), 0.9, phi.sin()).normalize();
                             let normal = (Vec3::Y - dir * dir.y).normalize_or(Vec3::X);
@@ -319,7 +389,7 @@ impl Grower {
                             let st = self.leaf_stem(l as usize);
                             let pose = poses[st];
                             let k = self.timing.leaf(l as usize, g) * (0.45 + 0.55 * pose.scale);
-                            pose.place(li.axis, li.anchor) + d * k
+                            pose.place(li.axis, li.anchor, li.t) + d * k
                         }
                     }
                 }

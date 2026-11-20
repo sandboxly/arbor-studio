@@ -877,6 +877,9 @@ fn join_branch(m: &mut Mesh, sk: &Skeleton, grids: &[Grid], removed: &mut [Vec<b
             m.pos.len() as u32 - 1
         })
         .collect();
+    for &v in rim.iter().chain(rim_ext.iter()) {
+        m.joint_rim.push((v, si as u32));
+    }
     let (mut i, mut j) = (0usize, 0usize);
     while i < nb || j < nc {
         let tb = if i < nb { fb[i + 1] } else { f32::MAX };
@@ -1448,6 +1451,9 @@ pub struct Mesh {
     pub leaf: Vec<bool>,
     /// First vertex of each skeleton leaf (leaf `i` owns vertices `leaf_first[i]..leaf_first[i + 1]`).
     pub leaf_first: Vec<u32>,
+    /// Rim of the opening cut into a parent's bark for a joined branch: (vertex, branch stem).
+    /// The growth animation closes these openings while the branch is still small.
+    pub joint_rim: Vec<(u32, u32)>,
     /// Bark triangles first, then leaf triangles from `leaf_tri_start`.
     pub tris: Vec<[u32; 3]>,
     pub leaf_tri_start: usize,
