@@ -277,7 +277,7 @@ pub fn tool_list() -> Vec<Value> {
             "highlight_selection": {"type": "boolean", "description": "Tint the selected generator in the viewport"},
             "lighting": {"type": "string", "enum": ["unlit", "morning", "noon", "evening", "night"], "description": "Viewport lighting preset (also used by render_preview)"}
         }), &[]),
-        tool("get_stats", "Statistics", "Stem, leaf, vertex and triangle counts plus height and crown width, for one LOD level or all.", json!({"lod": {"type": "integer", "minimum": 0, "maximum": 4}, "all_lods": {"type": "boolean"}}), &[]),
+        tool("get_stats", "Statistics", "Stem, leaf, vertex and triangle counts plus height and crown width, for one LOD level or all; LOD0..3 also give the leaf card area in m² (leaf_area.card_m2, one side) and the part the alpha cut-out keeps (leaf_area.opaque_m2).", json!({"lod": {"type": "integer", "minimum": 0, "maximum": 4}, "all_lods": {"type": "boolean"}}), &[]),
         tool("render_preview", "Render preview", "Render the tree to a PNG image (works even when the window is hidden). The tree is fitted in view from the window's yaw/pitch unless use_window_camera is true; yaw/pitch/distance override.", json!({
             "use_window_camera": {"type": "boolean"},
             "lighting": {"type": "string", "enum": ["unlit", "morning", "noon", "evening", "night"], "description": "Lighting preset; default: the window's"},
@@ -361,9 +361,10 @@ pub fn tool_list() -> Vec<Value> {
             "max": {"type": "integer", "minimum": 16, "maximum": 5000000, "description": "Maximum for LOD0; the other levels are derived from it"},
             "levels": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 5000000}, "minItems": 4, "maxItems": 4, "description": "Budgets for LOD0..LOD3 (0 = no limit)"},
             "auto": {"type": "boolean", "description": "true: derive from max; false: use levels (set automatically when max or levels is given)"},
-            "fit": {"type": "boolean", "description": "Reduce detail until each level fits (default true)"}
+            "fit": {"type": "boolean", "description": "Reduce detail until each level fits (default true)"},
+            "leaf_area": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 4, "maxItems": 4, "description": "Most leaf card area in m² (one side) for LOD0..LOD3, 0 = no limit. Card area is the overdraw cost of the foliage; it is checked and reported (area_over), not fitted."}
         }), &[]),
-        tool("check_triangle_budget", "Check triangle budget", "Check the current tree against its triangle budgets: for each mesh level (LOD0..LOD3, or only `lod`) the budget, the triangles it has, the triangles at its usual detail, whether detail was reduced to fit and whether it is over budget. within_budget is true when no level is over. Works when budgets are off too (then there is no budget to be over).", json!({
+        tool("check_triangle_budget", "Check triangle budget", "Check the current tree against its triangle budgets: for each mesh level (LOD0..LOD3, or only `lod`) the budget, the triangles it has, the triangles at its usual detail, whether detail was reduced to fit and whether it is over budget. within_budget is true when no level is over. Each level also reports its leaf card area in m² (leaf_area.card_m2, one side of each card) and the part the alpha cut-out keeps (leaf_area.opaque_m2, null when no leaf material cuts out), against the leaf area budget when one is set. Works when budgets are off too (then there is no budget to be over).", json!({
             "lod": {"type": "integer", "minimum": 0, "maximum": 3, "description": "Check one level only"}
         }), &[]),
         tool("set_growth", "Set growth", "The growth animation: the tree grows from a seedling to the mature tree on one mesh (the whole tree grows at once: a young tree is a small, slender tree with its branches, they come out of closed bark, and leaves keep coming so the crown gets denser), so engines play it as morph targets. Stages are named moments of the growth, from 0 (nothing above ground) to 1 (the mature tree); exports get a Grow clip and one clip per stage (first stage: from nothing; then '<A> to <B>'). Only the given fields change. Returns the settings, the keyframes and the clips with their times. Preview with render_preview growth/growth_stage or set_view.", json!({
@@ -493,14 +494,15 @@ fn budget_check(doc: &Document, lod: Option<u32>) -> Value {
         .map(|f| {
             json!({
                 "lod": f.lod, "budget": f.budget, "triangles": f.triangles, "usual_triangles": f.usual_triangles,
-                "reduced": f.reduced, "over": f.over, "reduction": f.reduction, "message": f.message(doc.budget.fit)
+                "reduced": f.reduced, "over": f.over, "reduction": f.reduction, "message": f.message(doc.budget.fit),
+                "leaf_area": f.leaf_area, "leaf_area_budget_m2": f.area_budget, "area_over": f.area_over, "leaf_area_message": f.area_message()
             })
         })
         .collect();
     json!({
         "budget": doc.budget,
         "budgets_in_effect": doc.budget.enabled.then(|| doc.budget.derived()),
-        "within_budget": levels.iter().all(|f| !f.over),
+        "within_budget": levels.iter().all(|f| !f.over && !f.area_over),
         "levels": rows,
         "billboard": "LOD4 is always 16 triangles and has no budget"
     })
@@ -508,7 +510,11 @@ fn budget_check(doc: &Document, lod: Option<u32>) -> Value {
 
 fn stats_for(doc: &Document, lod: u32) -> Value {
     let l = crate::billboard::lod_mesh(doc, lod);
-    json!(l.mesh.stats(&l.skeleton))
+    let mut v = json!(l.mesh.stats(&l.skeleton));
+    if let Some(f) = &l.fit {
+        v["leaf_area"] = json!(f.leaf_area);
+    }
+    v
 }
 
 fn gen_json(doc: &Document, g: &Generator) -> Value {
@@ -799,6 +805,14 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             }
             if let Some(v) = a.get("fit").and_then(|v| v.as_bool()) {
                 b.fit = v;
+            }
+            if let Some(v) = a.get("leaf_area").and_then(|v| v.as_array()) {
+                let l: Vec<f32> = v.iter().filter_map(|x| x.as_f64()).map(|x| x as f32).collect();
+                if l.len() != 4 {
+                    return Err("leaf_area needs four numbers: LOD0, LOD1, LOD2, LOD3 (m², 0 = no limit)".into());
+                }
+                b.leaf_area.copy_from_slice(&l);
+                b.enabled = true;
             }
             if let Some(v) = a.get("enabled").and_then(|v| v.as_bool()) {
                 b.enabled = v;
@@ -1393,7 +1407,13 @@ fn material_schema(adding: bool) -> Value {
         "roughness": {"type": "number", "minimum": 0, "maximum": 1},
         "tiling": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2, "description": "Bark texture repeats [around, along] a stem"},
         "alpha_cutout": {"type": "boolean", "description": "Transparent texture pixels become holes (leaf cards)"},
-        "double_sided": {"type": "boolean"}
+        "double_sided": {"type": "boolean"},
+        "atlas": {"type": "array", "maxItems": 64, "items": {"type": "object", "properties": {
+            "rect": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4, "description": "[left, top, width, height] of one leaf picture, origin at the image's top left"},
+            "pivot": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2, "description": "[x, y] where the stalk meets the twig, in the image (same units as rect; default: middle of the rectangle's bottom edge)"},
+            "weight": {"type": "number", "minimum": 0, "description": "How often this picture is used compared with the others (default 1)"}
+        }, "required": ["rect"]}, "description": "Leaf texture atlas: each leaf using this material shows one of these pictures, picked at random by weight, on a card with the picture's proportions hanging from its pivot (leaf_shape card; other shapes only take the picture's texture coordinates). [] = the whole image."},
+        "atlas_units": {"type": "string", "enum": ["px", "uv"], "description": "Units of atlas rect and pivot: px = pixels of the texture file (default), uv = shares of the image 0..1"}
     });
     if adding {
         props["assign_to"] = json!({"type": "array", "items": {"type": "integer"}, "description": "Generator ids that should use the new material"});
@@ -1407,6 +1427,22 @@ fn material_json(doc: &Document, m: &Material) -> Value {
     let users: Vec<Value> = doc.material_users(m.id).iter().map(|g| json!({"id": g.id, "name": g.name})).collect();
     let mut v = serde_json::to_value(m).unwrap();
     v["used_by"] = json!(users);
+    if !m.atlas.is_empty() {
+        // the same pictures in pixels of the texture file, as add/update_material take them
+        if let Some((w, h)) = m.texture.as_deref().and_then(|t| crate::textures::check(t).ok()) {
+            let (w, h) = (w as f32, h as f32);
+            let r = |x: f32| (x * 10.0).round() / 10.0;
+            v["atlas_px"] = json!(m
+                .atlas
+                .iter()
+                .map(|c| json!({
+                    "rect": [r(c.rect[0] * w), r(c.rect[1] * h), r(c.rect[2] * w), r(c.rect[3] * h)],
+                    "pivot": [r((c.rect[0] + c.pivot[0] * c.rect[2]) * w), r((c.rect[1] + c.pivot[1] * c.rect[3]) * h)],
+                    "weight": c.weight
+                }))
+                .collect::<Vec<_>>());
+        }
+    }
     if let Some(t) = &m.texture {
         v["texture_status"] = json!(match crate::textures::check(t) {
             Ok((w, h)) => match crate::textures::preview_size(t) {
@@ -1454,6 +1490,50 @@ fn apply_material_patch(m: &mut Material, a: &Value) -> Result<(), String> {
         }
     }
     merge_into(m, &Value::Object(patch), "material")?;
+    if let Some(v) = a.get("atlas") {
+        let arr = v.as_array().ok_or("atlas must be an array")?;
+        if arr.len() > MAX_ATLAS_CELLS {
+            return Err(format!("at most {MAX_ATLAS_CELLS} atlas pictures"));
+        }
+        let px = !matches!(a.get("atlas_units").and_then(|u| u.as_str()), Some("uv"));
+        let (w, h) = if px {
+            let t = m.texture.as_deref().ok_or("atlas in pixels needs the material's texture (or give atlas_units: uv)")?;
+            let (w, h) = crate::textures::check(t)?;
+            (w as f32, h as f32)
+        } else {
+            (1.0, 1.0)
+        };
+        let mut cells = vec![];
+        for c in arr {
+            let nums = |k: &str, n: usize| -> Result<Option<Vec<f32>>, String> {
+                match c.get(k) {
+                    None | Some(Value::Null) => Ok(None),
+                    Some(v) => {
+                        let xs: Vec<f32> = v.as_array().ok_or(format!("atlas {k} must be an array"))?.iter().filter_map(|x| x.as_f64()).map(|x| x as f32).collect();
+                        if xs.len() != n {
+                            return Err(format!("atlas {k} needs {n} numbers"));
+                        }
+                        Ok(Some(xs))
+                    }
+                }
+            };
+            let r = nums("rect", 4)?.ok_or("every atlas picture needs rect [left, top, width, height]")?;
+            if r[2] <= 0.0 || r[3] <= 0.0 {
+                return Err("atlas rect width and height must be above 0".into());
+            }
+            let rect = [r[0] / w, r[1] / h, r[2] / w, r[3] / h];
+            let pivot = match nums("pivot", 2)? {
+                Some(p) => [(p[0] - r[0]) / r[2], (p[1] - r[1]) / r[3]],
+                None => [0.5, 1.0],
+            };
+            if !(-0.001..=1.001).contains(&pivot[0]) || !(-0.001..=1.001).contains(&pivot[1]) {
+                return Err("the atlas pivot must be inside its rect".into());
+            }
+            let weight = c.get("weight").and_then(|x| x.as_f64()).unwrap_or(1.0) as f32;
+            cells.push(AtlasCell { rect, pivot, weight });
+        }
+        m.atlas = cells;
+    }
     m.clamp();
     Ok(())
 }

@@ -895,7 +895,50 @@ pub struct Material {
     /// Treat transparent texture pixels as holes (for leaf cards).
     pub alpha_cutout: bool,
     pub double_sided: bool,
+    /// Leaf pictures in a texture atlas: each leaf using this material shows one of them
+    /// (picked at random by weight), as a card shaped like the picture. Empty = the whole image.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub atlas: Vec<AtlasCell>,
 }
+
+/// One leaf picture in a texture atlas.
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct AtlasCell {
+    /// Left, top, width and height as shares of the image (0..1, origin top left).
+    pub rect: [f32; 4],
+    /// Where the leaf's stalk meets the twig, as shares of the rectangle from its left and top
+    /// edges (default: the middle of its bottom edge).
+    pub pivot: [f32; 2],
+    /// How often this picture is used compared with the others.
+    pub weight: f32,
+}
+
+impl Default for AtlasCell {
+    fn default() -> Self {
+        AtlasCell { rect: [0.0, 0.0, 1.0, 1.0], pivot: [0.5, 1.0], weight: 1.0 }
+    }
+}
+
+impl AtlasCell {
+    pub fn clamp(&mut self) {
+        let f = |x: f32, lo: f32, hi: f32, d: f32| if x.is_finite() { x.clamp(lo, hi) } else { d };
+        self.rect[0] = f(self.rect[0], 0.0, 0.999, 0.0);
+        self.rect[1] = f(self.rect[1], 0.0, 0.999, 0.0);
+        self.rect[2] = f(self.rect[2], 0.001, 1.0 - self.rect[0], 1.0 - self.rect[0]);
+        self.rect[3] = f(self.rect[3], 0.001, 1.0 - self.rect[1], 1.0 - self.rect[1]);
+        self.pivot = self.pivot.map(|p| f(p, 0.0, 1.0, 0.5));
+        self.weight = f(self.weight, 0.0, 100.0, 1.0);
+    }
+    /// Texture coordinates (v up, as on meshes) of a point given as shares of the rectangle
+    /// (`x` from its left edge, `y` up from its bottom edge).
+    pub fn uv(&self, x: f32, y: f32) -> [f32; 2] {
+        [self.rect[0] + x * self.rect[2], 1.0 - (self.rect[1] + self.rect[3]) + y * self.rect[3]]
+    }
+}
+
+/// Most pictures in one material's leaf atlas.
+pub const MAX_ATLAS_CELLS: usize = 64;
 
 impl Default for Material {
     fn default() -> Self {
@@ -911,12 +954,36 @@ impl Default for Material {
             tiling: [1.0, 1.0],
             alpha_cutout: false,
             double_sided: false,
+            atlas: vec![],
         }
     }
 }
 
 impl Material {
+    /// The atlas picture for a leaf, from a random number 0..1 (None: the whole image).
+    pub fn atlas_pick(&self, r: f32) -> Option<&AtlasCell> {
+        let total: f32 = self.atlas.iter().map(|c| c.weight).sum();
+        if self.atlas.is_empty() {
+            return None;
+        }
+        if total <= 0.0 {
+            return self.atlas.first();
+        }
+        let mut x = r * total;
+        for c in &self.atlas {
+            if x < c.weight {
+                return Some(c);
+            }
+            x -= c.weight;
+        }
+        self.atlas.iter().rev().find(|c| c.weight > 0.0)
+    }
+
     pub fn clamp(&mut self) {
+        self.atlas.truncate(MAX_ATLAS_CELLS);
+        for c in &mut self.atlas {
+            c.clamp();
+        }
         self.roughness = self.roughness.clamp(0.0, 1.0);
         self.normal_strength = if self.normal_strength.is_finite() { self.normal_strength.clamp(0.0, 4.0) } else { 1.0 };
         self.tiling = self.tiling.map(|t| t.clamp(0.05, 50.0));
@@ -1137,11 +1204,14 @@ pub struct TriangleBudget {
     /// Reduce detail until each level fits. Off: levels keep their usual detail and the ones
     /// over budget are only reported.
     pub fit: bool,
+    /// Most leaf card area (m², one side) for LOD0 to LOD3, checked and reported (0 = no limit).
+    /// Card area is what foliage costs in overdraw, which triangle counts do not show.
+    pub leaf_area: [f32; 4],
 }
 
 impl Default for TriangleBudget {
     fn default() -> Self {
-        TriangleBudget { enabled: false, auto: true, max: 50_000, levels: [50_000, 25_000, 12_500, 6_250], fit: true }
+        TriangleBudget { enabled: false, auto: true, max: 50_000, levels: [50_000, 25_000, 12_500, 6_250], fit: true, leaf_area: [0.0; 4] }
     }
 }
 
@@ -1168,8 +1238,18 @@ impl TriangleBudget {
         }
     }
 
+    /// The leaf card area budget of a level (m²), if budgets are on and the level has one.
+    pub fn area_level(&self, lod: u32) -> Option<f32> {
+        if !self.enabled || lod > 3 {
+            return None;
+        }
+        let a = self.leaf_area[lod as usize];
+        (a > 0.0).then_some(a)
+    }
+
     pub fn clamp(&mut self) {
         self.max = self.max.clamp(16, Self::LIMIT);
+        self.leaf_area = self.leaf_area.map(|a| if a.is_finite() { a.clamp(0.0, 100_000.0) } else { 0.0 });
         for l in &mut self.levels {
             *l = (*l).min(Self::LIMIT);
         }
@@ -2018,7 +2098,8 @@ pub const SETTINGS_REFERENCE: &[(&str, &str, &str)] = &[
     ("budget.auto", "on/off", "On: derive the budgets from one maximum (LOD0 = maximum, LOD1 = 1/2, LOD2 = 1/4, LOD3 = 1/8). Off: set each level yourself."),
     ("budget.max", "16..5000000", "Most triangles for LOD0 when the budgets are derived from a maximum."),
     ("budget.levels", "[LOD0, LOD1, LOD2, LOD3], 0..5000000", "Most triangles per level when set per level; 0 = no limit for that level."),
-    ("budget.fit", "on/off", "On: a level over its budget gets fewer sides, rings and (larger) leaves until it fits. Off: levels keep their usual detail and the ones over budget are reported."),
+    ("budget.fit", "on/off", "On: a level over its budget gets fewer sides, rings and (larger) leaves until it fits; when that is not enough, fewer leaves and the finest twigs left out. Off: levels keep their usual detail and the ones over budget are reported."),
+    ("budget.leaf_area", "[LOD0, LOD1, LOD2, LOD3] m², 0 = no limit", "Most leaf card area per level (one side of each card): the overdraw cost of the foliage, which the triangle count does not show. Checked and reported with the opaque part the cut-out keeps; not fitted."),
     ("growth.export", "on/off", "Exports carry the growth animation: GLB gets morph targets with a Grow clip and one clip per stage, OBJ one file per stage, JSON the growth timing of every stem and leaf."),
     ("growth.stages", "[{name, at 0.01..1}], up to 8", "Moments of the growth (0 = nothing above ground, 1 = the mature tree), for example Sprout 0.12, Sapling 0.38, Young 0.68, Mature 1. Names are optional; unnamed stages are called Stage 1, Stage 2, ... by their place."),
     ("growth.duration", "0.5..600 s", "Seconds the whole growth animation takes."),
@@ -2037,4 +2118,5 @@ pub const MATERIAL_REFERENCE: &[(&str, &str, &str)] = &[
     ("tiling", "[u, v] 0.05..50", "How often a bark texture repeats around (u) and along (v) a stem."),
     ("alpha_cutout", "bool", "Transparent texture pixels become holes (leaf cards)."),
     ("double_sided", "bool", "Render both faces in engines. Leaf materials are always exported double-sided."),
+    ("atlas", "[{rect [x, y, w, h], pivot [x, y], weight}], up to 64", "Leaf texture atlas: one rectangle per leaf picture (pixels of the texture, origin top left). Each leaf shows one picture, picked at random by weight, on a card shaped like it and hanging from its pivot (where the stalk meets the twig; default the middle of the bottom edge)."),
 ];

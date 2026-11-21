@@ -46,7 +46,35 @@
 <dt>Two-sided</dt>
 <dd>Asks engines to render both faces. Leaf materials are always exported as two-sided.</dd>
 </dl>
+<p>A material with a texture also has a <strong>Leaf atlas</strong> section; see <a href="#leaf-atlas">Leaf atlases</a>.</p>
 <p>The line <strong>Used by</strong> lists the generators that use the material. <strong>Delete material</strong> removes it; those generators return to the default colours.</p>
+
+<h2 id="gradient">Material gradients</h2>
+<p>One trunk, branch or root generator can carry several materials that blend into each other along a gradient, for example dark, cracked bark at the foot of a birch that turns into smooth white bark higher up. Select the generator and open <strong>Material gradient</strong> under its <strong>Material</strong>.</p>
+<dl class="params">
+<dt>Along</dt>
+<dd>What the gradient follows. <strong>Along each stem</strong>: 0 at the base of every stem, 1 at its tip. <strong>Height (m)</strong>: metres above the ground, the same on every generator, so the trunk and the roots can share one band. <strong>Share of tree height</strong>: 0 at the ground, 1 at the top of the tree.</dd>
+<dt>Layer 1</dt>
+<dd>The generator's own material, from the start of the gradient.</dd>
+<dt>Layer 2, 3, …</dt>
+<dd>Each further layer has a material and the place on the gradient <strong>from</strong> which it takes over. Click <strong>+ Layer</strong> to add one (up to five layers in all) and 🗑 to remove one.</dd>
+<dt>Blend width</dt>
+<dd>The width of each transition, in the units of <strong>Along</strong>.</dd>
+<dt>Noise <span class="range">0 to 1</span></dt>
+<dd>Breaks the transition line up: how far a noise pattern moves it, as a share of the blend width.</dd>
+<dt>Noise size</dt>
+<dd>The size of the noise patches in metres.</dd>
+<dt>Contrast <span class="range">0 to 1</span></dt>
+<dd>0 blends softly over the whole width; 1 makes a sharp, ragged edge, like bark that peels off in patches.</dd>
+</dl>
+<p>The viewport blends every pixel, so the edge looks the same at every level of detail. The materials' colours, textures, normal maps and roughness all blend.</p>
+<h3>Gradients in exports</h3>
+<ul>
+<li><strong>GLB</strong> keeps every material. Each material is its own part of the mesh; where a transition blends two materials, that part is drawn with the first and names the second in its <code>extras.material_blend</code>, with the place and width of the transition. <code>TEXCOORD_2</code> holds, per vertex, the position on the gradient (x) and the layer value (y). The file's <code>extras.material_blend</code> states the formula, so a custom shader can blend exactly like the viewport.</li>
+<li><strong>Bake material gradients</strong> in the <strong>Export</strong> menu (<code>bake_material_blend</code> for agents) turns the transitions into plain materials instead, for engines without a custom shader: the triangles of each transition get a texture of their own with both materials and the noise painted in, and everything else keeps its layer's material.</li>
+<li><strong>OBJ</strong> cannot carry blend weights, so OBJ exports are always baked. The baked textures are saved next to the <code>.obj</code> file.</li>
+<li><strong>JSON</strong> contains the gradient settings themselves.</li>
+</ul>
 
 <h2>How bark textures are mapped</h2>
 <p>A bark texture wraps once around each stem for each unit of <strong>around</strong> tiling. Along the stem it repeats once per circumference of the stem at that point, multiplied by the <strong>along</strong> tiling. This keeps the texture's proportions on thick trunks and thin twigs alike: the bark pattern is smaller on thin branches, as on a real tree. The circumference is measured on the actual surface, including buttress flare and flutes.</p>
@@ -66,11 +94,24 @@
 </ol>
 <p>Each card shows the whole texture, so a texture with several leaves makes a dense crown from fewer cards.</p>
 
+<h3 id="leaf-atlas">Leaf atlases</h3>
+<p>A texture atlas holds several leaf pictures in one image. Open the material and its <strong>Leaf atlas</strong> section, then add one rectangle per picture with <strong>+ Picture</strong>, or <strong>Split into a grid…</strong> for four equal pictures to adjust. The preview shows the rectangles in yellow and the pivots as red dots.</p>
+<dl class="params">
+<dt>x, y, w, h</dt>
+<dd>The rectangle of one picture in pixels of the texture file, measured from its top left corner.</dd>
+<dt>pivot</dt>
+<dd>Where the leaf's stalk meets the twig, in pixels from the rectangle's left and top edges. New pictures hang from the middle of their bottom edge.</dd>
+<dt>weight</dt>
+<dd>How often the picture is used compared with the others. 0 leaves it out.</dd>
+</dl>
+<p>Each leaf shows one picture, picked at random by weight. On <strong>Card</strong> leaves the card takes the picture's proportions and hangs from its pivot, so wide and narrow pictures are not stretched; the leaf size is the card's height. Other leaf shapes only take the picture's texture coordinates. Leaves keep their picture when the level of detail or the leaf count changes.</p>
+
 <h2>Textures in exports</h2>
 <ul>
 <li><strong>GLB</strong> files contain the textures, so the export is a single file.</li>
 <li><strong>OBJ</strong> exports copy the textures next to the <code>.obj</code> file and reference them from the <code>.mtl</code> file.</li>
 <li>The normal map is exported with its strength, and the colour is exported as the base colour factor.</li>
+<li>glTF expects normal maps with green pointing up. A map marked <strong>DirectX style (flip green)</strong> has its green channel flipped as it goes into a GLB, and the material's <code>extras.normal_flip_green</code> says so. OBJ exports copy the file as it is and note the convention in the <code>.mtl</code> file.</li>
 </ul>
 </main>
 </body>

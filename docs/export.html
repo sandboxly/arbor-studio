@@ -59,6 +59,9 @@
 <h2 id="growth">Growth animation</h2>
 <p>With <strong>Include the growth in exports</strong> on (Properties › Growth), GLB files carry the growth from a sprout to the mature tree as morph targets with one clip per stage, OBJ exports add one file per stage and JSON adds the growth timing. See <a href="growth.html">Growth animation</a>.</p>
 
+<h3 id="gradients">Material gradients and normal maps</h3>
+<p>Generators with a <a href="materials.html#gradient">material gradient</a> export every material: GLB stores the blend per vertex in <code>TEXCOORD_2</code> and describes it in the file's extras, or bakes the transitions into plain materials when <strong>Bake material gradients</strong> is on. OBJ is always baked. Normal maps marked as DirectX style are flipped to glTF's convention in GLB files, which their material's extras record as <code>normal_flip_green</code>.</p>
+
 <h2 id="variations">Exporting variations</h2>
 <p>A forest needs many individuals of one species. <strong>Export variations</strong> grows the tree with several seeds and writes one file per individual.</p>
 <ol class="steps">

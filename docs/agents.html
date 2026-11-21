@@ -41,7 +41,7 @@
 <tr><td>Starting a tree</td><td><code>new_tree</code>, <code>load_preset</code>, <code>randomize_seed</code></td></tr>
 <tr><td>Generators</td><td><code>add_generator</code>, <code>update_generator</code>, <code>remove_generator</code>, <code>select_generator</code>, <code>set_curve</code></td></tr>
 <tr><td>Tree settings</td><td><code>update_settings</code> (seed, scale, age, colours, season, joints, wind)</td></tr>
-<tr><td>Materials</td><td><code>list_materials</code>, <code>add_material</code>, <code>update_material</code>, <code>remove_material</code>, <code>assign_material</code></td></tr>
+<tr><td>Materials</td><td><code>list_materials</code>, <code>add_material</code>, <code>update_material</code>, <code>remove_material</code>, <code>assign_material</code>, <code>set_material_blend</code> (material gradients; leaf atlases are the <code>atlas</code> field of a material)</td></tr>
 <tr><td>Forces, pruning, collision</td><td><code>add_force</code>, <code>update_force</code>, <code>remove_force</code>, <code>set_pruning</code>, <code>set_collision</code></td></tr>
 <tr><td>Triangle budgets</td><td><code>set_triangle_budget</code>, <code>check_triangle_budget</code> (see <a href="lod.html#budget">Triangle budgets</a>)</td></tr>
 <tr><td>Growth animation</td><td><code>set_growth</code> (stages, duration, keyframes); each generator's <code>params.growth</code> in <code>update_generator</code>; <code>growth</code> or <code>growth_stage</code> in <code>render_preview</code> and <code>set_view</code>; <code>include_growth</code> in the exports (see <a href="growth.html">Growth animation</a>)</td></tr>

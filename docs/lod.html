@@ -29,6 +29,7 @@
 <li><strong>Points along stems</strong> are removed where they change the stem's path and thickness least, so bends and kinks are kept.</li>
 <li>A stem with fewer sides is a polygon with a smaller average width than a round stem. ArborStudio widens the radius to compensate, so branches do not look thinner at lower levels. Trunks keep at least five sides.</li>
 <li>Leaves are thinned out evenly over the crown, and the remaining leaves grow larger, so the crown keeps the same leaf area and density from a distance.</li>
+<li>Where a branch meets its parent, the rings around the joint are kept at every level, so lower levels never get flat, stretched triangles across a joint.</li>
 </ul>
 <div class="gallery wide">
 <figure><img src="images/lodwire-0.jpg" alt="LOD0 wireframe of a hand-authored oak, close to the base of the trunk"><figcaption>LOD0</figcaption></figure>
@@ -56,14 +57,16 @@
 <dt>Per level</dt>
 <dd>You enter a budget for each of LOD0 to LOD3. 0 means no limit for that level.</dd>
 <dt>Reduce detail to fit</dt>
-<dd>On: a level over its budget gets fewer sides around its stems, fewer rings along them and fewer, larger leaves, until it fits. ArborStudio keeps as much detail as the budget allows. Off: every level keeps its usual detail, and the levels over budget are only reported.</dd>
+<dd>On: a level over its budget gets fewer sides around its stems, fewer rings along them and fewer, larger leaves, until it fits. When even the least stem detail is too much, leaves are thinned out further and the finest twigs are left out, smallest first, with their leaves. ArborStudio keeps as much detail as the budget allows. Off: every level keeps its usual detail, and the levels over budget are only reported.</dd>
+<dt>Leaf area</dt>
+<dd>The most leaf card area for each of LOD0 to LOD3 in square metres (– = no limit). Card area is what foliage costs in overdraw, which the triangle count does not show: a few big cards can cost more than many small ones. It is checked and reported, not fitted.</dd>
 </dl>
-<p>Below the settings, each level is listed with its triangles and its budget, and with the number it had before it was reduced. The check runs in the background, so the list may take a moment to update after a change.</p>
+<p>Below the settings, each level is listed with its triangles and its budget, and with the number it had before it was reduced. A second line gives its leaf card area (one side of each card) and, for materials with <strong>Cut-out</strong>, the part of it that is opaque. Levels keep about the same card area, because the leaves that remain grow larger. The check runs in the background, so the list may take a moment to update after a change.</p>
 
 <h3>Warnings</h3>
 <p>A level that is over its budget is marked with ⚠ in amber, in the list and at the top right of the viewport while that level is shown:</p>
 <figure class="narrow"><img src="images/budget-header.jpg" alt="Viewport header: Pine, warning sign, 9,292 / 5,000 tris, over budget"></figure>
-<p>With <strong>Reduce detail to fit</strong> on, a level can still be over budget: reducing keeps every branch and leaves at least a few sides on each stem, so a tree with many branches has a lower limit. Lower the counts of the generators (branches, twigs, leaves) or their <strong>Sides</strong>, or raise the budget. When you export a level that is over budget, the status bar and the agent activity say so.</p>
+<p>With <strong>Reduce detail to fit</strong> on, a level can still be over budget: reducing keeps every branch thicker than the finest twigs and leaves at least a few sides on each stem, so a tree with many branches has a lower limit. Lower the counts of the generators (branches, twigs, leaves) or their <strong>Sides</strong>, or raise the budget. When you export a level that is over budget, the status bar and the agent activity say so.</p>
 
 <h2>Billboard</h2>
 <p>The billboard is the tree rendered from eight sides into one image, an atlas of 4 × 2 pictures. In the export it is shown on four crossed cards with both faces, a few triangles in total. Use it for the farthest distance and for large forests.</p>

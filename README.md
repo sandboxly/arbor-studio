@@ -61,7 +61,7 @@ The window's **Agent → Connect a coding agent…** shows these with copy butto
 
 get_tree, get_parameter_reference, list_presets, load_preset, new_tree, add_generator, update_generator,
 remove_generator, set_curve, list_nodes, edit_node, clear_node_edits, add_force, update_force, remove_force, set_pruning,
-set_collision, set_triangle_budget, check_triangle_budget, set_growth, list_materials, add_material, update_material, remove_material, assign_material, update_settings, randomize_seed, select_generator, set_view, get_stats, render_preview,
+set_collision, set_triangle_budget, check_triangle_budget, set_growth, list_materials, add_material, update_material, remove_material, assign_material, set_material_blend, update_settings, randomize_seed, select_generator, set_view, get_stats, render_preview,
 capture_window, export_tree, export_variations, save_project, open_project, undo, redo.
 
 ## Releases (maintainers)
@@ -127,7 +127,15 @@ Each tree has a material library. A material has a colour (or tint over a textur
 texture and normal map, roughness, tiling for bark, alpha cut-out for leaf cards and a two-sided flag.
 Assign one material to any number of generators; generators without one use the default bark/leaf colours.
 GLB exports embed the textures; OBJ exports copy them next to the .obj and reference them from the .mtl.
-For leaf textures with transparency, use leaf shape "card" and turn on cut-out.
+For leaf textures with transparency, use leaf shape "card" and turn on cut-out. A leaf atlas (rectangles in
+pixels of the texture, each with a pivot and a weight) makes every card show one leaf picture, picked at random,
+with the picture's proportions and hanging from its pivot.
+
+Material gradients put several materials on one trunk, branch or root generator, blended along each stem, by
+height in metres or by share of the tree's height, with a blend width, a noise mask and contrast (set_material_blend).
+GLB keeps every material and stores the blend in TEXCOORD_2 (the formula is in the file's extras), or bakes the
+transitions into plain materials (bake_material_blend); OBJ is always baked. DirectX-style normal maps are flipped
+into glTF's convention in GLB files and marked normal_flip_green in the material's extras.
 
 Bark textures wrap once around each stem per "around" tiling, and repeat along it once per local
 circumference (× "along" tiling), so the image keeps its proportions on thick trunks and thin roots alike

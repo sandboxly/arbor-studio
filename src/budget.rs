@@ -27,9 +27,30 @@ pub struct LevelFit {
     /// How far detail was reduced: 0 = the usual amount, 1 = the least stem detail (sides,
     /// rings), 2 = also only a few leaves left and most of the finest twigs left out.
     pub reduction: f32,
+    /// Leaf card area of the level, and the part the alpha cut-out keeps.
+    pub leaf_area: crate::leafarea::LeafArea,
+    /// The level's leaf card area budget in m² (None: no limit).
+    pub area_budget: Option<f32>,
+    /// The leaf card area is over its budget.
+    pub area_over: bool,
 }
 
 impl LevelFit {
+    /// The leaf card area of the level in one line (m², and against its budget when it has one).
+    pub fn area_message(&self) -> String {
+        let a = &self.leaf_area;
+        let mut s = format!("LOD{}: {:.1} m² of leaf cards", self.lod, a.card_m2);
+        if let Some(o) = a.opaque_m2 {
+            s += &format!(" ({o:.1} m² opaque after the cut-out)");
+        }
+        match self.area_budget {
+            Some(b) if self.area_over => s += &format!(", over the {b:.1} m² budget."),
+            Some(b) => s += &format!(", within the {b:.1} m² budget."),
+            None => s += ".",
+        }
+        s
+    }
+
     /// One line for the interface and the agent.
     pub fn message(&self, fitting: bool) -> String {
         let Some(b) = self.budget else {
@@ -80,10 +101,29 @@ fn at(doc: &Document, full: &Skeleton, level: u32, s: f32) -> (Skeleton, Mesh) {
 
 /// One mesh level of detail (0..=3) of the tree grown as `full`, fitted to its budget.
 pub fn fit_level(doc: &Document, full: &Skeleton, level: u32) -> (Skeleton, Mesh, LevelFit) {
+    let (sk, m, mut fit) = fit_triangles(doc, full, level);
+    fit.leaf_area = crate::leafarea::measure(doc, &m);
+    fit.area_budget = doc.budget.area_level(level);
+    fit.area_over = fit.area_budget.is_some_and(|b| fit.leaf_area.card_m2 > b);
+    (sk, m, fit)
+}
+
+fn fit_triangles(doc: &Document, full: &Skeleton, level: u32) -> (Skeleton, Mesh, LevelFit) {
     let (sk0, m0) = at(doc, full, level, 0.0);
     let t0 = m0.tris.len() as u32;
     let budget = doc.budget.level(level);
-    let mut fit = LevelFit { lod: level, budget, triangles: t0, usual_triangles: t0, reduced: false, over: false, reduction: 0.0 };
+    let mut fit = LevelFit {
+        lod: level,
+        budget,
+        triangles: t0,
+        usual_triangles: t0,
+        reduced: false,
+        over: false,
+        reduction: 0.0,
+        leaf_area: Default::default(),
+        area_budget: None,
+        area_over: false,
+    };
     let Some(b) = budget else { return (sk0, m0, fit) };
     if t0 <= b {
         return (sk0, m0, fit);

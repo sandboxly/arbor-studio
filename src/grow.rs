@@ -2151,8 +2151,25 @@ pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) ->
 
     m.leaf_tri_start = m.tris.len();
     let mut rng = Rng::new(&[doc.settings.seed as u64, 77]);
+    // leaf atlases: width / height of each atlas material's image
+    let mut atlas_aspect: std::collections::HashMap<u32, f32> = std::collections::HashMap::new();
     for l in &sk.leaves {
-        m.leaf_first.push(m.pos.len() as u32);
+        let first = m.pos.len();
+        m.leaf_first.push(first as u32);
+        // the picture of an atlas this leaf shows (picked by its place, so it stays the same
+        // when other leaves come and go), and the picture's width / height
+        let cell = doc.material(l.mat).filter(|mm| !mm.atlas.is_empty()).and_then(|mm| {
+            let img = *atlas_aspect.entry(l.mat).or_insert_with(|| mm.texture.as_deref().and_then(|p| image::image_dimensions(p).ok()).map(|(w, h)| w as f32 / h.max(1) as f32).unwrap_or(1.0));
+            let r = Rng::new(&[doc.settings.seed as u64, 313, l.pos.x.to_bits() as u64, l.pos.y.to_bits() as u64, l.pos.z.to_bits() as u64]).f();
+            mm.atlas_pick(r).map(|c| (c.clone(), img * c.rect[2] / c.rect[3].max(1e-4)))
+        });
+        let to_atlas = |m: &mut Mesh| {
+            if let Some((c, _)) = &cell {
+                for t in &mut m.uv[first..] {
+                    *t = c.uv(t[0], t[1]);
+                }
+            }
+        };
         let st = &sk.stems[l.stem];
         let sway = (base_sway[l.stem] + 0.3).min(1.0);
         let c = l.color;
@@ -2194,20 +2211,30 @@ pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) ->
             for t in &lm.tris {
                 m.tris.push([base + t[0], base + t[1], base + t[2]]);
             }
+            to_atlas(&mut m);
             continue;
         }
         match l.shape {
             LeafShape::Card | LeafShape::Mesh => {
-                // plain rectangle: the leaf texture (with transparency) draws the leaf
-                let hw = s * l.aspect * 0.5;
+                // plain rectangle: the leaf texture (with transparency) draws the leaf. With an
+                // atlas the card has the picture's proportions and hangs from its pivot.
+                let (wl, wr, below, above, um) = match &cell {
+                    Some((c, asp)) => {
+                        let wid = s * asp;
+                        (c.pivot[0] * wid, (1.0 - c.pivot[0]) * wid, (1.0 - c.pivot[1]) * s, c.pivot[1] * s, c.pivot[0])
+                    }
+                    None => (s * l.aspect * 0.5, s * l.aspect * 0.5, 0.0, s, 0.5),
+                };
                 let tipdir = (l.dir + Vec3::NEG_Y * (l.bend * 0.5)).normalize_or(l.dir);
+                let foot = l.pos - l.dir * below;
+                let top = l.pos + tipdir * above;
                 // midrib vertices so the card can fold
-                let a = add(&mut m, l.pos + half(-1.0) * hw, [0.0, 0.0], 0.0, l.normal);
-                let mb = add(&mut m, l.pos, [0.5, 0.0], 0.0, l.normal);
-                let b = add(&mut m, l.pos + half(1.0) * hw, [1.0, 0.0], 0.0, l.normal);
-                let c3 = add(&mut m, l.pos + tipdir * s + half(1.0) * hw, [1.0, 1.0], 1.0, l.normal);
-                let mt = add(&mut m, l.pos + tipdir * s, [0.5, 1.0], 1.0, l.normal);
-                let d2 = add(&mut m, l.pos + tipdir * s + half(-1.0) * hw, [0.0, 1.0], 1.0, l.normal);
+                let a = add(&mut m, foot + half(-1.0) * wl, [0.0, 0.0], 0.0, l.normal);
+                let mb = add(&mut m, foot, [um, 0.0], 0.0, l.normal);
+                let b = add(&mut m, foot + half(1.0) * wr, [1.0, 0.0], 0.0, l.normal);
+                let c3 = add(&mut m, top + half(1.0) * wr, [1.0, 1.0], 1.0, l.normal);
+                let mt = add(&mut m, top, [um, 1.0], 1.0, l.normal);
+                let d2 = add(&mut m, top + half(-1.0) * wl, [0.0, 1.0], 1.0, l.normal);
                 m.tris.push([a, mb, mt]);
                 m.tris.push([a, mt, d2]);
                 m.tris.push([mb, b, c3]);
@@ -2284,6 +2311,7 @@ pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) ->
                 }
             }
         }
+        to_atlas(&mut m);
     }
     // final bounds from the real geometry (leaf tips and fronds included)
     m.height = m.pos.iter().fold(0.1f32, |a, p| a.max(p.y));

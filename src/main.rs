@@ -19,6 +19,7 @@ mod grow;
 mod growth;
 mod budget;
 mod help;
+mod leafarea;
 mod leafmesh;
 mod mcp;
 #[cfg(target_os = "macos")]

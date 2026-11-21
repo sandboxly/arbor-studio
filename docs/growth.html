@@ -23,6 +23,15 @@
 <p>The Oak preset at five points of its growth with the default growth settings. Each picture is framed to the tree's size at that point, so the young tree's shape is visible; the sprout is about a tenth of the mature tree's height.</p>
 <figure class="narrow"><picture><source media="(prefers-reduced-motion: reduce)" srcset="images/growth-oak-still.jpg"><source type="image/webp" srcset="images/growth-oak.webp"><img src="images/growth-oak.gif" width="480" height="600" loading="lazy" alt="Animation: a hand-authored oak with 744 stems grows from a thin sapling into a tall tree with a full, rounded crown and spreading roots, all its branches growing together, while the camera pulls back and turns slowly"></picture><figcaption>A hand-authored oak growing from 0 to 1, rendered with render_preview at 72 points of its growth; the camera pulls back as it grows.</figcaption></figure>
 
+<h3 id="early">What a very young tree looks like</h3>
+<div class="gallery">
+<figure><img src="images/growth-low-03.jpg" alt="The oak at 3 percent of its growth: a trunk thinner than a pencil line that splits into two leaders, no leaves"><figcaption>0.03</figcaption></figure>
+<figure><img src="images/growth-low-06.jpg" alt="The oak at 6 percent: the same whip, a little taller, the fork base a small pointed swelling"><figcaption>0.06</figcaption></figure>
+<figure><img src="images/growth-low-12.jpg" alt="The oak at 12 percent: a slim sapling with its two leaders, short side shoots and the first few leaves"><figcaption>0.12</figcaption></figure>
+<figure><img src="images/growth-low-20.jpg" alt="The oak at 20 percent: a sapling with side branches, a loose cluster of leaves and small roots at the base"><figcaption>0.20</figcaption></figure>
+</div>
+<p>The Oak preset close up at low growth values, each picture framed to the young tree. Below about 0.1 the tree is a thin whip: the trunk and its leaders have their final shape but are only a few millimetres thick, side branches are short stubs and there are no leaves yet. Where the trunk splits, the base of the fork shows as a small pointed swelling, a smaller copy of its final base. From about 0.1 the first leaves come out, a little smaller than mature leaves, and side shoots become visible; roots appear as short spurs at the base. Seen from the mature tree's distance, a tree below 0.1 is only a few pixels tall, so the first stage of a growth clip usually starts around 0.1. To see any point yourself, scrub the <strong>Growth</strong> slider, or ask an agent for <code>render_preview</code> with <code>growth</code> and a close <code>target</code> and <code>distance</code>.</p>
+
 <h2>How a tree grows</h2>
 <p>Growth runs from <strong>0</strong> (nothing above the ground) to <strong>1</strong> (the tree as designed). On the way:</p>
 <ul>

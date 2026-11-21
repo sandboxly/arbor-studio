@@ -10,7 +10,7 @@ the source or the docs in this repository.
 - Title: ArborStudio: game tree editor with an MCP server
 - Description: Desktop editor for game-ready trees. GLB or OBJ with four LODs, a billboard and per-vertex
   wind weights. Every editor operation is an MCP tool, so your agent can grow the variants. Free, MIT.
-- OG image text: "Game-ready trees. Ready for your favorite AI agent." / "GLB · OBJ · 4 LODs + billboard · wind weights · growth animation · 38 MCP tools"
+- OG image text: "Game-ready trees. Ready for your favorite AI agent." / "GLB · OBJ · 4 LODs + billboard · wind weights · growth animation · 39 MCP tools"
 
 ## Hero
 
@@ -94,7 +94,7 @@ the source or the docs in this repository.
 - Lead: SpeedTree is the reference for game vegetation and has far more features. ArborStudio is
   younger and smaller. It adds features when people ask for them in the issue tracker.
 - Table:
-  - Agent access: ArborStudio: MCP server, 38 tools | SpeedTree: no such interface
+  - Agent access: ArborStudio: MCP server, 39 tools | SpeedTree: no such interface
   - Price: ArborStudio: free | SpeedTree: paid licence
   - Source: ArborStudio: MIT, read and change the generator | SpeedTree: closed
   - Feature set: ArborStudio: smaller, grows from requests | SpeedTree: larger and more mature

@@ -1585,6 +1585,15 @@ fn budget_ui(ui: &mut Ui, sh: &mut Shared) {
         ui.label("Fit");
         ui.checkbox(&mut b.fit, "Reduce detail to fit").on_hover_text(help_for("budget.fit"));
         ui.end_row();
+        ui.label("Leaf area").on_hover_text(help_for("budget.leaf_area"));
+        ui.horizontal(|ui| {
+            for l in 0..4 {
+                ui.add(egui::DragValue::new(&mut b.leaf_area[l]).range(0.0..=100_000.0).speed(0.5).max_decimals(1).custom_formatter(|v, _| if v == 0.0 { "–".into() } else { format!("{v:.1}") }))
+                    .on_hover_text(format!("Most leaf card area for LOD{l} in m² (– = no limit)"));
+            }
+            ui.label(RichText::new("m²").size(11.0).color(HEADER));
+        });
+        ui.end_row();
     });
     let doc = sh.doc.clone();
     let (report, fresh) = budget_report(ui.ctx(), &doc);
@@ -1597,6 +1606,9 @@ fn budget_ui(ui: &mut Ui, sh: &mut Shared) {
         let colour = if f.over { WARN } else if !fresh { Color32::from_gray(120) } else { HEADER };
         let icon = if f.over { "⚠ " } else { "" };
         ui.label(RichText::new(format!("{icon}{}", f.message(doc.budget.fit))).size(11.0).color(colour));
+        let acol = if f.area_over { WARN } else if !fresh { Color32::from_gray(120) } else { HEADER };
+        let aicon = if f.area_over { "⚠ " } else { "   " };
+        ui.label(RichText::new(format!("{aicon}{}", f.area_message())).size(10.5).color(acol));
     }
     if !fresh {
         ui.label(RichText::new("Checking the levels…").size(11.0).color(HEADER));
@@ -1980,6 +1992,74 @@ fn swatch(ui: &mut Ui, color: [u8; 3], tex: Option<egui::TextureId>) {
     ui.painter().rect_stroke(rect, 3, egui::Stroke::new(1.0, Color32::from_gray(90)), egui::StrokeKind::Inside);
 }
 
+/// Leaf pictures in a texture atlas: rectangles in pixels of the texture, each with a pivot
+/// (where the stalk meets the twig) and a weight, drawn over a preview of the image.
+fn atlas_ui(ui: &mut Ui, m: &mut Material, tex: Option<egui::TextureId>) {
+    let Some((w, h)) = m.texture.as_deref().and_then(|p| image::image_dimensions(p).ok()) else { return };
+    let (w, h) = (w as f32, h as f32);
+    let title = if m.atlas.is_empty() { "Leaf atlas".to_string() } else { format!("Leaf atlas ({} pictures)", m.atlas.len()) };
+    egui::CollapsingHeader::new(title).id_salt("leaf_atlas").default_open(!m.atlas.is_empty()).show(ui, |ui| {
+        ui.label(RichText::new("For a texture with several leaves: one rectangle per leaf picture. Each leaf card shows one of them, picked at random by weight, shaped like the picture and hanging from its pivot (the dot). Pixels of the image, origin top left.").small().color(HEADER));
+        if let Some(t) = tex {
+            let side = 200.0;
+            let size = if w >= h { egui::vec2(side, side * h / w) } else { egui::vec2(side * w / h, side) };
+            let r = ui.add(egui::Image::new((t, size))).rect;
+            let p = ui.painter();
+            for (i, c) in m.atlas.iter().enumerate() {
+                let rr = egui::Rect::from_min_size(r.min + egui::vec2(c.rect[0] * size.x, c.rect[1] * size.y), egui::vec2(c.rect[2] * size.x, c.rect[3] * size.y));
+                let col = Color32::from_rgb(255, 200, 60);
+                p.rect_stroke(rr, 0.0, egui::Stroke::new(1.0, col), egui::StrokeKind::Inside);
+                let pv = rr.min + egui::vec2(c.pivot[0] * rr.width(), c.pivot[1] * rr.height());
+                p.circle_filled(pv, 2.5, Color32::from_rgb(255, 80, 60));
+                p.text(rr.min + egui::vec2(2.0, 1.0), egui::Align2::LEFT_TOP, format!("{}", i + 1), egui::FontId::proportional(10.0), col);
+            }
+        }
+        let mut remove = None;
+        egui::Grid::new("atlas_grid").num_columns(2).spacing([6.0, 4.0]).show(ui, |ui| {
+            for (i, c) in m.atlas.iter_mut().enumerate() {
+                ui.label(format!("{}", i + 1));
+                ui.vertical(|ui| {
+                    let mut px = [c.rect[0] * w, c.rect[1] * h, c.rect[2] * w, c.rect[3] * h];
+                    let mut pv = [c.pivot[0] * px[2], c.pivot[1] * px[3]];
+                    ui.horizontal(|ui| {
+                        for (k, (lab, max)) in [("x", w), ("y", h), ("w", w), ("h", h)].into_iter().enumerate() {
+                            ui.label(lab);
+                            ui.add(egui::DragValue::new(&mut px[k]).range(0.0..=max).speed(1.0).max_decimals(0));
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("pivot");
+                        ui.add(egui::DragValue::new(&mut pv[0]).range(0.0..=px[2]).speed(1.0).max_decimals(0)).on_hover_text("From the rectangle's left edge, in pixels");
+                        ui.add(egui::DragValue::new(&mut pv[1]).range(0.0..=px[3]).speed(1.0).max_decimals(0)).on_hover_text("From the rectangle's top edge, in pixels");
+                        ui.label("weight");
+                        ui.add(egui::DragValue::new(&mut c.weight).range(0.0..=100.0).speed(0.05).max_decimals(2));
+                        if ui.small_button("🗑").on_hover_text("Remove this picture").clicked() {
+                            remove = Some(i);
+                        }
+                    });
+                    c.rect = [px[0] / w, px[1] / h, px[2].max(1.0) / w, px[3].max(1.0) / h];
+                    c.pivot = [pv[0] / px[2].max(1.0), pv[1] / px[3].max(1.0)];
+                });
+                ui.end_row();
+            }
+        });
+        if let Some(i) = remove {
+            m.atlas.remove(i);
+        }
+        ui.horizontal(|ui| {
+            if m.atlas.len() < crate::model::MAX_ATLAS_CELLS && ui.button("+ Picture").clicked() {
+                m.atlas.push(crate::model::AtlasCell::default());
+            }
+            if m.atlas.is_empty() && ui.button("Split into a grid…").on_hover_text("Rectangles for a 2 × 2 grid of pictures; adjust them after").clicked() {
+                for k in 0..4 {
+                    let (cx, cy) = ((k % 2) as f32 * 0.5, (k / 2) as f32 * 0.5);
+                    m.atlas.push(crate::model::AtlasCell { rect: [cx, cy, 0.5, 0.5], ..Default::default() });
+                }
+            }
+        });
+    });
+}
+
 /// More materials on a generator's stems, blended along a gradient.
 fn material_blend_ui(ui: &mut Ui, g: &mut Generator, mats: &[(u32, String)]) {
     let n = g.blend.as_ref().map(|b| b.layers.len()).unwrap_or(0);
@@ -2221,6 +2301,9 @@ fn material_editor(
             ui.checkbox(&mut m.double_sided, "Render both faces in engines");
             ui.end_row();
         });
+        if m.texture.is_some() {
+            atlas_ui(ui, &mut m, textures.get(&mid).copied());
+        }
         ui.separator();
         if users.is_empty() {
             ui.label(RichText::new("Not used by any generator yet.").color(HEADER));

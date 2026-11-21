@@ -57,7 +57,8 @@ pub struct ExportResult {
 impl ExportResult {
     /// Levels that went out over their triangle budget, as one sentence (None: all fit).
     pub fn budget_warning(&self, fitting: bool) -> Option<String> {
-        let over: Vec<String> = self.budget.iter().filter(|f| f.over).map(|f| f.message(fitting)).collect();
+        let mut over: Vec<String> = self.budget.iter().filter(|f| f.over).map(|f| f.message(fitting)).collect();
+        over.extend(self.budget.iter().filter(|f| f.area_over).map(|f| f.area_message()));
         (!over.is_empty()).then(|| format!("Over the triangle budget: {}", over.join(" ")))
     }
 }
