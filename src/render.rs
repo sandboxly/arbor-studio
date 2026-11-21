@@ -517,16 +517,27 @@ pub fn draw(painter: &egui::Painter, rect: Rect, a: &DrawArgs) -> PickData {
                     let uv = m.uv[i];
                     let n = m.nrm[i];
                     let w = wpos[i];
-                    gm.verts.extend_from_slice(&[c.x, c.y, c.z, c.w, base[0], base[1], base[2], hl[0], hl[1], hl[2], amt, uv[0], 1.0 - uv[1], n.x, n.y, n.z, w.x, w.y, w.z, kind]);
+                    gm.verts.extend_from_slice(&[c.x, c.y, c.z, c.w, base[0], base[1], base[2], hl[0], hl[1], hl[2], amt, uv[0], 1.0 - uv[1], n.x, n.y, n.z, w.x, w.y, w.z, kind, m.axis.get(i).copied().unwrap_or(0.0)]);
                 }
                 for &ti in &order {
                     let tri = m.tris[ti as usize];
-                    let mat = m.vmat[tri[0] as usize];
+                    let (_, mat, next) = m.tri_layers(a.doc, ti as usize);
+                    let ramp = m.tri_blend(a.doc, ti as usize).map(|(k, b)| [b.layers[k].at, b.half_ramp(), b.noise_reach(), b.noise_scale]);
                     let key = crate::gpu::GroupKey {
                         color: a.textures.get(&mat).copied(),
                         normal: a.normals.get(&mat).map(|n| n.0),
                         flip_green: a.normals.get(&mat).map(|n| n.1).unwrap_or(false),
                         strength_milli: a.normals.get(&mat).map(|n| (n.2 * 1000.0) as u32).unwrap_or(1000),
+                        blend: next.map(|m2| crate::gpu::BlendKey {
+                            at: ramp.map(|r| r[0]).unwrap_or(0.0).to_bits(),
+                            half: ramp.map(|r| r[1]).unwrap_or(0.0).to_bits(),
+                            reach: ramp.map(|r| r[2]).unwrap_or(0.0).to_bits(),
+                            scale: ramp.map(|r| r[3]).unwrap_or(1.0).to_bits(),
+                            color: a.textures.get(&m2).copied(),
+                            normal: a.normals.get(&m2).map(|n| n.0),
+                            flip_green: a.normals.get(&m2).map(|n| n.1).unwrap_or(false),
+                            strength_milli: a.normals.get(&m2).map(|n| (n.2 * 1000.0) as u32).unwrap_or(1000),
+                        }),
                     };
                     gm.groups.entry(key).or_default().extend_from_slice(&tri);
                 }
@@ -544,7 +555,7 @@ pub fn draw(painter: &egui::Painter, rect: Rect, a: &DrawArgs) -> PickData {
                 let mut run_tex = egui::TextureId::default();
                 for &ti in &order {
                     let tri = m.tris[ti as usize];
-                    let tex = a.textures.get(&m.vmat[tri[0] as usize]).copied();
+                    let tex = a.textures.get(&m.tri_layers(a.doc, ti as usize).1).copied();
                     let want = tex.unwrap_or_default();
                     if want != run_tex && !run.indices.is_empty() {
                         let full = std::mem::replace(&mut run, egui::Mesh::default());
@@ -725,7 +736,12 @@ fn render_core(doc: &Document, m: &Mesh, cam: &Camera, w: u32, h: u32, time: f32
             continue;
         }
         let (ca, cb, cc) = (cols[tri[0] as usize], cols[tri[1] as usize], cols[tri[2] as usize]);
-        let texture = tex.get(&m.vmat[tri[0] as usize]);
+        let (_, mat, next) = m.tri_layers(doc, ti);
+        let texture = tex.get(&mat);
+        let texture2 = next.map(|m2| tex.get(&m2));
+        let blend = m.tri_blend(doc, ti);
+        let [la, lb, lc] = tri.map(|i| m.axis.get(i as usize).copied().unwrap_or(0.0));
+        let [pa, pb, pc] = tri.map(|i| m.pos[i as usize]);
         let [ua, ub, uc] = tri.map(|i| m.uv[i as usize]);
         for y in miny..=maxy {
             for x in minx..=maxx {
@@ -740,14 +756,29 @@ fn render_core(doc: &Document, m: &Mesh, cam: &Camera, w: u32, h: u32, time: f32
                 let idx = (y as u32 * w + x as u32) as usize;
                 if z < zb[idx] {
                     let mut t = [1.0f32; 3];
+                    let u = ua[0] * w0 + ub[0] * w1 + uc[0] * w2;
+                    let v = ua[1] * w0 + ub[1] * w1 + uc[1] * w2;
                     if let Some((timg, cutout)) = texture {
-                        let u = ua[0] * w0 + ub[0] * w1 + uc[0] * w2;
-                        let v = ua[1] * w0 + ub[1] * w1 + uc[1] * w2;
                         let px = crate::textures::sample(timg, u, 1.0 - v);
                         if *cutout && px[3] < 128 {
                             continue;
                         }
                         t = [px[0] as f32 / 255.0, px[1] as f32 / 255.0, px[2] as f32 / 255.0];
+                    }
+                    if let (Some(t2), Some((k, bl))) = (texture2, blend) {
+                        let x = la * w0 + lb * w1 + lc * w2;
+                        let nz = if bl.noise > 0.0 { crate::grow::blend_noise(pa * w0 + pb * w1 + pc * w2, bl.noise_scale) } else { 0.0 };
+                        let bw = bl.weight(k, x, nz);
+                        if bw > 0.0 {
+                            let c2 = match t2 {
+                                Some((img2, _)) => {
+                                    let px = crate::textures::sample(img2, u, 1.0 - v);
+                                    [px[0] as f32 / 255.0, px[1] as f32 / 255.0, px[2] as f32 / 255.0]
+                                }
+                                None => [1.0; 3],
+                            };
+                            t = [0, 1, 2].map(|k| t[k] + (c2[k] - t[k]) * bw);
+                        }
                     }
                     zb[idx] = z;
                     let col = [0, 1, 2].map(|k| ((ca[k] * w0 + cb[k] * w1 + cc[k] * w2) * t[k] * 255.0).clamp(0.0, 255.0) as u8);

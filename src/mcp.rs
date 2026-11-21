@@ -234,6 +234,16 @@ pub fn tool_list() -> Vec<Value> {
             "generator_id": {"type": "integer"},
             "material_id": {"type": ["integer", "null"]}
         }), &["generator_id", "material_id"]),
+        tool("set_material_blend", "Set material blend", "Several materials on one trunk, branch or root generator, blended along a gradient: the generator's own material is the first layer, each layer in `layers` takes over at its `at` (e.g. a birch: dark cracked bark at the foot, white bark higher up). axis: stem (0 = each stem's base .. 1 = its tip), height (metres above the ground, the same on every generator, so trunk and roots can share a band) or height_share (0 = ground .. 1 = top of the tree). width: width of each transition in the axis's units. noise (0..1, share of the width the noise mask moves the edge), noise_scale (metres, size of the noise patches) and contrast (0 = soft blend, 1 = a sharp, ragged edge) break the line up like real bark. Only the given fields change; layers: [] (or clear: true) removes the gradient. Exports: GLB keeps each material and puts the blend in TEXCOORD_2 (see the file's extras), or bakes it into plain materials with bake_material_blend; JSON has the gradient itself.", json!({
+            "generator_id": {"type": "integer"},
+            "axis": {"type": "string", "enum": ["stem", "height", "height_share"]},
+            "layers": {"type": "array", "items": {"type": "object", "properties": {"material_id": {"type": ["integer", "null"]}, "at": {"type": "number"}}, "required": ["at"]}, "description": "Layers above the generator's own material (at most 4)"},
+            "width": {"type": "number", "minimum": 0},
+            "noise": {"type": "number", "minimum": 0, "maximum": 1},
+            "noise_scale": {"type": "number", "minimum": 0.01, "maximum": 10},
+            "contrast": {"type": "number", "minimum": 0, "maximum": 1},
+            "clear": {"type": "boolean"}
+        }), &["generator_id"]),
         tool("update_settings", "Update tree settings", "Change global settings: name, seed, scale, bark_color, leaf_color, leaf_color_variation, autumn (0..1), leaf_drop (0..1, season: fallen leaves), ao_strength (0..1, baked ambient occlusion), age (0.05..1 growth stage) and wind {strength, direction, gustiness, speed}.", json!({
             "name": {"type": "string"},
             "seed": {"type": "integer"},
@@ -280,12 +290,13 @@ pub fn tool_list() -> Vec<Value> {
             "wind_time": {"type": "number", "description": "Render the tree bent by the wind at this time in seconds, with the tree's wind settings (as the viewport plays it); render a series of times for an animation. Default: no wind."}
         }), &[]),
         tool("capture_window", "Capture window", "Take a picture of the whole application window (panels and viewport) as PNG. The window must be open and visible.", json!({"save_to": {"type": "string"}}), &[]),
-        tool("export_tree", "Export tree", "Export the tree for a game engine or DCC tool. format obj (+mtl) or glb work in Unity, Unreal and Godot; json is the raw skeleton + settings for custom engines. include_lods adds LOD0-3 meshes named <Tree>_LOD0..3. include_billboard adds a billboard LOD (LOD4, or <Tree>_Billboard without LODs) and saves its atlas picture as <name>_billboard.png next to the file. Wind sway weights are stored in UV2 (TEXCOORD_1) in glb.", json!({
+        tool("export_tree", "Export tree", "Export the tree for a game engine or DCC tool. format obj (+mtl) or glb work in Unity, Unreal and Godot; json is the raw skeleton + settings for custom engines. include_lods adds LOD0-3 meshes named <Tree>_LOD0..3. include_billboard adds a billboard LOD (LOD4, or <Tree>_Billboard without LODs) and saves its atlas picture as <name>_billboard.png next to the file. Wind sway weights are stored in UV2 (TEXCOORD_1) in glb, material gradient weights in TEXCOORD_2 (or baked with bake_material_blend).", json!({
             "path": {"type": "string", "description": "Absolute output path, e.g. /Users/me/Game/Assets/Trees/oak.glb"},
             "format": {"type": "string", "enum": ["obj", "glb", "json"]},
             "include_lods": {"type": "boolean"},
             "include_billboard": {"type": "boolean"},
-            "include_growth": {"type": "boolean", "description": "Add the growth animation (default: the tree's growth.export setting). glb: morph targets with a Grow clip and one clip per stage; obj: one extra file per stage (<name>_<Stage>.obj); json: growth timing per stem and leaf. See set_growth."}
+            "include_growth": {"type": "boolean", "description": "Add the growth animation (default: the tree's growth.export setting). glb: morph targets with a Grow clip and one clip per stage; obj: one extra file per stage (<name>_<Stage>.obj); json: growth timing per stem and leaf. See set_growth."},
+            "bake_material_blend": {"type": "boolean", "description": "glb: bake material gradients (set_material_blend) into plain materials, each transition with a texture of its own, for engines without a custom shader. Default false: every material is kept and the blend goes in TEXCOORD_2 (see the file's extras.material_blend). obj is always baked (textures saved next to the file)."}
         }), &["path"]),
         tool("export_variations", "Export variations", "Export several individuals of the current species (different seeds) into a folder, one file each: <Tree>_v01.glb, <Tree>_v02.glb, ... Mesh names carry the same suffix. Node edits are not applied to variations.", json!({
             "folder": {"type": "string", "description": "Absolute output folder"},
@@ -294,7 +305,8 @@ pub fn tool_list() -> Vec<Value> {
             "format": {"type": "string", "enum": ["obj", "glb", "json"]},
             "include_lods": {"type": "boolean"},
             "include_billboard": {"type": "boolean"},
-            "include_growth": {"type": "boolean", "description": "Add the growth animation to every file (default: the tree's growth.export setting)"}
+            "include_growth": {"type": "boolean", "description": "Add the growth animation to every file (default: the tree's growth.export setting)"},
+            "bake_material_blend": {"type": "boolean", "description": "glb: bake material gradients into plain materials (see export_tree)"}
         }), &["folder", "count"]),
         tool("add_force", "Add force", "Add a force that bends stems while they grow. kind 'direction' pushes every stem along direction [x,y,z] (wind-swept or leaning trees); kind 'attractor' pulls stems towards position [x,y,z] in metres (light seeking), negative strength pushes them away (obstacles). Each generator's force_response parameter scales the effect (roots default to 0).", json!({
             "kind": {"type": "string", "enum": ["direction", "attractor"]},
@@ -502,7 +514,11 @@ fn stats_for(doc: &Document, lod: u32) -> Value {
 fn gen_json(doc: &Document, g: &Generator) -> Value {
     let children: Vec<u32> = doc.children(Some(g.id)).map(|c| c.id).collect();
     let material = g.material.and_then(|m| doc.material(m)).map(|m| m.name.clone()).unwrap_or_else(|| if g.kind == GenKind::Leaves { "Default leaves".into() } else { "Default bark".into() });
-    json!({"id": g.id, "name": g.name, "kind": g.kind, "parent_id": g.parent, "enabled": g.enabled, "material_id": g.material, "material": material, "children": children, "params": g.params})
+    let mut v = json!({"id": g.id, "name": g.name, "kind": g.kind, "parent_id": g.parent, "enabled": g.enabled, "material_id": g.material, "material": material, "children": children, "params": g.params});
+    if let Some(bl) = &g.blend {
+        v["material_blend"] = json!(bl);
+    }
+    v
 }
 
 fn tree_json(sh: &Shared) -> Value {
@@ -923,6 +939,47 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             let g = gen_json(&sh.doc, sh.doc.get(gid).unwrap());
             Ok(pretty(&json!({"updated": g})))
         }
+        "set_material_blend" => {
+            let gid = arg_u32(a, "generator_id").ok_or("generator_id is required")?;
+            let mut sh = lock();
+            let kind = sh.doc.get(gid).ok_or_else(|| format!("no generator with id {gid}"))?.kind;
+            if kind == GenKind::Leaves {
+                return Err("material gradients are for trunks, branches and roots; leaves use one material".into());
+            }
+            let mut b = sh.doc.get(gid).unwrap().blend.clone().unwrap_or_default();
+            if let Some(ax) = arg_str(a, "axis") {
+                let new = BlendAxis::parse(ax).ok_or("axis must be stem, height or height_share")?;
+                if new != b.axis && a.get("layers").is_none() && !b.layers.is_empty() {
+                    return Err("changing the axis changes what `at` means: give the layers again".into());
+                }
+                b.axis = new;
+            }
+            if let Some(ls) = a.get("layers") {
+                let arr = ls.as_array().ok_or("layers must be an array")?;
+                let mut layers = vec![];
+                for l in arr {
+                    let at = l.get("at").and_then(|v| v.as_f64()).ok_or("every layer needs `at`")? as f32;
+                    let mid = material_arg(&sh.doc, l.get("material_id").unwrap_or(&Value::Null))?;
+                    layers.push(MaterialLayer { material: mid, at });
+                }
+                if layers.len() > MAX_LAYERS {
+                    return Err(format!("at most {MAX_LAYERS} layers above the generator's own material"));
+                }
+                b.layers = layers;
+            }
+            for (k, f) in [("width", &mut b.width), ("noise", &mut b.noise), ("noise_scale", &mut b.noise_scale), ("contrast", &mut b.contrast)] {
+                if let Some(x) = arg_f32(a, k) {
+                    *f = x;
+                }
+            }
+            b.clamp();
+            let clear = a.get("clear").and_then(|v| v.as_bool()).unwrap_or(false);
+            let g = sh.doc.get_mut(gid).unwrap();
+            g.blend = if clear || b.layers.is_empty() { None } else { Some(b) };
+            sh.commit();
+            let g = gen_json(&sh.doc, sh.doc.get(gid).unwrap());
+            Ok(pretty(&json!({"updated": g})))
+        }
         "remove_generator" => {
             let id = arg_u32(a, "id").ok_or("id is required")?;
             let mut sh = lock();
@@ -1153,7 +1210,8 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             if let Some(g) = a.get("include_growth").and_then(|v| v.as_bool()) {
                 doc.growth.export = g;
             }
-            let r = export::export(&doc, &path, fmt, lods, bb)?;
+            let bake = a.get("bake_material_blend").and_then(|v| v.as_bool()).unwrap_or(false);
+            let r = export::export(&doc, &path, fmt, lods, bb, bake)?;
             let files: Vec<String> = r.files.iter().map(|f| f.display().to_string()).collect();
             lock().log(Source::App, format!("exported {}", files.join(", ")));
             let mut out = json!({"files": files, "lods": r.lods});
@@ -1185,7 +1243,8 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
                 doc.growth.export = g;
             }
             let first = arg_u32(a, "first_seed").unwrap_or(doc.settings.seed);
-            let v = export::export_variations(&doc, &dir, count, first, fmt, lods, bb)?;
+            let bake = a.get("bake_material_blend").and_then(|v| v.as_bool()).unwrap_or(false);
+            let v = export::export_variations(&doc, &dir, count, first, fmt, lods, bb, bake)?;
             lock().log(Source::App, format!("exported {} variations to {}", v.len(), dir.display()));
             let list: Vec<Value> = v
                 .iter()

@@ -1846,6 +1846,12 @@ pub struct Mesh {
     /// Rim of the opening cut into a parent's bark for a joined branch: (vertex, branch stem).
     /// The growth animation closes these openings while the branch is still small.
     pub joint_rim: Vec<(u32, u32)>,
+    /// Material layer value per vertex for stems with a material gradient: the layer it is in
+    /// plus how far it has blended into the next (empty or 0 = the generator's own material).
+    pub layer: Vec<f32>,
+    /// Position on its generator's gradient axis per vertex (see [`crate::model::BlendAxis`]),
+    /// before noise; the blend weight of a pixel is computed from it and [`blend_noise`].
+    pub axis: Vec<f32>,
     /// Bark triangles first, then leaf triangles from `leaf_tri_start`.
     pub tris: Vec<[u32; 3]>,
     pub leaf_tri_start: usize,
@@ -1864,6 +1870,32 @@ pub struct Stats {
 }
 
 impl Mesh {
+    /// The materials a triangle is drawn with: (layer `k`, material of layer k, and the material
+    /// of layer k + 1 when the triangle blends into it). The blend weight at a vertex is
+    /// `clamp(layer - k, 0, 1)`.
+    pub fn tri_layers(&self, doc: &Document, ti: usize) -> (u32, u32, Option<u32>) {
+        let tri = self.tris[ti];
+        let v0 = tri[0] as usize;
+        if self.axis.is_empty() || ti >= self.leaf_tri_start || self.vmat[v0] == crate::billboard::BILLBOARD_MAT {
+            return (0, self.vmat[v0], None);
+        }
+        let gen = self.gen[v0];
+        let Some(b) = doc.get(gen).and_then(|g| g.blend.as_ref()) else { return (0, self.vmat[v0], None) };
+        let x = tri.map(|i| self.axis[i as usize]);
+        let (k, blends) = b.span_layers(x[0].min(x[1]).min(x[2]), x[0].max(x[1]).max(x[2]));
+        let a = doc.layer_material_id(gen, k);
+        (k, a, blends.then(|| doc.layer_material_id(gen, k + 1)))
+    }
+
+    /// The blend of a triangle that blends into its next layer: (layer index in the gradient's
+    /// `layers`, the gradient). None for triangles drawn with one material.
+    pub fn tri_blend<'a>(&self, doc: &'a Document, ti: usize) -> Option<(usize, &'a crate::model::MaterialBlend)> {
+        let (k, _, next) = self.tri_layers(doc, ti);
+        next?;
+        let gen = self.gen[self.tris[ti][0] as usize];
+        doc.get(gen).and_then(|g| g.blend.as_ref()).map(|b| (k as usize, b))
+    }
+
     pub fn stats(&self, sk: &Skeleton) -> Stats {
         Stats {
             stems: sk.stems.len(),
@@ -2256,8 +2288,88 @@ pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) ->
     // final bounds from the real geometry (leaf tips and fronds included)
     m.height = m.pos.iter().fold(0.1f32, |a, p| a.max(p.y));
     m.radius = m.pos.iter().fold(0.1f32, |a, p| a.max((p.x * p.x + p.z * p.z).sqrt()));
+    assign_layers(doc, sk, &below, &mut m);
     bake_ao(&mut m, doc.settings.ao_strength, level);
     m
+}
+
+/// Material gradients: the layer value of every stem vertex of a generator with a gradient
+/// (see [`crate::model::MaterialBlend::layer_value`]), and its colour tint blended between the
+/// layers' materials. Fillets and collars belong to the branch they join, so they take its
+/// value.
+fn assign_layers(doc: &Document, sk: &Skeleton, below: &[f32], m: &mut Mesh) {
+    if !doc.generators.iter().any(|g| g.blend.is_some()) {
+        return;
+    }
+    let n = m.pos.len();
+    m.layer = vec![0.0; n];
+    m.axis = vec![0.0; n];
+    let bark = doc.settings.bark_color.map(|c| c as f32 / 255.0);
+    let tint = |id: u32| doc.material(id).map(|mt| mt.color.map(|c| c as f32 / 255.0)).unwrap_or(bark);
+    let tree_h = m.height.max(0.1);
+    // arc length along each stem's polyline, for the Stem axis
+    let arcs: Vec<Vec<f32>> = sk
+        .stems
+        .iter()
+        .map(|s| {
+            let mut a = vec![0.0f32];
+            for w in s.points.windows(2) {
+                a.push(a.last().unwrap() + w[0].distance(w[1]));
+            }
+            a
+        })
+        .collect();
+    for i in 0..n {
+        if m.leaf[i] || m.vmat[i] == crate::billboard::BILLBOARD_MAT {
+            continue;
+        }
+        let gen = m.gen[i];
+        let Some(b) = doc.get(gen).and_then(|g| g.blend.as_ref()) else { continue };
+        if b.layers.is_empty() {
+            continue;
+        }
+        let p = m.pos[i];
+        let x = match b.axis {
+            BlendAxis::Height => p.y,
+            BlendAxis::HeightShare => p.y / tree_h,
+            BlendAxis::Stem => {
+                let si = m.stem[i] as usize;
+                let Some(st) = sk.stems.get(si) else { continue };
+                let arc = &arcs[si];
+                let mut best = (f32::MAX, 0.0f32);
+                for k in 0..st.points.len().saturating_sub(1) {
+                    let (a, c) = (st.points[k], st.points[k + 1]);
+                    let ac = c - a;
+                    let t = ((p - a).dot(ac) / ac.length_squared().max(1e-12)).clamp(0.0, 1.0);
+                    let d = p.distance_squared(a + ac * t);
+                    if d < best.0 {
+                        best = (d, arc[k] + t * (arc[k + 1] - arc[k]));
+                    }
+                }
+                let total = arc.last().copied().unwrap_or(1.0);
+                let b0 = below.get(si).copied().unwrap_or(0.0);
+                ((best.1 - b0) / (total - b0).max(1e-6)).clamp(0.0, 1.0)
+            }
+        };
+        let nz = if b.noise > 0.0 { blend_noise(p, b.noise_scale) } else { 0.0 };
+        let l = b.layer_value(x, nz);
+        m.layer[i] = l;
+        m.axis[i] = x;
+        if l > 0.0 {
+            let k = l.floor() as u32;
+            let f = l - k as f32;
+            let t0 = tint(doc.layer_material_id(gen, 0));
+            let (ta, tb) = (tint(doc.layer_material_id(gen, k)), tint(doc.layer_material_id(gen, k + 1)));
+            for c in 0..3 {
+                let want = ta[c] + (tb[c] - ta[c]) * f;
+                if t0[c] > 1e-4 {
+                    m.col[i][c] *= want / t0[c];
+                } else {
+                    m.col[i][c] = want;
+                }
+            }
+        }
+    }
 }
 
 /// Ambient occlusion from the tree's own geometry: triangles are splatted into a density
@@ -2375,6 +2487,40 @@ pub fn wind_offset(doc: &Document, m: &Mesh, i: usize, time: f32) -> Vec3 {
         off += m.nrm[i] * (flutter * w.strength * 0.06 * (t * 9.0 + ph * 3.0).sin());
     }
     off
+}
+
+/// The noise mask of material gradients at world position `p` (-1..1), patches about `scale`
+/// metres across. The viewport shader computes the same function per pixel (see gpu.rs), and
+/// exported files describe it, so engines can reproduce it.
+pub fn blend_noise(p: Vec3, scale: f32) -> f32 {
+    let q = p / scale.max(0.01);
+    let a = value_noise(q);
+    let b = value_noise(q * 2.7 + Vec3::splat(31.0));
+    (((a * 0.65 + b * 0.35) * 2.0 - 1.0) * 1.6).clamp(-1.0, 1.0)
+}
+
+/// Hash of a lattice point to 0..1 (float arithmetic only, the same in the shader).
+fn hash13(p: Vec3) -> f32 {
+    let fr = |x: f32| x - x.floor();
+    let mut q = Vec3::new(fr(p.x * 0.1031), fr(p.y * 0.1031), fr(p.z * 0.1031));
+    let d = q.dot(Vec3::new(q.y, q.z, q.x) + Vec3::splat(31.32));
+    q += Vec3::splat(d);
+    fr((q.x + q.y) * q.z)
+}
+
+/// Smooth value noise in 0..1.
+fn value_noise(p: Vec3) -> f32 {
+    let i = p.floor();
+    let f = p - i;
+    let u = f * f * (Vec3::splat(3.0) - f * 2.0);
+    let h = |x: f32, y: f32, z: f32| hash13(i + Vec3::new(x, y, z));
+    let x00 = h(0.0, 0.0, 0.0) + (h(1.0, 0.0, 0.0) - h(0.0, 0.0, 0.0)) * u.x;
+    let x10 = h(0.0, 1.0, 0.0) + (h(1.0, 1.0, 0.0) - h(0.0, 1.0, 0.0)) * u.x;
+    let x01 = h(0.0, 0.0, 1.0) + (h(1.0, 0.0, 1.0) - h(0.0, 0.0, 1.0)) * u.x;
+    let x11 = h(0.0, 1.0, 1.0) + (h(1.0, 1.0, 1.0) - h(0.0, 1.0, 1.0)) * u.x;
+    let y0 = x00 + (x10 - x00) * u.y;
+    let y1 = x01 + (x11 - x01) * u.y;
+    y0 + (y1 - y0) * u.z
 }
 
 fn hash3(x: i32, y: i32, z: i32) -> f32 {

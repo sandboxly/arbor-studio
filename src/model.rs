@@ -731,6 +731,146 @@ pub struct Generator {
     /// Material id from the document's material library; `None` = the default bark / leaf look.
     #[serde(default)]
     pub material: Option<u32>,
+    /// More materials on the stems, blended along a gradient (trunks, branches and roots).
+    /// `material` is the first layer, from the start of the gradient.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blend: Option<MaterialBlend>,
+}
+
+/// What a material gradient runs along.
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BlendAxis {
+    /// Along each stem's own length: 0 = its base, 1 = its tip.
+    #[default]
+    Stem,
+    /// Height above the ground in metres, the same on every stem (trunk and roots alike).
+    Height,
+    /// Height as a share of the tree's height: 0 = the ground, 1 = the top.
+    HeightShare,
+}
+
+impl BlendAxis {
+    pub fn label(self) -> &'static str {
+        match self {
+            BlendAxis::Stem => "Along the stem",
+            BlendAxis::Height => "Height (m)",
+            BlendAxis::HeightShare => "Height (share)",
+        }
+    }
+    pub fn parse(s: &str) -> Option<BlendAxis> {
+        match s {
+            "stem" => Some(BlendAxis::Stem),
+            "height" => Some(BlendAxis::Height),
+            "height_share" => Some(BlendAxis::HeightShare),
+            _ => None,
+        }
+    }
+    /// Largest position on this axis.
+    pub fn max(self) -> f32 {
+        match self {
+            BlendAxis::Height => 100.0,
+            _ => 1.0,
+        }
+    }
+}
+
+/// One more material in a gradient: it takes over from the layer below at `at`.
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct MaterialLayer {
+    /// Material id (`None` = the default bark).
+    pub material: Option<u32>,
+    /// Where it takes over, on the gradient's axis (a share, or metres for Height).
+    pub at: f32,
+}
+
+impl Default for MaterialLayer {
+    fn default() -> Self {
+        MaterialLayer { material: None, at: 0.5 }
+    }
+}
+
+/// Several materials on one generator's stems, blended along a gradient.
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct MaterialBlend {
+    pub axis: BlendAxis,
+    /// The layers above the generator's own material, in order of `at`.
+    pub layers: Vec<MaterialLayer>,
+    /// Width of each transition, in the axis's units.
+    pub width: f32,
+    /// Noise mask: how far it moves the transition, as a share of the width (0 = a straight
+    /// line, 1 = up to a whole width either way).
+    pub noise: f32,
+    /// Size of the noise patches in metres.
+    pub noise_scale: f32,
+    /// 0 = a soft blend over the whole width, 1 = a sharp (but still noisy) edge.
+    pub contrast: f32,
+}
+
+impl Default for MaterialBlend {
+    fn default() -> Self {
+        MaterialBlend { axis: BlendAxis::Stem, layers: vec![], width: 0.1, noise: 0.0, noise_scale: 0.3, contrast: 0.0 }
+    }
+}
+
+/// Most layers above the first one.
+pub const MAX_LAYERS: usize = 4;
+
+impl MaterialBlend {
+    pub fn clamp(&mut self) {
+        let max = self.axis.max();
+        self.layers.truncate(MAX_LAYERS);
+        for l in &mut self.layers {
+            l.at = if l.at.is_finite() { l.at.clamp(0.0, max) } else { 0.5 };
+        }
+        self.layers.sort_by(|a, b| a.at.total_cmp(&b.at));
+        let wmax = if self.axis == BlendAxis::Height { 20.0 } else { 1.0 };
+        self.width = if self.width.is_finite() { self.width.clamp(0.0, wmax) } else { 0.1 };
+        self.noise = if self.noise.is_finite() { self.noise.clamp(0.0, 1.0) } else { 0.0 };
+        self.noise_scale = if self.noise_scale.is_finite() { self.noise_scale.clamp(0.01, 10.0) } else { 0.3 };
+        self.contrast = if self.contrast.is_finite() { self.contrast.clamp(0.0, 1.0) } else { 0.0 };
+    }
+
+    /// The layer value at a point: the index of the layer it is in plus how far it has blended
+    /// into the next one (e.g. 0.3 = 30 % of layer 1 over layer 0). `x` is the position on the
+    /// axis, `n` the noise mask there (-1..1).
+    pub fn layer_value(&self, x: f32, n: f32) -> f32 {
+        (0..self.layers.len()).map(|k| self.weight(k, x, n)).sum()
+    }
+
+    /// Half the width over which a transition actually ramps (contrast narrows it).
+    pub fn half_ramp(&self) -> f32 {
+        0.5 * self.width * (1.0 - 0.95 * self.contrast)
+    }
+
+    /// How far the noise mask can move a transition, in the axis's units.
+    pub fn noise_reach(&self) -> f32 {
+        self.noise * self.width
+    }
+
+    /// Weight of layer `k + 1` (index `k` in `layers`) over the layers below it at axis position
+    /// `x` with noise `n` (-1..1): a smooth step over the ramp around its `at`.
+    pub fn weight(&self, k: usize, x: f32, n: f32) -> f32 {
+        let Some(l) = self.layers.get(k) else { return 0.0 };
+        let x = x + self.noise_reach() * n;
+        let hw = self.half_ramp();
+        if hw <= 1e-6 {
+            return if x >= l.at { 1.0 } else { 0.0 };
+        }
+        let t = ((x - (l.at - hw)) / (2.0 * hw)).clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    }
+
+    /// The layers a part of a stem spanning axis positions `lo..hi` is drawn with: (layer `k`
+    /// it is fully in, and whether it can blend into layer `k + 1` somewhere, noise included).
+    pub fn span_layers(&self, lo: f32, hi: f32) -> (u32, bool) {
+        let reach = self.half_ramp() + self.noise_reach() + 1e-5;
+        let k = self.layers.iter().filter(|l| l.at + reach <= lo).count();
+        let blends = self.layers.get(k).is_some_and(|l| l.at - reach < hi);
+        (k as u32, blends)
+    }
 }
 
 /// A surface material: colour (or tint over a texture), optional texture and normal map.
@@ -1241,7 +1381,7 @@ impl Document {
             let n = self.generators.iter().filter(|g| g.kind == kind).count() + 1;
             format!("{} {}", kind.label(), n)
         });
-        self.generators.push(Generator { id, parent, name, kind, enabled: true, params, material: None });
+        self.generators.push(Generator { id, parent, name, kind, enabled: true, params, material: None, blend: None });
         Ok(id)
     }
 
@@ -1339,11 +1479,30 @@ impl Document {
             if g.material == Some(id) {
                 g.material = None;
             }
+            if let Some(b) = &mut g.blend {
+                for l in &mut b.layers {
+                    if l.material == Some(id) {
+                        l.material = None;
+                    }
+                }
+            }
         }
         before != self.materials.len()
     }
     pub fn material_users(&self, id: u32) -> Vec<&Generator> {
-        self.generators.iter().filter(|g| g.material == Some(id)).collect()
+        self.generators.iter().filter(|g| g.material == Some(id) || g.blend.as_ref().is_some_and(|b| b.layers.iter().any(|l| l.material == Some(id)))).collect()
+    }
+    /// The material id of layer `k` of a generator's stems (0 = its own material; ids of 0 =
+    /// the default look). Layers past the last one use the last.
+    pub fn layer_material_id(&self, gen_id: u32, k: u32) -> u32 {
+        let Some(g) = self.get(gen_id) else { return 0 };
+        if k == 0 {
+            return g.material.unwrap_or(0);
+        }
+        match &g.blend {
+            Some(b) if !b.layers.is_empty() => b.layers[(k as usize - 1).min(b.layers.len() - 1)].material.unwrap_or(0),
+            _ => g.material.unwrap_or(0),
+        }
     }
 
     pub fn clamp_all(&mut self) {
@@ -1361,6 +1520,20 @@ impl Document {
         for g in &mut self.generators {
             if g.material.map(|m| !ids.contains(&m)).unwrap_or(false) {
                 g.material = None;
+            }
+            if g.kind == GenKind::Leaves {
+                g.blend = None;
+            }
+            if let Some(b) = &mut g.blend {
+                for l in &mut b.layers {
+                    if l.material.map(|m| !ids.contains(&m)).unwrap_or(false) {
+                        l.material = None;
+                    }
+                }
+                b.clamp();
+                if b.layers.is_empty() {
+                    g.blend = None;
+                }
             }
         }
         for g in &mut self.generators {

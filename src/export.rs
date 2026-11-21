@@ -11,6 +11,12 @@
 //! morph targets on skinned meshes, such as Unreal, import them) and animations that drive the
 //! morph weights: "Grow" from nothing to the mature tree, and one clip per stage. OBJ gets one
 //! extra file per stage; JSON gets the growth timing of every stem and leaf.
+//!
+//! Material gradients (several materials on a generator's stems): GLB keeps every material and
+//! stores the blend in TEXCOORD_2 (x = position on the gradient's axis, y = layer value); each
+//! primitive where two layers meet names its second material and the blend formula in its
+//! extras. With `bake_blend` (and always for OBJ, which cannot carry weights) the transitions are
+//! baked into plain materials instead, see [`crate::blendbake`]. JSON has the gradient itself.
 
 use crate::grow::{grow, Mesh, Stats};
 use crate::model::Document;
@@ -73,7 +79,7 @@ fn level_name(name: &str, level: u32, with_lods: bool) -> String {
     }
 }
 
-pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with_billboard: bool) -> Result<ExportResult, String> {
+pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with_billboard: bool, bake_blend: bool) -> Result<ExportResult, String> {
     if let Some(dir) = path.parent() {
         if !dir.as_os_str().is_empty() {
             std::fs::create_dir_all(dir).map_err(|e| format!("cannot create folder {}: {e}", dir.display()))?;
@@ -108,15 +114,72 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
         meshes.push((crate::billboard::BILLBOARD_LOD, bb.mesh, sk));
     }
     // growth animation: every level grows on the full tree's timing
-    let growth = doc.growth.export.then(|| {
+    let mut growth = doc.growth.export.then(|| {
         let timing = crate::growth::Timing::new(doc, &full);
         let pairs: Vec<(&Mesh, &crate::grow::Skeleton)> = meshes.iter().map(|(_, m, sk)| (m, sk)).collect();
         (timing.clone(), crate::growth::animate(doc, &timing, &pairs))
     });
+    // material gradients baked into plain materials (OBJ always: it cannot carry blend weights)
+    let mut baked: Vec<crate::blendbake::BakedMaterial> = vec![];
+    let has_blend = meshes.iter().any(|(_, m, _)| !m.axis.is_empty());
+    let bake = has_blend && (format == Format::Obj || (format == Format::Glb && bake_blend));
+    let mut bake_tmp: Option<PathBuf> = None;
+    if bake {
+        let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| name.clone());
+        let dir = if format == Format::Obj {
+            path.parent().map(Path::to_path_buf).unwrap_or_default()
+        } else {
+            let t = std::env::temp_dir().join(format!("arbor_bake_{}_{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)));
+            std::fs::create_dir_all(&t).map_err(|e| format!("cannot create {}: {e}", t.display()))?;
+            bake_tmp = Some(t.clone());
+            t
+        };
+        for (i, (l, m, _)) in meshes.iter_mut().enumerate() {
+            if m.axis.is_empty() {
+                continue;
+            }
+            let max = match *l {
+                0 => 2048,
+                1 => 1024,
+                _ => 512,
+            };
+            let tag = if with_lods { format!("{stem}_blend_LOD{l}") } else { format!("{stem}_blend") };
+            let mut src = vec![];
+            let first = crate::blendbake::BAKED_BASE + baked.len() as u32;
+            let r = crate::blendbake::bake_mesh(doc, m, max, &dir, &tag, first, &mut src);
+            let mut r = match r {
+                Ok(r) => r,
+                Err(e) => {
+                    if let Some(t) = &bake_tmp {
+                        let _ = std::fs::remove_dir_all(t);
+                    }
+                    return Err(e);
+                }
+            };
+            if with_lods {
+                for b in &mut r {
+                    b.name = format!("{}_LOD{l}", b.name);
+                }
+            }
+            if let Some((_, anim)) = growth.as_mut() {
+                for shape in anim.shapes[i].iter_mut() {
+                    let old = std::mem::take(shape);
+                    *shape = src.iter().map(|&v| old[v as usize]).collect();
+                }
+            }
+            if format == Format::Obj {
+                for b in &r {
+                    extra_files.push(b.texture.clone());
+                    extra_files.extend(b.normal_map.clone());
+                }
+            }
+            baked.extend(r);
+        }
+    }
     let growth_info = growth.as_ref().map(|_| crate::mcp::growth_info(&doc.growth));
     let files = match format {
         Format::Obj => {
-            let mut f = write_obj(doc, &name, path, &meshes, with_lods, bb_texture.as_deref(), &caps)?;
+            let mut f = write_obj(doc, &name, path, &meshes, with_lods, bb_texture.as_deref(), &caps, &baked)?;
             // one more file per stage before the mature tree: <file>_<Stage>.obj
             if let Some((_, anim)) = &growth {
                 let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| name.clone());
@@ -132,7 +195,7 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
                         })
                         .collect();
                     let p = path.with_file_name(format!("{stem}_{}.obj", safe_name(&doc.growth.label(si))));
-                    f.extend(write_obj(doc, &name, &p, &staged, with_lods, bb_texture.as_deref(), &[])?);
+                    f.extend(write_obj(doc, &name, &p, &staged, with_lods, bb_texture.as_deref(), &[], &baked)?);
                 }
             }
             f.extend(extra_files);
@@ -140,7 +203,11 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
         }
         Format::Glb => {
             let refs: Vec<(u32, &Mesh)> = meshes.iter().map(|(l, m, _)| (*l, m)).collect();
-            write_glb(doc, &name, path, &refs, with_lods, bb_texture.as_deref(), &caps, growth.as_ref().map(|(_, a)| a))?;
+            let r = write_glb(doc, &name, path, &refs, with_lods, bb_texture.as_deref(), &caps, growth.as_ref().map(|(_, a)| a), &baked);
+            if let Some(t) = &bake_tmp {
+                let _ = std::fs::remove_dir_all(t);
+            }
+            r?;
             let mut f = vec![path.to_path_buf()];
             f.extend(extra_files);
             f
@@ -173,7 +240,7 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
 
 /// Export `count` individuals of the same species (seeds `first_seed`, `first_seed + 1`, ...)
 /// into `dir` as `<tree>_v01.<ext>`, `<tree>_v02.<ext>`, ... Mesh names carry the same suffix.
-pub fn export_variations(doc: &Document, dir: &Path, count: u32, first_seed: u32, format: Format, with_lods: bool, with_billboard: bool) -> Result<Vec<(u32, Vec<PathBuf>, Option<String>)>, String> {
+pub fn export_variations(doc: &Document, dir: &Path, count: u32, first_seed: u32, format: Format, with_lods: bool, with_billboard: bool, bake_blend: bool) -> Result<Vec<(u32, Vec<PathBuf>, Option<String>)>, String> {
     let count = count.clamp(1, 64);
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create folder {}: {e}", dir.display()))?;
     let ext = match format {
@@ -190,7 +257,7 @@ pub fn export_variations(doc: &Document, dir: &Path, count: u32, first_seed: u32
         d.nodes.clear();
         d.name = format!("{base}_v{:02}", i + 1);
         let path = dir.join(format!("{}.{ext}", d.name));
-        let r = export(&d, &path, format, with_lods, with_billboard)?;
+        let r = export(&d, &path, format, with_lods, with_billboard, bake_blend)?;
         let warning = if d.budget.enabled { r.budget_warning(d.budget.fit) } else { None };
         out.push((d.settings.seed, r.files, warning));
     }
@@ -205,6 +272,8 @@ struct Slot {
     texture: Option<String>,
     normal_map: Option<String>,
     normal_scale: f32,
+    /// The normal map is in the DirectX convention (green = down); GLB flips it on export.
+    normal_flip_green: bool,
     roughness: f32,
     cutout: bool,
     double_sided: bool,
@@ -215,28 +284,48 @@ enum SlotKey {
     DefaultBark,
     DefaultLeaves,
     Mat(u32),
+    Baked(u32),
     Billboard,
 }
 
-fn tri_key(m: &Mesh, ti: usize) -> SlotKey {
-    let v = m.tris[ti][0] as usize;
-    match m.vmat[v] {
+fn key_of(id: u32, leaf: bool) -> SlotKey {
+    match id {
         crate::billboard::BILLBOARD_MAT => SlotKey::Billboard,
-        0 if ti >= m.leaf_tri_start => SlotKey::DefaultLeaves,
+        0 if leaf => SlotKey::DefaultLeaves,
         0 => SlotKey::DefaultBark,
+        id if id >= crate::blendbake::BAKED_BASE => SlotKey::Baked(id),
         id => SlotKey::Mat(id),
     }
 }
 
+/// The material a triangle is drawn with (the first of the two where a material gradient blends).
+fn tri_key(doc: &Document, m: &Mesh, ti: usize) -> SlotKey {
+    let (_, a, _) = m.tri_layers(doc, ti);
+    key_of(a, ti >= m.leaf_tri_start)
+}
+
+/// Where a gradient blends two materials on a triangle: (second material, layer index, generator).
+fn tri_blend_key(doc: &Document, m: &Mesh, ti: usize) -> Option<(SlotKey, usize, u32)> {
+    let (_, _, b) = m.tri_layers(doc, ti);
+    let b = b?;
+    let (k, _) = m.tri_blend(doc, ti)?;
+    Some((key_of(b, false), k, m.gen[m.tris[ti][0] as usize]))
+}
+
 /// The materials the exported meshes actually use, in a stable order.
-fn slots(doc: &Document, meshes: &[&Mesh], bb_texture: Option<&str>) -> Vec<Slot> {
+fn slots(doc: &Document, meshes: &[&Mesh], bb_texture: Option<&str>, baked: &[crate::blendbake::BakedMaterial]) -> Vec<Slot> {
     let mut used: Vec<SlotKey> = vec![];
     let mut on_leaves: Vec<u32> = vec![];
     for m in meshes {
         for ti in 0..m.tris.len() {
-            let k = tri_key(m, ti);
+            let k = tri_key(doc, m, ti);
             if !used.contains(&k) {
                 used.push(k);
+            }
+            if let Some((b, _, _)) = tri_blend_key(doc, m, ti) {
+                if !used.contains(&b) {
+                    used.push(b);
+                }
             }
             if let SlotKey::Mat(id) = k {
                 if ti >= m.leaf_tri_start && !on_leaves.contains(&id) {
@@ -247,6 +336,7 @@ fn slots(doc: &Document, meshes: &[&Mesh], bb_texture: Option<&str>) -> Vec<Slot
     }
     let mut order = vec![SlotKey::DefaultBark, SlotKey::DefaultLeaves];
     order.extend(doc.materials.iter().map(|m| SlotKey::Mat(m.id)));
+    order.extend(baked.iter().map(|b| SlotKey::Baked(b.id)));
     order.push(SlotKey::Billboard);
     let mut names: Vec<String> = vec![];
     let mut out = vec![];
@@ -260,6 +350,7 @@ fn slots(doc: &Document, meshes: &[&Mesh], bb_texture: Option<&str>) -> Vec<Slot
                 texture: None,
                 normal_map: None,
                 normal_scale: 1.0,
+                normal_flip_green: false,
                 roughness: 0.95,
                 cutout: false,
                 double_sided: false,
@@ -271,6 +362,7 @@ fn slots(doc: &Document, meshes: &[&Mesh], bb_texture: Option<&str>) -> Vec<Slot
                 texture: None,
                 normal_map: None,
                 normal_scale: 1.0,
+                normal_flip_green: false,
                 roughness: 0.8,
                 cutout: false,
                 double_sided: true,
@@ -282,6 +374,7 @@ fn slots(doc: &Document, meshes: &[&Mesh], bb_texture: Option<&str>) -> Vec<Slot
                 texture: bb_texture.map(String::from),
                 normal_map: None,
                 normal_scale: 1.0,
+                normal_flip_green: false,
                 roughness: 0.9,
                 cutout: true,
                 // each card has separate front and back faces, so it must stay single-sided
@@ -296,9 +389,26 @@ fn slots(doc: &Document, meshes: &[&Mesh], bb_texture: Option<&str>) -> Vec<Slot
                     texture: m.texture.clone().filter(|p| Path::new(p).is_file()),
                     normal_map: m.normal_map.clone().filter(|p| Path::new(p).is_file()),
                     normal_scale: m.normal_strength,
+                    normal_flip_green: m.normal_flip_green,
                     roughness: m.roughness,
                     cutout: m.alpha_cutout,
                     double_sided: m.double_sided || on_leaves.contains(&id),
+                }
+            }
+            SlotKey::Baked(id) => {
+                let b = baked.iter().find(|b| b.id == id).unwrap();
+                Slot {
+                    key,
+                    name: safe_name(&b.name),
+                    color: [1.0, 1.0, 1.0],
+                    texture: Some(b.texture.display().to_string()),
+                    normal_map: b.normal_map.as_ref().map(|p| p.display().to_string()),
+                    // the baked normal map already has each layer's strength in it
+                    normal_scale: 1.0,
+                    normal_flip_green: false,
+                    roughness: b.roughness,
+                    cutout: false,
+                    double_sided: false,
                 }
             }
         };
@@ -311,9 +421,9 @@ fn slots(doc: &Document, meshes: &[&Mesh], bb_texture: Option<&str>) -> Vec<Slot
     out
 }
 
-fn write_obj(doc: &Document, name: &str, path: &Path, meshes: &[(u32, Mesh, crate::grow::Skeleton)], with_lods: bool, bb_texture: Option<&str>, caps: &[crate::collision::Capsule]) -> Result<Vec<PathBuf>, String> {
+fn write_obj(doc: &Document, name: &str, path: &Path, meshes: &[(u32, Mesh, crate::grow::Skeleton)], with_lods: bool, bb_texture: Option<&str>, caps: &[crate::collision::Capsule], baked: &[crate::blendbake::BakedMaterial]) -> Result<Vec<PathBuf>, String> {
     let mesh_refs: Vec<&Mesh> = meshes.iter().map(|(_, m, _)| m).collect();
-    let slots = slots(doc, &mesh_refs, bb_texture);
+    let slots = slots(doc, &mesh_refs, bb_texture, baked);
     let mtl_path = path.with_extension("mtl");
     let mtl_name = mtl_path.file_name().unwrap().to_string_lossy().to_string();
     let err = |e: std::io::Error| format!("cannot write {}: {e}", path.display());
@@ -333,7 +443,7 @@ fn write_obj(doc: &Document, name: &str, path: &Path, meshes: &[(u32, Mesh, crat
             writeln!(out, "vn {:.4} {:.4} {:.4}", n.x, n.y, n.z).map_err(err)?;
         }
         for slot in &slots {
-            let tris: Vec<&[u32; 3]> = (0..m.tris.len()).filter(|&ti| tri_key(m, ti) == slot.key).map(|ti| &m.tris[ti]).collect();
+            let tris: Vec<&[u32; 3]> = (0..m.tris.len()).filter(|&ti| tri_key(doc, m, ti) == slot.key).map(|ti| &m.tris[ti]).collect();
             if tris.is_empty() {
                 continue;
             }
@@ -387,6 +497,9 @@ fn write_obj(doc: &Document, name: &str, path: &Path, meshes: &[(u32, Mesh, crat
         }
         if let Some(n) = &s.normal_map {
             let f = copy(n)?;
+            if s.normal_flip_green {
+                mtl += "# normal map in the DirectX convention (green = down), copied as is\n";
+            }
             mtl += &format!("norm {f}\nmap_Bump {f}\n");
         }
     }
@@ -394,9 +507,10 @@ fn write_obj(doc: &Document, name: &str, path: &Path, meshes: &[(u32, Mesh, crat
     Ok(files)
 }
 
-fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], with_lods: bool, bb_texture: Option<&str>, caps: &[crate::collision::Capsule], growth: Option<&crate::growth::Animation>) -> Result<(), String> {
+#[allow(clippy::too_many_arguments)]
+fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], with_lods: bool, bb_texture: Option<&str>, caps: &[crate::collision::Capsule], growth: Option<&crate::growth::Animation>, baked: &[crate::blendbake::BakedMaterial]) -> Result<(), String> {
     let mesh_refs: Vec<&Mesh> = meshes.iter().map(|(_, m)| *m).collect();
-    let slots = slots(doc, &mesh_refs, bb_texture);
+    let slots = slots(doc, &mesh_refs, bb_texture, baked);
     let mut bin: Vec<u8> = Vec::new();
     let mut views = Vec::new();
     let mut accessors = Vec::new();
@@ -425,12 +539,22 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
     let mut images = vec![];
     let mut textures = vec![];
     let mut tex_index: Vec<(String, usize)> = vec![];
-    let mut texture_for = |p: &str, bin: &mut Vec<u8>, views: &mut Vec<serde_json::Value>| -> Result<usize, String> {
-        if let Some((_, i)) = tex_index.iter().find(|(q, _)| q == p) {
+    let mut texture_for = |p: &str, flip_green: bool, bin: &mut Vec<u8>, views: &mut Vec<serde_json::Value>| -> Result<usize, String> {
+        let key = if flip_green { format!("{p}#flip") } else { p.to_string() };
+        if let Some((_, i)) = tex_index.iter().find(|(q, _)| *q == key) {
             return Ok(*i);
         }
         let lower = p.to_ascii_lowercase();
-        let (bytes, mime) = if lower.ends_with(".png") {
+        let (bytes, mime) = if flip_green {
+            // glTF normal maps are OpenGL style (green = up): flip DirectX ones on the way out
+            let mut img = image::open(p).map_err(|e| format!("cannot read texture {p}: {e}"))?.to_rgba8();
+            for px in img.pixels_mut() {
+                px.0[1] = 255 - px.0[1];
+            }
+            let mut buf = std::io::Cursor::new(Vec::new());
+            img.write_to(&mut buf, image::ImageFormat::Png).map_err(|e| format!("cannot encode texture {p}: {e}"))?;
+            (buf.into_inner(), "image/png")
+        } else if lower.ends_with(".png") {
             (std::fs::read(p).map_err(|e| format!("cannot read texture {p}: {e}"))?, "image/png")
         } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
             (std::fs::read(p).map_err(|e| format!("cannot read texture {p}: {e}"))?, "image/jpeg")
@@ -441,7 +565,7 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
         let iname = Path::new(p).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
         images.push(json!({"name": iname, "bufferView": bv, "mimeType": mime}));
         textures.push(json!({"sampler": 0, "source": images.len() - 1}));
-        tex_index.push((p.to_string(), textures.len() - 1));
+        tex_index.push((key, textures.len() - 1));
         Ok(textures.len() - 1)
     };
     let mut materials = vec![];
@@ -449,10 +573,19 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
         let mut pbr = json!({"baseColorFactor": [1.0, 1.0, 1.0, 1.0], "metallicFactor": 0.0, "roughnessFactor": s.roughness});
         let mut mat = json!({"name": s.name, "doubleSided": s.double_sided, "extras": {"color": s.color}});
         if let Some(t) = &s.texture {
-            pbr["baseColorTexture"] = json!({"index": texture_for(t, &mut bin, &mut views)?});
+            pbr["baseColorTexture"] = json!({"index": texture_for(t, false, &mut bin, &mut views)?});
         }
         if let Some(n) = &s.normal_map {
-            mat["normalTexture"] = json!({"index": texture_for(n, &mut bin, &mut views)?, "scale": s.normal_scale});
+            mat["normalTexture"] = json!({"index": texture_for(n, s.normal_flip_green, &mut bin, &mut views)?, "scale": s.normal_scale});
+            mat["extras"]["normal_flip_green"] = json!(s.normal_flip_green);
+            mat["extras"]["normal_map_convention"] = json!(if s.normal_flip_green {
+                "the source map is DirectX style (green = down); its green channel was flipped on export, so the embedded map is glTF/OpenGL style (green = up)"
+            } else {
+                "the source map is OpenGL style (green = up), embedded as is"
+            });
+        }
+        if let SlotKey::Baked(_) = s.key {
+            mat["extras"]["baked_material_blend"] = json!(true);
         }
         if s.cutout {
             mat["alphaMode"] = json!("MASK");
@@ -493,6 +626,14 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
         let cv = push_view(&mut bin, &mut views, &f32s(m.col.iter().flat_map(|c| [c[0], c[1], c[2]])), Some(34962));
         accessors.push(json!({"bufferView": cv, "componentType": 5126, "count": n, "type": "VEC3"}));
         let col_acc = accessors.len() - 1;
+        // material gradients: x = position on the gradient's axis, y = layer value
+        let blend_acc = if m.axis.len() == n {
+            let bv = push_view(&mut bin, &mut views, &f32s(m.axis.iter().zip(&m.layer).flat_map(|(x, l)| [*x, *l])), Some(34962));
+            accessors.push(json!({"bufferView": bv, "componentType": 5126, "count": n, "type": "VEC2"}));
+            Some(accessors.len() - 1)
+        } else {
+            None
+        };
         // growth: morph targets (position offsets) and the one-bone skin
         let mut targets = vec![];
         let mut skin_attrs = None;
@@ -523,14 +664,20 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
         }
 
         let mut prims = vec![];
-        for (mi, slot) in slots.iter().enumerate() {
-            let idx: Vec<u8> = (0..m.tris.len())
-                .filter(|&ti| tri_key(m, ti) == slot.key)
-                .flat_map(|ti| m.tris[ti].iter().flat_map(|i| i.to_le_bytes()).collect::<Vec<u8>>())
-                .collect();
-            if idx.is_empty() {
-                continue;
+        // one primitive per material, and one more per gradient transition into a second one
+        let mut groups: Vec<(usize, Option<(SlotKey, usize, u32)>, Vec<usize>)> = vec![];
+        for ti in 0..m.tris.len() {
+            let a = tri_key(doc, m, ti);
+            let Some(mi) = slots.iter().position(|s| s.key == a) else { continue };
+            let b = tri_blend_key(doc, m, ti);
+            match groups.iter_mut().find(|g| g.0 == mi && g.1 == b) {
+                Some(g) => g.2.push(ti),
+                None => groups.push((mi, b, vec![ti])),
             }
+        }
+        groups.sort_by_key(|g| (g.0, g.1.is_some()));
+        for (mi, b, tris) in groups {
+            let idx: Vec<u8> = tris.iter().flat_map(|&ti| m.tris[ti].iter().flat_map(|i| i.to_le_bytes()).collect::<Vec<u8>>()).collect();
             let count = idx.len() / 4;
             let iv = push_view(&mut bin, &mut views, &idx, Some(34963));
             accessors.push(json!({"bufferView": iv, "componentType": 5125, "count": count, "type": "SCALAR"}));
@@ -539,6 +686,23 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
                 "indices": accessors.len() - 1,
                 "material": mi,
             });
+            if let Some(ba) = blend_acc {
+                prim["attributes"]["TEXCOORD_2"] = json!(ba);
+            }
+            if let Some((bk, k, gen)) = b {
+                if let Some(bl) = doc.get(gen).and_then(|g| g.blend.as_ref()) {
+                    let bi = slots.iter().position(|s| s.key == bk);
+                    prim["extras"] = json!({"material_blend": {
+                        "material_b": bi,
+                        "layer": k,
+                        "axis": bl.axis,
+                        "at": bl.layers[k].at,
+                        "half_ramp": bl.half_ramp(),
+                        "noise_reach": bl.noise_reach(),
+                        "noise_scale": bl.noise_scale,
+                    }});
+                }
+            }
             if let Some((j, w)) = skin_attrs {
                 prim["attributes"]["JOINTS_0"] = json!(j);
                 prim["attributes"]["WEIGHTS_0"] = json!(w);
@@ -638,8 +802,21 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
             "wind": doc.settings.wind,
             "wind_attribute": "TEXCOORD_1: x = branch sway weight, y = leaf flutter weight",
             "color_attribute": "COLOR_0: material colour/tint with per-leaf variation and baked ambient occlusion; multiplies the base colour texture",
+            "normal_maps": "glTF normal maps are OpenGL style (green = up). Materials whose source map was DirectX style have normal_flip_green: true in their extras; those maps were flipped on export.",
         },
     });
+    if meshes.iter().any(|(_, m)| !m.axis.is_empty()) {
+        gltf["extras"]["material_blend"] = json!({
+            "attribute": "TEXCOORD_2: x = position on the gradient's axis (stem: 0 = base .. 1 = tip; height: metres above the ground; height_share: 0 = ground .. 1 = top), y = layer value (the layer the vertex is in plus how far it has blended into the next)",
+            "primitives": "Each material is its own primitive. Where a gradient blends into a second material, the primitive draws the first and its extras.material_blend names the second (material_b, a material index) and the transition: layer, axis, at, half_ramp, noise_reach, noise_scale.",
+            "weight": "w = smoothstep(at - half_ramp, at + half_ramp, TEXCOORD_2.x + noise_reach * noise(world_position / noise_scale)); final = mix(material, material_b, w) for colour, normal and roughness. noise is smooth value noise in -1..1; without it (or per vertex) use w = clamp(TEXCOORD_2.y - layer, 0, 1).",
+            "materials": doc.generators.iter().filter_map(|g| g.blend.as_ref().map(|b| json!({"generator": g.name, "blend": b}))).collect::<Vec<_>>(),
+            "bake": "Export with bake_material_blend to get plain materials instead (each transition baked into a texture of its own).",
+        });
+    }
+    if !baked.is_empty() {
+        gltf["extras"]["material_blend_baked"] = json!("Material gradients were baked: materials with extras.baked_material_blend hold the transitions (their own textures, the blend and noise painted in); everything else uses each layer's own material.");
+    }
     if growth.is_some() {
         gltf["skins"] = json!(skins);
         gltf["animations"] = json!(animations);

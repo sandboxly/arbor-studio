@@ -10,8 +10,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// Floats per vertex: clip position (4), unlit colour (3), highlight overlay rgb + amount (4),
-/// uv (2), normal (3), world position (3), kind (1: 0 bark, 1 leaf, 2 already lit).
-pub const STRIDE: usize = 20;
+/// uv (2), normal (3), world position (3), kind (1: 0 bark, 1 leaf, 2 already lit), position on
+/// the material gradient's axis (1, see [`crate::grow::Mesh::axis`]).
+pub const STRIDE: usize = 21;
 
 /// Triangles drawn with the same textures.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -20,6 +21,22 @@ pub struct GroupKey {
     pub normal: Option<egui::TextureId>,
     pub flip_green: bool,
     /// Normal strength × 1000 (kept as an integer so the key can be hashed).
+    pub strength_milli: u32,
+    /// Material gradients: the next layer's textures, blended in by `layer - band`.
+    pub blend: Option<BlendKey>,
+}
+
+/// The second material of a blended group and its transition (f32 bit patterns, for hashing):
+/// where it is, half the ramp's width, how far the noise moves it and the noise's size.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BlendKey {
+    pub at: u32,
+    pub half: u32,
+    pub reach: u32,
+    pub scale: u32,
+    pub color: Option<egui::TextureId>,
+    pub normal: Option<egui::TextureId>,
+    pub flip_green: bool,
     pub strength_milli: u32,
 }
 
@@ -53,6 +70,14 @@ struct Res {
     u_amb: Option<glow::UniformLocation>,
     u_sky: Option<glow::UniformLocation>,
     u_unlit: Option<glow::UniformLocation>,
+    u_tex2: Option<glow::UniformLocation>,
+    u_nrm2: Option<glow::UniformLocation>,
+    u_use_tex2: Option<glow::UniformLocation>,
+    u_use_nrm2: Option<glow::UniformLocation>,
+    u_green2: Option<glow::UniformLocation>,
+    u_strength2: Option<glow::UniformLocation>,
+    u_blend: Option<glow::UniformLocation>,
+    u_ramp: Option<glow::UniformLocation>,
 }
 
 /// Lazily created GL resources, shared with the paint callbacks.
@@ -86,7 +111,7 @@ impl GpuRenderer {
     }
 }
 
-const ATTRS: [(&str, i32); 8] = [("a_pos", 4), ("a_base", 3), ("a_hl", 4), ("a_uv", 2), ("a_nrm", 3), ("a_wpos", 3), ("a_kind", 1), ("", 0)];
+const ATTRS: [(&str, i32); 8] = [("a_pos", 4), ("a_base", 3), ("a_hl", 4), ("a_uv", 2), ("a_nrm", 3), ("a_wpos", 3), ("a_kind", 1), ("a_layer", 1)];
 
 impl Res {
     unsafe fn new(gl: &glow::Context) -> Result<Res, String> {
@@ -99,9 +124,9 @@ impl Res {
             let precision = if ver.is_embedded() { "#extension GL_OES_standard_derivatives : enable\nprecision highp float;" } else { "" };
             let vs = format!(
                 "{decl}\n{precision}\n\
-                {vin} vec4 a_pos;\n{vin} vec3 a_base;\n{vin} vec4 a_hl;\n{vin} vec2 a_uv;\n{vin} vec3 a_nrm;\n{vin} vec3 a_wpos;\n{vin} float a_kind;\n\
-                {vout} vec3 v_base;\n{vout} vec4 v_hl;\n{vout} vec2 v_uv;\n{vout} vec3 v_nrm;\n{vout} vec3 v_wpos;\n{vout} float v_kind;\n\
-                void main() {{ gl_Position = a_pos; v_base = a_base; v_hl = a_hl; v_uv = a_uv; v_nrm = a_nrm; v_wpos = a_wpos; v_kind = a_kind; }}\n"
+                {vin} vec4 a_pos;\n{vin} vec3 a_base;\n{vin} vec4 a_hl;\n{vin} vec2 a_uv;\n{vin} vec3 a_nrm;\n{vin} vec3 a_wpos;\n{vin} float a_kind;\n{vin} float a_layer;\n\
+                {vout} vec3 v_base;\n{vout} vec4 v_hl;\n{vout} vec2 v_uv;\n{vout} vec3 v_nrm;\n{vout} vec3 v_wpos;\n{vout} float v_kind;\n{vout} float v_layer;\n\
+                void main() {{ gl_Position = a_pos; v_base = a_base; v_hl = a_hl; v_uv = a_uv; v_nrm = a_nrm; v_wpos = a_wpos; v_kind = a_kind; v_layer = a_layer; }}\n"
             );
             let fs = format!(
                 r#"{decl}
@@ -117,6 +142,15 @@ uniform vec3 u_sun;
 uniform vec3 u_amb;
 uniform vec3 u_sky;
 uniform float u_unlit;
+uniform sampler2D u_tex2;
+uniform sampler2D u_nrm2;
+uniform float u_use_tex2;
+uniform float u_use_nrm2;
+uniform float u_green2;
+uniform float u_strength2;
+uniform float u_blend;
+uniform vec4 u_ramp;
+{fin} float v_layer;
 {fin} vec3 v_base;
 {fin} vec4 v_hl;
 {fin} vec2 v_uv;
@@ -124,14 +158,50 @@ uniform float u_unlit;
 {fin} vec3 v_wpos;
 {fin} float v_kind;
 {frag_out_decl}
+float hash13(vec3 p) {{
+  vec3 q = fract(p * 0.1031);
+  q += dot(q, q.yzx + 31.32);
+  return fract((q.x + q.y) * q.z);
+}}
+float vnoise(vec3 p) {{
+  vec3 i = floor(p);
+  vec3 f = p - i;
+  vec3 u = f * f * (3.0 - 2.0 * f);
+  float x00 = mix(hash13(i), hash13(i + vec3(1.0, 0.0, 0.0)), u.x);
+  float x10 = mix(hash13(i + vec3(0.0, 1.0, 0.0)), hash13(i + vec3(1.0, 1.0, 0.0)), u.x);
+  float x01 = mix(hash13(i + vec3(0.0, 0.0, 1.0)), hash13(i + vec3(1.0, 0.0, 1.0)), u.x);
+  float x11 = mix(hash13(i + vec3(0.0, 1.0, 1.0)), hash13(i + vec3(1.0, 1.0, 1.0)), u.x);
+  return mix(mix(x00, x10, u.y), mix(x01, x11, u.y), u.z);
+}}
 void main() {{
+  // material gradient: weight of the next layer's material at this pixel
+  // (u_ramp = where the transition is, half its ramp, how far noise moves it, noise size)
+  float bw = 0.0;
+  if (u_blend > 0.5) {{
+    float nz = 0.0;
+    if (u_ramp.z > 0.0) {{
+      vec3 q = v_wpos / max(u_ramp.w, 0.01);
+      nz = clamp(((vnoise(q) * 0.65 + vnoise(q * 2.7 + 31.0) * 0.35) * 2.0 - 1.0) * 1.6, -1.0, 1.0);
+    }}
+    float x = v_layer + u_ramp.z * nz;
+    if (u_ramp.y <= 1e-6) {{
+      bw = x >= u_ramp.x ? 1.0 : 0.0;
+    }} else {{
+      float t = clamp((x - (u_ramp.x - u_ramp.y)) / (2.0 * u_ramp.y), 0.0, 1.0);
+      bw = t * t * (3.0 - 2.0 * t);
+    }}
+  }}
   vec4 t = vec4(1.0);
   if (u_use_tex > 0.5) {{
     t = {tex_fn}(u_tex, v_uv);
     if (t.a < 0.5) discard;
   }}
+  if (bw > 0.0) {{
+    vec4 t2 = u_use_tex2 > 0.5 ? {tex_fn}(u_tex2, v_uv) : vec4(1.0);
+    t = mix(t, t2, bw);
+  }}
   vec3 n = normalize(v_nrm);
-  if (u_use_nrm > 0.5 && v_kind < 1.5) {{
+  if ((u_use_nrm > 0.5 || (bw > 0.0 && u_use_nrm2 > 0.5)) && v_kind < 1.5) {{
     // tangent frame from screen-space derivatives of position and uv (no tangents needed)
     vec3 dp1 = dFdx(v_wpos);
     vec3 dp2 = dFdy(v_wpos);
@@ -142,10 +212,22 @@ void main() {{
     vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
     vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
     if (dot(T, T) > 1e-36 && dot(B, B) > 1e-36) {{
-      vec3 tn = {tex_fn}(u_nrm, v_uv).xyz * 2.0 - 1.0;
-      // B points down the image (texture rows grow downwards): OpenGL maps store green = up
-      tn.y *= u_green;
-      tn.xy *= u_strength;
+      vec3 tn = vec3(0.0, 0.0, 1.0);
+      if (u_use_nrm > 0.5) {{
+        tn = {tex_fn}(u_nrm, v_uv).xyz * 2.0 - 1.0;
+        // B points down the image (texture rows grow downwards): OpenGL maps store green = up
+        tn.y *= u_green;
+        tn.xy *= u_strength;
+      }}
+      if (bw > 0.0) {{
+        vec3 tn2 = vec3(0.0, 0.0, 1.0);
+        if (u_use_nrm2 > 0.5) {{
+          tn2 = {tex_fn}(u_nrm2, v_uv).xyz * 2.0 - 1.0;
+          tn2.y *= u_green2;
+          tn2.xy *= u_strength2;
+        }}
+        tn = mix(tn, tn2, bw);
+      }}
       n = normalize(normalize(T) * tn.x + normalize(B) * tn.y + n * max(tn.z, 0.05));
     }}
   }}
@@ -225,6 +307,14 @@ void main() {{
                 u_amb: u("u_amb"),
                 u_sky: u("u_sky"),
                 u_unlit: u("u_unlit"),
+                u_tex2: u("u_tex2"),
+                u_nrm2: u("u_nrm2"),
+                u_use_tex2: u("u_use_tex2"),
+                u_use_nrm2: u("u_use_nrm2"),
+                u_green2: u("u_green2"),
+                u_strength2: u("u_strength2"),
+                u_blend: u("u_blend"),
+                u_ramp: u("u_ramp"),
             })
         }
     }
@@ -253,6 +343,8 @@ void main() {{
             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(self.ebo));
             gl.uniform_1_i32(self.u_tex.as_ref(), 0);
             gl.uniform_1_i32(self.u_nrm.as_ref(), 1);
+            gl.uniform_1_i32(self.u_tex2.as_ref(), 2);
+            gl.uniform_1_i32(self.u_nrm2.as_ref(), 3);
             gl.uniform_3_f32(self.u_light.as_ref(), mesh.light[0], mesh.light[1], mesh.light[2]);
             gl.uniform_3_f32(self.u_sun.as_ref(), mesh.sun[0], mesh.sun[1], mesh.sun[2]);
             gl.uniform_3_f32(self.u_amb.as_ref(), mesh.ambient[0], mesh.ambient[1], mesh.ambient[2]);
@@ -270,6 +362,21 @@ void main() {{
                 gl.uniform_1_f32(self.u_use_nrm.as_ref(), if nrm.is_some() { 1.0 } else { 0.0 });
                 gl.uniform_1_f32(self.u_green.as_ref(), if key.flip_green { 1.0 } else { -1.0 });
                 gl.uniform_1_f32(self.u_strength.as_ref(), key.strength_milli as f32 / 1000.0);
+                let (col2, nrm2) = match key.blend {
+                    Some(b) => (b.color.and_then(|t| painter.texture(t)), b.normal.and_then(|t| painter.texture(t))),
+                    None => (None, None),
+                };
+                gl.uniform_1_f32(self.u_blend.as_ref(), if key.blend.is_some() { 1.0 } else { 0.0 });
+                let r = key.blend.map(|b| [b.at, b.half, b.reach, b.scale].map(f32::from_bits)).unwrap_or([0.0; 4]);
+                gl.uniform_4_f32(self.u_ramp.as_ref(), r[0], r[1], r[2], r[3]);
+                gl.uniform_1_f32(self.u_use_tex2.as_ref(), if col2.is_some() { 1.0 } else { 0.0 });
+                gl.uniform_1_f32(self.u_use_nrm2.as_ref(), if nrm2.is_some() { 1.0 } else { 0.0 });
+                gl.uniform_1_f32(self.u_green2.as_ref(), if key.blend.map(|b| b.flip_green).unwrap_or(false) { 1.0 } else { -1.0 });
+                gl.uniform_1_f32(self.u_strength2.as_ref(), key.blend.map(|b| b.strength_milli as f32 / 1000.0).unwrap_or(1.0));
+                gl.active_texture(glow::TEXTURE3);
+                gl.bind_texture(glow::TEXTURE_2D, nrm2.or(fallback));
+                gl.active_texture(glow::TEXTURE2);
+                gl.bind_texture(glow::TEXTURE_2D, col2.or(fallback));
                 gl.active_texture(glow::TEXTURE1);
                 gl.bind_texture(glow::TEXTURE_2D, nrm.or(fallback));
                 gl.active_texture(glow::TEXTURE0);
@@ -279,6 +386,10 @@ void main() {{
                 gl.draw_elements(glow::TRIANGLES, idx.len() as i32, glow::UNSIGNED_INT, 0);
             }
             // hand the GL state back to egui
+            gl.active_texture(glow::TEXTURE3);
+            gl.bind_texture(glow::TEXTURE_2D, None);
+            gl.active_texture(glow::TEXTURE2);
+            gl.bind_texture(glow::TEXTURE_2D, None);
             gl.active_texture(glow::TEXTURE1);
             gl.bind_texture(glow::TEXTURE_2D, None);
             gl.active_texture(glow::TEXTURE0);

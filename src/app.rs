@@ -77,6 +77,8 @@ pub struct ArborApp {
     /// Scroll the properties panel to this offset once (documentation pictures).
     force_scroll: Option<f32>,
     export_billboard: bool,
+    /// Bake material gradients into plain materials in GLB exports.
+    export_bake_blend: bool,
     /// macOS: the menus in the system menu bar.
     #[cfg(target_os = "macos")]
     native_menu: Option<crate::native_menu::NativeMenu>,
@@ -168,6 +170,7 @@ impl ArborApp {
             script: None,
             force_scroll: None,
             export_billboard: true,
+            export_bake_blend: false,
             #[cfg(target_os = "macos")]
             native_menu: Some(crate::native_menu::NativeMenu::install(&cc.egui_ctx)),
             variation_count: 5,
@@ -409,6 +412,7 @@ impl eframe::App for ArborApp {
                     ui.separator();
                     ui.checkbox(&mut self.export_lods, "Include LOD0–3 in exports");
                     ui.checkbox(&mut self.export_billboard, "Include billboard LOD in exports");
+                    ui.checkbox(&mut self.export_bake_blend, "Bake material gradients (GLB)").on_hover_text("Plain materials instead of blend weights, for engines without a custom shader. OBJ is always baked.");
                     if ui.button("Export GLB (glTF) — Unity / Unreal / Godot…").clicked() {
                         actions.push(Action::Export(Format::Glb, self.export_lods));
                     }
@@ -517,6 +521,7 @@ impl eframe::App for ArborApp {
                 ui.menu_button("⮩ Export", |ui| {
                     ui.checkbox(&mut self.export_lods, "Include LOD0–3");
                     ui.checkbox(&mut self.export_billboard, "Include billboard LOD");
+                    ui.checkbox(&mut self.export_bake_blend, "Bake material gradients (GLB)").on_hover_text("Plain materials instead of blend weights, for engines without a custom shader. OBJ is always baked.");
                     if ui.button("GLB (glTF 2.0)").clicked() {
                         actions.push(Action::Export(Format::Glb, self.export_lods));
                     }
@@ -1090,6 +1095,9 @@ fn properties_ui(ui: &mut Ui, sh: &mut Shared, stats: &Stats, editing_material: 
                     }
                 }
             });
+            if kind != GenKind::Leaves {
+                material_blend_ui(ui, g, &mats);
+            }
             let p = &mut g.params;
             let trunk = kind == GenKind::Trunk;
             let ccx = CurveCx { gid: id, kind, taper: p.taper, profile: p.profile };
@@ -1928,7 +1936,7 @@ impl ArborApp {
             Action::ExportVariations(fmt) => {
                 let doc = self.shared.lock().unwrap().doc.clone();
                 if let Some(dir) = rfd::FileDialog::new().set_title("Folder for the variations").pick_folder() {
-                    match export::export_variations(&doc, &dir, self.variation_count, doc.settings.seed, fmt, self.export_lods, self.export_billboard) {
+                    match export::export_variations(&doc, &dir, self.variation_count, doc.settings.seed, fmt, self.export_lods, self.export_billboard, self.export_bake_blend) {
                         Ok(v) => {
                             self.status = format!("Exported {} variations to {}", v.len(), dir.display());
                             let over = v.iter().filter(|(_, _, w)| w.is_some()).count();
@@ -1945,7 +1953,7 @@ impl ArborApp {
     }
 
     fn export_to(&mut self, doc: &Document, p: &std::path::Path, fmt: Format, lods: bool, bb: bool) {
-        match export::export(doc, p, fmt, lods, bb) {
+        match export::export(doc, p, fmt, lods, bb, self.export_bake_blend) {
             Ok(r) => {
                 self.status = format!("Exported {}", r.files.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join(", "));
                 if let Some(w) = r.budget_warning(doc.budget.fit) {
@@ -1970,6 +1978,96 @@ fn swatch(ui: &mut Ui, color: [u8; 3], tex: Option<egui::TextureId>) {
         }
     }
     ui.painter().rect_stroke(rect, 3, egui::Stroke::new(1.0, Color32::from_gray(90)), egui::StrokeKind::Inside);
+}
+
+/// More materials on a generator's stems, blended along a gradient.
+fn material_blend_ui(ui: &mut Ui, g: &mut Generator, mats: &[(u32, String)]) {
+    let n = g.blend.as_ref().map(|b| b.layers.len()).unwrap_or(0);
+    let title = if n == 0 { "Material gradient".to_string() } else { format!("Material gradient ({} layers)", n + 1) };
+    egui::CollapsingHeader::new(title).id_salt("material_gradient").default_open(n > 0).show(ui, |ui| {
+        let Some(b) = g.blend.as_mut() else {
+            ui.label(RichText::new("Blend more materials along the stems, e.g. dark cracked bark at the foot and smooth bark higher up.").small().color(Color32::GRAY));
+            if ui.button("+ Add a layer").clicked() {
+                g.blend = Some(crate::model::MaterialBlend { layers: vec![crate::model::MaterialLayer { material: None, at: 0.3 }], ..Default::default() });
+            }
+            return;
+        };
+        let name_of = |m: Option<u32>| m.and_then(|m| mats.iter().find(|x| x.0 == m)).map(|x| x.1.clone()).unwrap_or_else(|| "Default bark".to_string());
+        egui::Grid::new("blend_grid").num_columns(2).show(ui, |ui| {
+            ui.label("Along");
+            let before = b.axis;
+            egui::ComboBox::from_id_salt("blend_axis").selected_text(b.axis.label()).show_ui(ui, |ui| {
+                for ax in [crate::model::BlendAxis::Stem, crate::model::BlendAxis::Height, crate::model::BlendAxis::HeightShare] {
+                    ui.selectable_value(&mut b.axis, ax, ax.label());
+                }
+            })
+            .response
+            .on_hover_text("Along each stem (0 = base, 1 = tip), by height above the ground in metres (the same on every generator, so trunk and roots can share a band) or by share of the tree's height");
+            if b.axis != before {
+                // keep the layers where they were, roughly: metres <-> shares of 10 m
+                let f = match (before, b.axis) {
+                    (crate::model::BlendAxis::Height, _) => 0.1,
+                    (_, crate::model::BlendAxis::Height) => 10.0,
+                    _ => 1.0,
+                };
+                for l in &mut b.layers {
+                    l.at *= f;
+                }
+                b.width *= f;
+            }
+            ui.end_row();
+            ui.label("Layer 1");
+            ui.label(RichText::new("the generator's material, from the start").small().color(Color32::GRAY));
+            ui.end_row();
+            let max = b.axis.max();
+            let unit = if b.axis == crate::model::BlendAxis::Height { " m" } else { "" };
+            let mut remove = None;
+            for (i, l) in b.layers.iter_mut().enumerate() {
+                ui.label(format!("Layer {}", i + 2));
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_salt(("blend_mat", i)).width(110.0).selected_text(name_of(l.material)).show_ui(ui, |ui| {
+                        ui.selectable_value(&mut l.material, None, "Default bark");
+                        for (mid, name) in mats {
+                            ui.selectable_value(&mut l.material, Some(*mid), name);
+                        }
+                    });
+                    ui.label("from");
+                    let range = if b.axis == crate::model::BlendAxis::Height { 0.0..=30.0 } else { 0.0..=max };
+                    ui.add(egui::DragValue::new(&mut l.at).range(range).speed(0.01).suffix(unit));
+                    if ui.small_button("🗑").on_hover_text("Remove this layer").clicked() {
+                        remove = Some(i);
+                    }
+                });
+                ui.end_row();
+            }
+            if let Some(i) = remove {
+                b.layers.remove(i);
+            }
+            let wmax = if b.axis == crate::model::BlendAxis::Height { 5.0 } else { 1.0 };
+            ui.label("Blend width");
+            ui.add(egui::Slider::new(&mut b.width, 0.0..=wmax).suffix(unit)).on_hover_text("Width of each transition");
+            ui.end_row();
+            ui.label("Noise");
+            ui.add(egui::Slider::new(&mut b.noise, 0.0..=1.0)).on_hover_text("Breaks the transition up: how far the noise moves it, as a share of the width");
+            ui.end_row();
+            ui.label("Noise size");
+            ui.add(egui::Slider::new(&mut b.noise_scale, 0.02..=3.0).suffix(" m").logarithmic(true)).on_hover_text("Size of the noise patches");
+            ui.end_row();
+            ui.label("Contrast");
+            ui.add(egui::Slider::new(&mut b.contrast, 0.0..=1.0)).on_hover_text("0 = a soft blend over the whole width, 1 = a sharp, ragged edge");
+            ui.end_row();
+        });
+        ui.horizontal(|ui| {
+            if b.layers.len() < crate::model::MAX_LAYERS && ui.button("+ Layer").clicked() {
+                let at = b.layers.last().map(|l| (l.at + 0.2 * b.axis.max().min(5.0)).min(b.axis.max())).unwrap_or(0.3);
+                b.layers.push(crate::model::MaterialLayer { material: None, at });
+            }
+        });
+        b.layers.sort_by(|x, y| x.at.total_cmp(&y.at));
+        if b.layers.is_empty() {
+            g.blend = None;
+        }
+    });
 }
 
 /// The material library list in the left panel.

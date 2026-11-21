@@ -10,6 +10,7 @@
 
 mod app;
 mod billboard;
+mod blendbake;
 mod collision;
 mod docshots;
 mod export;
