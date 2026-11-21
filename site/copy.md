@@ -50,8 +50,8 @@ the source or the docs in this repository.
 ## 2. What ends up in the file
 
 - H2: Four LODs, a billboard, wind weights. One GLB.
-- LOD table (Oak preset, seed 1, from code via get_stats): LOD0 32,014 · LOD1 16,982 · LOD2 10,234 ·
-  LOD3 6,406 · Billboard 16 triangles.
+- LOD table (the person's oak from the hero, via get_stats): LOD0 128,940 · LOD1 76,154 · LOD2 49,880 ·
+  LOD3 28,270 · Billboard 16 triangles. Pictures rendered from the same oak.
 - LOD note: Lower levels keep the skeleton and coarsen the mesh around it, so the silhouette holds when the
   engine switches.
 - Wind: Two weights per vertex in TEXCOORD_1 (UV2): x is branch sway, 0 at the ground to 1 at the crown
