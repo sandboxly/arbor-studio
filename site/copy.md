@@ -14,7 +14,7 @@ the source or the docs in this repository.
 
 ## Hero
 
-- Eyebrow: Tree editor for games · v0.2.0
+- Eyebrow: Tree editor for games · v0.3.0
 - H1: Game-ready trees. Ready for your favorite AI agent.
 - Subhead: ArborStudio is a desktop editor that grows trees from trunk, branch, root and leaf generators and
   exports them as GLB or OBJ with four LODs, a billboard and wind weights. Every operation in the editor is
@@ -62,9 +62,9 @@ the source or the docs in this repository.
 - Collision hulls, named for Unreal (UCX_) or Godot (-convcolonly) if you pick it.
 - Engines: The docs describe the import into Unity, Unreal and Godot.
 
-## 3. Growth animation (new in v0.2.0)
+## 3. Growth animation (reworked in v0.3.0)
 
-- Eyebrow: New in v0.2.0: growth animation
+- Eyebrow: New in v0.3.0: the whole tree grows
 - H2: The tree grows in your game, from a shoot to the crown you designed.
 - Lead: The whole tree grows at once, the way trees do: every shoot grows a little each season, so a young tree is a small, slender tree with its own branches that thickens, widens and fills in with leaves. Branches come out of closed bark.
 - Animation 1 (tall): the person's oak from the hero, 744 stems, growth 0 to 1, camera turning 50° and pulling back as the tree grows.
@@ -108,7 +108,7 @@ the source or the docs in this repository.
 
 ## 7. Download
 
-- H2: v0.2.0 for macOS, Windows and Linux.
+- H2: v0.3.0 for macOS, Windows and Linux.
 - Files: macOS 11 or later, Apple silicon and Intel: ArborStudio-macos-universal.dmg, 14.7 MB ·
   Windows 10 or later, 64-bit: arbor_studio-windows-x86_64.msi, 4.3 MB ·
   Linux x86-64, X11 or Wayland: arbor_studio-linux-x86_64.tar.gz, 6.3 MB.
@@ -119,7 +119,7 @@ the source or the docs in this repository.
 
 ## Footer
 
-- ArborStudio 0.2.0 · MIT licence · Source · Issues · Docs · Written in Rust.
+- ArborStudio 0.3.0 · MIT licence · Source · Issues · Docs · Written in Rust.
 
 ## Open items (left off the page until they exist)
 
