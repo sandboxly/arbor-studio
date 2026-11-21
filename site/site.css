@@ -159,6 +159,8 @@ sup a { text-decoration: none; font: 500 10px/1 var(--font-mono); letter-spacing
 .grow { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 5fr); gap: var(--space-6); align-items: start; }
 .grow__cell { margin: 0; }
 .grow__cell img { width: 100%; height: auto; display: block; }
+.wind { margin: var(--space-6) 0 0; max-width: 600px; }
+.wind img { width: 100%; height: auto; display: block; }
 
 /* ======================================================================= 04 generators */
 .gen { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--space-16); align-items: start; }

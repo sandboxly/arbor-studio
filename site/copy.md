@@ -52,6 +52,8 @@ the source or the docs in this repository.
 - H2: Four LODs, a billboard, wind weights. One GLB.
 - LOD table (the person's oak from the hero, via get_stats): LOD0 128,940 · LOD1 76,154 · LOD2 49,880 ·
   LOD3 28,270 · Billboard 16 triangles. Pictures rendered from the same oak.
+- Wind animation: the same oak, wind strength 1.2, gustiness 0.8, rendered with render_preview wind_time
+  over 6 s (75 frames, the last second crossfades into the first so it loops). WebP, GIF fallback, still.
 - LOD note: Lower levels keep the skeleton and coarsen the mesh around it, so the silhouette holds when the
   engine switches.
 - Wind: Two weights per vertex in TEXCOORD_1 (UV2): x is branch sway, 0 at the ground to 1 at the crown

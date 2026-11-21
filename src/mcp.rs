@@ -276,7 +276,8 @@ pub fn tool_list() -> Vec<Value> {
             "yaw": {"type": "number"}, "pitch": {"type": "number"}, "distance": {"type": "number"},
             "lod": {"type": "integer", "minimum": 0, "maximum": 4}, "save_to": {"type": "string", "description": "Optional absolute path to also save the PNG"},
             "growth": {"type": "number", "minimum": 0, "maximum": 1, "description": "Render the tree at this point of its growth (0 = nothing above ground, 1 = mature; default 1). The camera still frames the mature tree unless distance/target are given."},
-            "growth_stage": {"type": "string", "description": "Render the tree at this growth stage (by name, see set_growth)"}
+            "growth_stage": {"type": "string", "description": "Render the tree at this growth stage (by name, see set_growth)"},
+            "wind_time": {"type": "number", "description": "Render the tree bent by the wind at this time in seconds, with the tree's wind settings (as the viewport plays it); render a series of times for an animation. Default: no wind."}
         }), &[]),
         tool("capture_window", "Capture window", "Take a picture of the whole application window (panels and viewport) as PNG. The window must be open and visible.", json!({"save_to": {"type": "string"}}), &[]),
         tool("export_tree", "Export tree", "Export the tree for a game engine or DCC tool. format obj (+mtl) or glb work in Unity, Unreal and Godot; json is the raw skeleton + settings for custom engines. include_lods adds LOD0-3 meshes named <Tree>_LOD0..3. include_billboard adds a billboard LOD (LOD4, or <Tree>_Billboard without LODs) and saves its atlas picture as <name>_billboard.png next to the file. Wind sway weights are stored in UV2 (TEXCOORD_1) in glb.", json!({
@@ -1101,9 +1102,13 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
                 Some(l) => crate::render::Lighting::parse(l).ok_or("lighting must be unlit, morning, noon, evening or night")?,
                 None => view.lighting,
             };
-            let img = render_offscreen(&doc, &m, &cam, w, h, 0.0, false, None, &tex, lighting);
+            let wind_time = arg_f32(a, "wind_time").filter(|t| t.is_finite());
+            let img = render_offscreen(&doc, &m, &cam, w, h, wind_time.unwrap_or(0.0), wind_time.is_some(), None, &tex, lighting);
             let png = png_bytes(&img)?;
             let mut note = format!("{} — {} triangles, height {:.2} m, LOD{}", doc.name, m.tris.len(), m.height, lod);
+            if let Some(t) = wind_time {
+                note.push_str(&format!(", wind at {t:.2} s"));
+            }
             if growth < 1.0 {
                 note.push_str(&format!(", growth {:.0}%", growth * 100.0));
             }

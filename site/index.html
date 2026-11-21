@@ -173,6 +173,15 @@
     </div>
     <p class="strip__note">Triangles per level of the oak at the top of this page (744 stems, 15,405 leaves at LOD0).</p>
 
+    <figure class="frame wind">
+      <picture>
+        <source media="(prefers-reduced-motion: reduce)" srcset="images/wind-oak-still.jpg">
+        <source type="image/webp" srcset="images/wind-oak.webp">
+        <img src="images/wind-oak.gif" width="560" height="420" loading="lazy" alt="Animation: the same oak in a gusty wind. The crown sways and bends with the gusts, the trunk stays still, and the leaves flutter.">
+      </picture>
+      <figcaption>The same oak in a gusty wind (strength 1.2, gustiness 0.8), driven by the exported sway and flutter weights: the trunk stays put, the crown sways and the leaves flutter.</figcaption>
+    </figure>
+
     <dl class="sheet">
       <div class="sheet__row"><dt class="label">Wind</dt>
       <dd>Two weights per vertex in <code>TEXCOORD_1</code> (UV2). <code>x</code> is branch sway, from 0 at the ground to 1 at the crown tips. <code>y</code> is leaf flutter. Your vertex shader applies them; ArborStudio doesn't ship an engine shader.</dd></div>
