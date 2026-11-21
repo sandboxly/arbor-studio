@@ -1,9 +1,11 @@
 //! Triangle budgets for the mesh levels of detail (LOD0 to LOD3).
 //!
-//! A level over its budget is reduced further than usual: fewer sides around stems, fewer rings
-//! along them and fewer (larger) leaves, on the scale from [`crate::grow::lod_blend`]. The search
-//! keeps the most detailed mesh that fits. When even the least detail allowed is over budget, or
-//! fitting is switched off, the level is reported as over budget.
+//! A level over its budget is reduced further than usual, on the scale from
+//! [`crate::grow::lod_blend`]: first fewer sides around stems, fewer rings along them and fewer
+//! (larger) leaves (reduction 0 to 1), then fewer leaves still and the finest twigs left out,
+//! smallest first (1 to 2). The search keeps the most detailed mesh that fits. When even the
+//! least detail allowed is over budget, or fitting is switched off, the level is reported as over
+//! budget.
 
 use crate::grow::{build_mesh_with, grow, lod, lod_blend, reduce_detail, Mesh, Skeleton};
 use crate::model::Document;
@@ -22,7 +24,8 @@ pub struct LevelFit {
     pub reduced: bool,
     /// The level is over its budget.
     pub over: bool,
-    /// How far detail was reduced: 0 = the usual amount, 1 = the least detail allowed.
+    /// How far detail was reduced: 0 = the usual amount, 1 = the least stem detail (sides,
+    /// rings), 2 = also only a few leaves left and most of the finest twigs left out.
     pub reduction: f32,
 }
 
@@ -34,13 +37,15 @@ impl LevelFit {
         };
         if self.over && fitting {
             format!(
-                "LOD{}: {} of {} triangles, over budget even at the least detail allowed. Lower the counts of the tree (leaves, branches, sides) or raise the budget.",
+                "LOD{}: {} of {} triangles, over budget even at the least detail allowed (fewest sides and rings, most leaves and the finest twigs left out). Lower the counts of the tree (branches, sides) or raise the budget.",
                 self.lod,
                 group(self.triangles),
                 group(b)
             )
         } else if self.over {
             format!("LOD{}: {} of {} triangles, over budget by {}.", self.lod, group(self.triangles), group(b), group(self.triangles - b))
+        } else if self.reduced && self.reduction > 1.0 {
+            format!("LOD{}: {} of {} triangles, reduced from {} to fit (fewer leaves, finest twigs left out).", self.lod, group(self.triangles), group(b), group(self.usual_triangles))
         } else if self.reduced {
             format!("LOD{}: {} of {} triangles, reduced from {} to fit.", self.lod, group(self.triangles), group(b), group(self.usual_triangles))
         } else {
@@ -90,17 +95,26 @@ pub fn fit_level(doc: &Document, full: &Skeleton, level: u32) -> (Skeleton, Mesh
     let (sk1, m1) = at(doc, full, level, 1.0);
     let t1 = m1.tris.len() as u32;
     fit.reduced = true;
-    if t1 > b {
-        fit.triangles = t1;
-        fit.over = true;
-        fit.reduction = 1.0;
-        return (sk1, m1, fit);
-    }
-    // Illinois false position on triangles(s) - budget; `hi` always fits.
     let target = b as f32;
-    let (mut lo, mut flo) = (0.0f32, t0 as f32 - target);
-    let (mut hi, mut fhi) = (1.0f32, t1 as f32 - target);
-    let mut best = (1.0f32, sk1, m1);
+    // the stage that reaches the budget: stem detail (0..1), or leaves and twigs (1..2)
+    let (lo0, flo0, hi0, sk_hi, m_hi) = if t1 <= b {
+        (0.0f32, t0 as f32 - target, 1.0f32, sk1, m1)
+    } else {
+        let (sk2, m2) = at(doc, full, level, 2.0);
+        let t2 = m2.tris.len() as u32;
+        if t2 > b {
+            fit.triangles = t2;
+            fit.over = true;
+            fit.reduction = 2.0;
+            return (sk2, m2, fit);
+        }
+        (1.0f32, t1 as f32 - target, 2.0f32, sk2, m2)
+    };
+    // Illinois false position on triangles(s) - budget; `hi` always fits.
+    let fhi0 = m_hi.tris.len() as f32 - target;
+    let (mut lo, mut flo) = (lo0, flo0);
+    let (mut hi, mut fhi) = (hi0, fhi0);
+    let mut best = (hi0, sk_hi, m_hi);
     let mut last = 0i8;
     for _ in 0..8 {
         let span = hi - lo;

@@ -113,30 +113,95 @@ pub struct Lod {
     pub segments: f32,
     pub leaves: f32,
     pub leaf_size: f32,
+    /// Share of the finest stems (twigs first) left out, with what grows on them.
+    pub prune: f32,
 }
 
 pub fn lod(level: u32) -> Lod {
     match level {
-        0 => Lod { sides: 1.0, segments: 1.0, leaves: 1.0, leaf_size: 1.0 },
-        1 => Lod { sides: 0.65, segments: 0.7, leaves: 0.6, leaf_size: 1.29 },
-        2 => Lod { sides: 0.45, segments: 0.5, leaves: 0.35, leaf_size: 1.69 },
+        0 => Lod { sides: 1.0, segments: 1.0, leaves: 1.0, leaf_size: 1.0, prune: 0.0 },
+        1 => Lod { sides: 0.65, segments: 0.7, leaves: 0.6, leaf_size: 1.29, prune: 0.0 },
+        2 => Lod { sides: 0.45, segments: 0.5, leaves: 0.35, leaf_size: 1.69, prune: 0.0 },
         // leaves grow by 1 / sqrt(share kept), so the crown keeps its leaf area
-        _ => Lod { sides: 0.25, segments: 0.3, leaves: 0.15, leaf_size: 2.58 },
+        _ => Lod { sides: 0.25, segments: 0.3, leaves: 0.15, leaf_size: 2.58, prune: 0.0 },
     }
 }
 
-/// The least detail a triangle budget may reduce a level to.
-const FLOOR: Lod = Lod { sides: 0.12, segments: 0.15, leaves: 0.04, leaf_size: 5.0 };
+/// The least stem detail a triangle budget may reduce a level to (reduction 1).
+const FLOOR: Lod = Lod { sides: 0.12, segments: 0.15, leaves: 0.04, leaf_size: 5.0, prune: 0.0 };
+/// At reduction 2 (the most a budget may take away) only this share of the leaves is left and
+/// this share of the stems, the finest ones, is left out.
+const FLOOR_LEAVES: f32 = 0.006;
+const MAX_PRUNE: f32 = 0.9;
 
-/// Detail between a level's usual amount (`s` = 0) and the least detail allowed (`s` = 1), for
-/// fitting a level into a triangle budget. Kept leaves grow by 1 / sqrt(share kept), so the
-/// crown keeps its leaf area.
+/// Detail between a level's usual amount (`s` = 0) and the least detail allowed, for fitting a
+/// level into a triangle budget. From 0 to 1 the stems get fewer sides and rings and the leaves
+/// thin out; from 1 to 2 the leaves thin out further and the finest twigs (with their leaves)
+/// are left out, smallest first, which is what a distant tree loses first. Kept leaves grow by
+/// 1 / sqrt(share kept), so the crown keeps its leaf area.
 pub fn lod_blend(level: u32, s: f32) -> Lod {
     let a = lod(level.min(3));
-    let s = s.clamp(0.0, 1.0);
+    let s = s.clamp(0.0, 2.0);
+    if s > 1.0 {
+        let u = s - 1.0;
+        let leaves = FLOOR.leaves * (FLOOR_LEAVES / FLOOR.leaves).powf(u);
+        return Lod { sides: FLOOR.sides, segments: FLOOR.segments, leaves, leaf_size: 1.0 / leaves.sqrt(), prune: MAX_PRUNE * u };
+    }
     let mix = |x: f32, y: f32| x + (y - x) * s;
     let leaves = mix(a.leaves, FLOOR.leaves);
-    Lod { sides: mix(a.sides, FLOOR.sides), segments: mix(a.segments, FLOOR.segments), leaves, leaf_size: 1.0 / leaves.sqrt() }
+    Lod { sides: mix(a.sides, FLOOR.sides), segments: mix(a.segments, FLOOR.segments), leaves, leaf_size: 1.0 / leaves.sqrt(), prune: 0.0 }
+}
+
+/// Leave out the finest stems: a share `prune` of the stems that are not trunks or a trunk's
+/// split leaders, smallest (base radius × length) first, each with everything growing on it.
+/// Returns the share of the leaves kept.
+fn prune_finest(sk: &mut Skeleton, prune: f32) -> f32 {
+    let n = sk.stems.len();
+    let structural = |i: usize| {
+        let st = &sk.stems[i];
+        st.parent.is_none() || (st.fork && st.parent.is_some_and(|p| sk.stems[p].parent.is_none()))
+    };
+    let mut cand: Vec<usize> = (0..n).filter(|&i| !structural(i)).collect();
+    if cand.is_empty() || prune <= 0.0 {
+        return 1.0;
+    }
+    cand.sort_by(|&a, &b| {
+        let sa = sk.stems[a].radii[0] * sk.stems[a].length;
+        let sb = sk.stems[b].radii[0] * sk.stems[b].length;
+        sa.total_cmp(&sb)
+    });
+    let cut = ((cand.len() as f32) * prune.clamp(0.0, 1.0)).round() as usize;
+    let mut gone = vec![false; n];
+    for &i in &cand[..cut] {
+        gone[i] = true;
+    }
+    // parents come before their children, so one pass carries removal down the hierarchy
+    for i in 0..n {
+        if let Some(p) = sk.stems[i].parent {
+            if gone[p] {
+                gone[i] = true;
+            }
+        }
+    }
+    let mut map = vec![usize::MAX; n];
+    let mut stems = Vec::with_capacity(n);
+    for (i, st) in sk.stems.drain(..).enumerate() {
+        if !gone[i] {
+            map[i] = stems.len();
+            stems.push(st);
+        }
+    }
+    for st in &mut stems {
+        st.parent = st.parent.map(|p| map[p]);
+        st.forks = st.forks.iter().filter(|&&f| map[f] != usize::MAX).map(|&f| map[f]).collect();
+    }
+    sk.stems = stems;
+    let before = sk.leaves.len().max(1);
+    sk.leaves.retain(|l| !gone[l.stem]);
+    for l in &mut sk.leaves {
+        l.stem = map[l.stem];
+    }
+    sk.leaves.len() as f32 / before as f32
 }
 
 /// Sides around a stem: (full detail, at this LOD). Trunks keep at least five sides at low
@@ -165,6 +230,12 @@ fn polygon_width(n: usize) -> f32 {
 /// own centre, so the crown keeps its outline and its coverage).
 pub fn reduce_detail(doc: &Document, sk: &mut Skeleton, lodf: &Lod) {
     let defaults = GenParams::default();
+    let mut leaf_grow = 1.0;
+    if lodf.prune > 0.0 {
+        // the leaves of left-out twigs: the others grow a little more to keep the crown's area
+        leaf_grow = 1.0 / prune_finest(sk, lodf.prune).max(0.05).sqrt();
+    }
+    let keep_rings = joint_rings(doc, sk);
     for si in 0..sk.stems.len() {
         let st = &sk.stems[si];
         let trunk = st.depth == 0 && !st.root;
@@ -175,9 +246,15 @@ pub fn reduce_detail(doc: &Document, sk: &mut Skeleton, lodf: &Lod) {
         let st = &mut sk.stems[si];
         let n = st.points.len();
         let keep = ((((n - 1) as f32) * lodf.segments).round() as usize + 1).max(if trunk { 4 } else { 2 });
+        // the rings that shape a joint (a branch's base, the parent's bark around it) stay, or
+        // the joint can't close and leaves stray faces
+        let mut fixed = keep_rings[si].clone();
         while st.points.len() > keep.max(2) {
             let mut best = (f32::MAX, 0usize);
             for i in 1..st.points.len() - 1 {
+                if fixed[i] {
+                    continue;
+                }
                 let (a, b, p) = (st.points[i - 1], st.points[i + 1], st.points[i]);
                 let ab = b - a;
                 let t = ((p - a).dot(ab) / ab.length_squared().max(1e-12)).clamp(0.0, 1.0);
@@ -187,8 +264,12 @@ pub fn reduce_detail(doc: &Document, sk: &mut Skeleton, lodf: &Lod) {
                     best = (e, i);
                 }
             }
+            if best.0 == f32::MAX {
+                break;
+            }
             st.points.remove(best.1);
             st.radii.remove(best.1);
+            fixed.remove(best.1);
         }
         if widen != 1.0 {
             for r in &mut st.radii {
@@ -196,7 +277,7 @@ pub fn reduce_detail(doc: &Document, sk: &mut Skeleton, lodf: &Lod) {
             }
         }
     }
-    if lodf.leaves < 1.0 {
+    if lodf.leaves < 1.0 || leaf_grow != 1.0 {
         let mut acc = 0.5f32;
         sk.leaves.retain(|_| {
             acc += lodf.leaves;
@@ -209,11 +290,83 @@ pub fn reduce_detail(doc: &Document, sk: &mut Skeleton, lodf: &Lod) {
         });
         for l in &mut sk.leaves {
             let old = l.size;
-            l.size *= lodf.leaf_size;
+            l.size *= lodf.leaf_size * leaf_grow;
             // grow around the leaf's centre, not outwards from its stalk
             l.pos -= l.dir * ((l.size - old) * 0.5);
         }
     }
+}
+
+/// Per stem and point: whether the point is a ring a joint needs when the tree is joined into
+/// one surface: the densified rings at a branch's base (up to where it leaves the parent's bark,
+/// with its weld zone) and the parent's rings across each branch's footprint.
+fn joint_rings(doc: &Document, sk: &Skeleton) -> Vec<Vec<bool>> {
+    let mut out: Vec<Vec<bool>> = sk.stems.iter().map(|s| vec![false; s.points.len()]).collect();
+    if !doc.settings.join_branches {
+        return out;
+    }
+    let arcs: Vec<Vec<f32>> = sk
+        .stems
+        .iter()
+        .map(|s| {
+            let mut a = vec![0.0f32];
+            for w in s.points.windows(2) {
+                a.push(a.last().unwrap() + w[0].distance(w[1]));
+            }
+            a
+        })
+        .collect();
+    for (ci, c) in sk.stems.iter().enumerate() {
+        let Some(pi) = c.parent else { continue };
+        if c.points.len() < 2 || c.fork {
+            continue;
+        }
+        let ps = &sk.stems[pi];
+        if ps.points.len() < 2 {
+            continue;
+        }
+        let weld = doc.get(c.gen).map(|g| g.params.weld).unwrap_or(0.0);
+        let (_, pr, _) = axis_info(ps, c.points[0]);
+        // the branch's own base: everything inside the parent plus the weld zone
+        let reach = c.radii[0] * 2.0 + pr * (0.4 + 1.4 * weld) + pr;
+        // and up to the first two rings fully outside the parent's bark (a steep branch runs
+        // inside its parent for a while)
+        let first_out = (1..c.points.len())
+            .find(|&i| {
+                let (d, r, _) = axis_info(ps, c.points[i]);
+                d - c.radii[i] > r * 1.15
+            })
+            .unwrap_or(c.points.len() - 1);
+        for (i, &d) in arcs[ci].iter().enumerate() {
+            if d <= reach || i <= first_out + 1 {
+                out[ci][i] = true;
+            }
+        }
+        // the parent's rings across the footprint
+        let p0 = c.points[0];
+        let (mut best, mut at, mut tan) = (f32::MAX, 0.0f32, Vec3::Y);
+        for i in 0..ps.points.len() - 1 {
+            let ab = ps.points[i + 1] - ps.points[i];
+            let l = ab.length().max(1e-6);
+            let t = ((p0 - ps.points[i]).dot(ab) / (l * l)).clamp(0.0, 1.0);
+            let d = p0.distance(ps.points[i] + ab * t);
+            if d < best {
+                best = d;
+                at = arcs[pi][i] + t * l;
+                tan = ab / l;
+            }
+        }
+        let cdir = (c.points[1] - c.points[0]).normalize_or(tan);
+        let sin = (cdir - tan * cdir.dot(tan)).length().max(0.3);
+        let h = c.radii[0] * (1.08 + 0.8 * weld) * 1.2 / sin + c.radii[0] * 0.15;
+        let h = h * 1.7;
+        for (i, &d) in arcs[pi].iter().enumerate() {
+            if (d - at).abs() <= h {
+                out[pi][i] = true;
+            }
+        }
+    }
+    out
 }
 
 impl Stem {
@@ -382,9 +535,9 @@ fn extend_trunk_bases(sk: &Skeleton) -> (Skeleton, Vec<f32>) {
         for k in (1..=steps).rev() {
             let d = k as f32 / steps as f32;
             pts.push(st.points[0] - tan * (ext * d));
-            // tucks in under the flared base right away, so between the roots no bark bulges
-            // out below ground level; narrow and rounded at the bottom
-            rad.push(st.radii[0] * (0.04 + 0.86 * (1.0 - d).powf(1.15)));
+            // carries on below the base and rounds off like the end of an ellipsoid, so the
+            // roots grow out of its side (no lip where the flared base used to tuck in)
+            rad.push(st.radii[0] * (0.04 + 0.96 * (1.0 - d * d).max(0.0).sqrt()));
         }
         pts.extend_from_slice(&st.points);
         rad.extend_from_slice(&st.radii);
@@ -908,19 +1061,48 @@ fn join_branch(m: &mut Mesh, sk: &Skeleton, grids: &[Grid], removed: &mut [Vec<b
     Some(s)
 }
 
+/// Extra rings along the first part of a stem: `zones` are (arc length from the base, longest
+/// spacing there), in increasing order. The rings lie on the polyline, so the shape is unchanged.
+fn densify_base(points: &mut Vec<Vec3>, radii: &mut Vec<f32>, zones: &[(f32, f32)]) {
+    let mut np = vec![points[0]];
+    let mut nr = vec![radii[0]];
+    let mut d = 0.0f32;
+    for i in 1..points.len() {
+        let seg = points[i].distance(points[i - 1]);
+        if let Some(&(_, step)) = zones.iter().find(|z| d < z.0) {
+            let k = ((seg / step.max(1e-3)).ceil() as usize).clamp(1, 24);
+            for s in 1..k {
+                let t = s as f32 / k as f32;
+                np.push(points[i - 1].lerp(points[i], t));
+                nr.push(radii[i - 1] + (radii[i] - radii[i - 1]) * t);
+            }
+        }
+        d += seg;
+        np.push(points[i]);
+        nr.push(radii[i]);
+    }
+    *points = np;
+    *radii = nr;
+}
+
 /// Welding: swell the base of a branch into a collar that blends into its parent.
 /// Extra rings are inserted near the base so the blend is smooth.
-fn weld_base(points: &mut Vec<Vec3>, radii: &mut Vec<f32>, r0: f32, parent_r: f32, weld: f32, swell: bool) {
+/// `exit` is how far along the branch its underside leaves the parent's bark (a branch at a
+/// steep angle to its parent runs inside it for a while); the rings reach past it, so the joint
+/// closes right where the branch comes out instead of stretching to a ring far up the branch.
+#[allow(clippy::too_many_arguments)]
+fn weld_base(points: &mut Vec<Vec3>, radii: &mut Vec<f32>, r0: f32, parent_r: f32, weld: f32, swell: bool, exit: f32) {
     let reach = r0 * 2.0 + parent_r * (0.4 + 1.4 * weld);
+    let zone = reach.max(parent_r).max(exit * 1.15);
     // densify the polyline inside the blend zone
     let mut np = vec![points[0]];
     let mut nr = vec![radii[0]];
     let mut d = 0.0;
     for i in 1..points.len() {
         let seg = points[i].distance(points[i - 1]);
-        let step = (reach * 0.34).min(parent_r * 0.6).max(1e-3);
-        if d < reach.max(parent_r) && seg > step {
-            let k = ((seg / step).ceil() as usize).min(3);
+        let step = (reach * 0.34).min(parent_r * 0.6).max(exit * 0.4).max(1e-3);
+        if d < zone && seg > step {
+            let k = ((seg.min(zone + step - d) / step).ceil() as usize).clamp(1, 6);
             for s in 1..k {
                 let t = s as f32 / k as f32;
                 np.push(points[i - 1].lerp(points[i], t));
@@ -1247,7 +1429,7 @@ fn push_leaders(cx: &Ctx, sk: &mut Skeleton, idx: usize, leaders: Vec<Leader>, p
         }
         let r0 = radii[0];
         if !root || cx.doc.settings.join_branches {
-            weld_base(&mut points, &mut radii, r0, rf, p.weld, !root && !cx.doc.settings.join_branches);
+            weld_base(&mut points, &mut radii, r0, rf, p.weld, !root && !cx.doc.settings.join_branches, 0.0);
         }
         let length = points.windows(2).map(|w| w[0].distance(w[1])).sum();
         sk.stems.push(Stem { gen, depth: depth + 1, parent: Some(idx), points, radii, length, phase: phase + 0.3 * (j as f32 + 1.0), root, lobes: vec![], key: lkey, broken: false, fork: true, forks: vec![], fork_t: 1.0, fork_gap: 0.0 });
@@ -1297,6 +1479,12 @@ pub fn grow(doc: &Document, level: u32) -> Skeleton {
             let (mut points, mut radii) = build_stem(&cx, origin, dir, len, r0, p, p.kink, true, false, &mut rng);
             if points.len() < 2 {
                 continue;
+            }
+            let has_roots = doc.generators.iter().any(|c| c.parent == Some(g.id) && c.enabled && c.kind == GenKind::Roots);
+            if p.flare > 0.0 || has_roots {
+                // the flare and the root ridges are shaped ring by ring: enough rings near the
+                // base that they curve smoothly into the roots instead of creasing at a ring
+                densify_base(&mut points, &mut radii, &[(len / 6.0, len / 36.0), (len * 0.35, len * 0.35 / 6.0)]);
             }
             let (fork_t, fork_gap, leaders) = fork_stem(&cx, p, &mut points, &mut radii, true, false, key);
             sk.stems.push(Stem { gen: g.id, depth: 0, parent: None, points, radii, length: len, phase: rng.f() * TAU, root: false, lobes: vec![], key, broken: false, fork: false, forks: vec![], fork_t, fork_gap });
@@ -1496,7 +1684,12 @@ fn grow_children(cx: &Ctx, gen_id: u32, stem_idx: usize, sk: &mut Skeleton) {
                     }
                     if !ground || doc.settings.join_branches {
                         // roots only get the extra rings near the base (for the joint), never a swell
-                        weld_base(&mut points, &mut radii, r0, pr, p.weld, !ground && !doc.settings.join_branches);
+                        let exit = {
+                            let d = (points[1.min(points.len() - 1)] - points[0]).normalize_or(tan);
+                            let sin = (d - tan * d.dot(tan)).length().max(0.15);
+                            (pr + r0) / sin
+                        };
+                        weld_base(&mut points, &mut radii, r0, pr, p.weld, !ground && !doc.settings.join_branches, exit);
                     }
                     let (fork_t, fork_gap, leaders) = if broken { (1.0, 0.0, vec![]) } else { fork_stem(cx, p, &mut points, &mut radii, false, ground, key) };
                     sk.stems.push(Stem {
@@ -1783,7 +1976,7 @@ pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) ->
             let t = ((arc[i] - below[si]) / (arc_total - below[si]).max(1e-6)).max(0.0);
             // buttress flare near the trunk base: ridges towards the roots, hollows between them
             // below the real base (underground extension) flare and flutes fade out with the rounding
-            let under = if below[si] > 0.0 && arc[i] < below[si] { (arc[i] / below[si]).powf(1.5) } else { 1.0 };
+            let under = if below[si] > 0.0 && arc[i] < below[si] { (arc[i] / below[si]).powf(0.6) } else { 1.0 };
             let flare_k = if flare > 0.0 { (1.0 - t * 6.0).max(0.0).powf(1.6) * under } else { 0.0 };
             let sway = if st.root {
                 0.0

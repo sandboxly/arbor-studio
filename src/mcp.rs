@@ -1350,7 +1350,10 @@ fn material_json(doc: &Document, m: &Material) -> Value {
     v["used_by"] = json!(users);
     if let Some(t) = &m.texture {
         v["texture_status"] = json!(match crate::textures::check(t) {
-            Ok((w, h)) => format!("ok, {w}x{h}"),
+            Ok((w, h)) => match crate::textures::preview_size(t) {
+                Some((pw, ph)) if (pw, ph) != (w, h) => format!("ok, {w}x{h} (exports use the file at full size; the viewport and the billboard render from a {pw}x{ph} copy)"),
+                _ => format!("ok, {w}x{h}"),
+            },
             Err(e) => e,
         });
     }

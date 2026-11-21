@@ -38,14 +38,20 @@ pub fn load(path: &str) -> Result<Image, String> {
     r
 }
 
-/// Is this a readable PNG/JPEG? Returns its size.
+/// Is this a readable PNG/JPEG? Returns the file's own size (exports embed or copy the file as
+/// it is; only the viewport's and the billboard renderer's copy is scaled down to 1024 px).
 pub fn check(path: &str) -> Result<(u32, u32), String> {
     let lower = path.to_ascii_lowercase();
     if !(lower.ends_with(".png") || lower.ends_with(".jpg") || lower.ends_with(".jpeg")) {
         return Err(format!("textures must be .png, .jpg or .jpeg files: {path}"));
     }
-    let img = load(path)?;
-    Ok((img.width(), img.height()))
+    load(path)?;
+    image::image_dimensions(path).map_err(|e| format!("cannot read image {path}: {e}"))
+}
+
+/// The size of the copy the viewport and the billboard renderer use (at most 1024 px).
+pub fn preview_size(path: &str) -> Option<(u32, u32)> {
+    load(path).ok().map(|i| (i.width(), i.height()))
 }
 
 /// Nearest-neighbour sample with repeat wrapping; uv origin is the image's top-left.
