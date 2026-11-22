@@ -3,7 +3,7 @@
 
     wix extension add -g WixToolset.UI.wixext/5.0.2
     wix build windows/ArborStudio.wxs -arch x64 -ext WixToolset.UI.wixext
-      -d Version=0.3.0 -d Exe=arbor_studio.exe -d LicenseRtf=license.rtf
+      -d Version=0.4.0 -d Exe=arbor_studio.exe -d LicenseRtf=license.rtf
       -d Icon=assets\icon.ico -d Readme=README.md -d Licence=LICENSE
       -o arbor_studio-windows-x86_64.msi
 
