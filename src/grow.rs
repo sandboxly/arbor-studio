@@ -694,7 +694,8 @@ fn push_blend(m: &mut Mesh, idx: [u32; 4], w: [f32; 4]) -> u32 {
 /// branch comes out, drop the branch rings that are inside the parent, and stitch the opening's
 /// rim to the first branch ring outside. Returns that ring, or None (kept as a separate tube).
 #[allow(clippy::too_many_arguments)]
-fn join_branch(m: &mut Mesh, sk: &Skeleton, grids: &[Grid], removed: &mut [Vec<bool>], _margin: f32, weld: f32, si: usize, pi: usize) -> Option<u32> {
+#[allow(clippy::too_many_arguments)]
+fn join_branch(m: &mut Mesh, sk: &Skeleton, grids: &[Grid], removed: &mut [Vec<bool>], _margin: f32, weld: f32, si: usize, pi: usize, xfade: bool) -> Option<u32> {
     let st = &sk.stems[si];
     let ps = &sk.stems[pi];
     let (gc, gp) = (grids[si], grids[pi]);
@@ -1058,7 +1059,134 @@ fn join_branch(m: &mut Mesh, sk: &Skeleton, grids: &[Grid], removed: &mut [Vec<b
         }
     }
     m.tris.extend(tris);
+    if xfade {
+        joint_crossfade(m, sk, &gp, &gc, si, pi, s, &rim, &rim_ext, &ang);
+    }
     Some(s)
+}
+
+/// Cross-fade the bark where a stitched branch meets its parent: the collar starts with the
+/// parent's texture mapping (exactly the parent's coordinates at the opening, so there is no
+/// seam) and fades into the branch's own mapping over a few branch radii. The parent's mapping
+/// is extended off its surface by projecting onto its axis (angle around it, position along
+/// it), corrected to match the opening's real coordinates.
+#[allow(clippy::too_many_arguments)]
+fn joint_crossfade(m: &mut Mesh, sk: &Skeleton, gp: &Grid, gc: &Grid, si: usize, pi: usize, s: u32, rim: &[u32], rim_ext: &[u32], ang: &dyn Fn(Vec3) -> f32) {
+    let (st, ps) = (&sk.stems[si], &sk.stems[pi]);
+    let n = ps.points.len().min(gp.n as usize);
+    if n < 2 || rim.is_empty() {
+        return;
+    }
+    let ring0 = gp.base as usize;
+    let tiling_u = (m.uv[ring0 + 1][0] - m.uv[ring0][0]) * gp.sides as f32;
+    if tiling_u.abs() < 1e-5 {
+        return;
+    }
+    let wrap_u = |x: f32| (x + 0.5 * tiling_u).rem_euclid(tiling_u) - 0.5 * tiling_u;
+    // the parent's mapping, projected: (u, v) of the point of its tube in line with `p`
+    let pmap = |m: &Mesh, p: Vec3| -> [f32; 2] {
+        let mut best = (f32::MAX, 0usize, 0.0f32);
+        for i in 0..n - 1 {
+            let (a, b) = (ps.points[i], ps.points[i + 1]);
+            let ab = b - a;
+            let t = ((p - a).dot(ab) / ab.length_squared().max(1e-12)).clamp(0.0, 1.0);
+            let d = p.distance_squared(a + ab * t);
+            if d < best.0 {
+                best = (d, i, t);
+            }
+        }
+        let (_, i, t) = best;
+        let (a, b) = (ps.points[i], ps.points[i + 1]);
+        let ta = (b - a).normalize_or(Vec3::Y);
+        let c = a.lerp(b, t);
+        let flat = |q: Vec3| (q - a) - ta * (q - a).dot(ta);
+        let b1 = flat(m.pos[gp.v(i as u32, 0) as usize]).normalize_or(ta.any_orthonormal_vector());
+        let mut b2 = ta.cross(b1);
+        if flat(m.pos[gp.v(i as u32, 1) as usize]).dot(b2) < 0.0 {
+            b2 = -b2;
+        }
+        let w = p - c;
+        let th = w.dot(b2).atan2(w.dot(b1)).rem_euclid(TAU);
+        let v0 = m.uv[gp.v(i as u32, 0) as usize][1];
+        let v1 = m.uv[gp.v(i as u32 + 1, 0) as usize][1];
+        [th / TAU * tiling_u, v0 + (v1 - v0) * t]
+    };
+    // one reference so the projected u never jumps across the parent's seam within this joint
+    let u_ref = pmap(m, st.points[s as usize])[0];
+    let unwrapped = |m: &Mesh, p: Vec3| {
+        let q = pmap(m, p);
+        [u_ref + wrap_u(q[0] - u_ref), q[1]]
+    };
+    // correction at every rim vertex: its real parent coordinates minus the projection
+    let rim_fix: Vec<(f32, [f32; 2])> = rim
+        .iter()
+        .map(|&r| {
+            let p = m.pos[r as usize];
+            let q = unwrapped(m, p);
+            let real = m.uv[r as usize];
+            (ang(p), [wrap_u(real[0] - q[0]), real[1] - q[1]])
+        })
+        .collect();
+    let fix_at = |p: Vec3| -> [f32; 2] {
+        // the two rim vertices around the branch on either side of `p`, by angle
+        let a = ang(p);
+        let d = |x: f32| (x - a + PI).rem_euclid(TAU) - PI;
+        let (mut lo, mut hi) = ((f32::MIN, [0.0f32; 2]), (f32::MAX, [0.0f32; 2]));
+        for &(ra, f) in &rim_fix {
+            let x = d(ra);
+            if x <= 0.0 && x > lo.0 {
+                lo = (x, f);
+            }
+            if x >= 0.0 && x < hi.0 {
+                hi = (x, f);
+            }
+        }
+        match (lo.0 > f32::MIN, hi.0 < f32::MAX) {
+            (true, true) if hi.0 - lo.0 > 1e-6 => {
+                let t = -lo.0 / (hi.0 - lo.0);
+                [lo.1[0] + (hi.1[0] - lo.1[0]) * t, lo.1[1] + (hi.1[1] - lo.1[1]) * t]
+            }
+            (true, _) => lo.1,
+            (_, true) => hi.1,
+            _ => [0.0; 2],
+        }
+    };
+    let set = |m: &mut Mesh, i: u32, w: f32| {
+        let p = m.pos[i as usize];
+        let q = unwrapped(m, p);
+        let f = fix_at(p);
+        if m.xuv.len() < m.pos.len() {
+            m.xuv.resize(m.pos.len(), [0.0; 3]);
+        }
+        m.xuv[i as usize] = [q[0] + f[0], q[1] + f[1], w];
+    };
+    // the collar's opening side shows the parent's bark exactly
+    for (i, &e) in rim_ext.iter().enumerate() {
+        let r = rim[i % rim.len()] as usize;
+        let real = m.uv[r];
+        let q = unwrapped(m, m.pos[r]);
+        if m.xuv.len() < m.pos.len() {
+            m.xuv.resize(m.pos.len(), [0.0; 3]);
+        }
+        m.xuv[e as usize] = [q[0] + wrap_u(real[0] - q[0]), real[1], 1.0];
+    }
+    // then the branch's rings fade into its own bark over a few of its radii
+    let rc = st.radii[s as usize].max(0.002);
+    let len = rc * 3.0;
+    let mut arc = 0.0f32;
+    for j in s..gc.n {
+        if j > s {
+            arc += st.points[j as usize].distance(st.points[j as usize - 1]);
+        }
+        let t = (arc / len).min(1.0);
+        let w = 0.7 * (1.0 - t * t * (3.0 - 2.0 * t));
+        if w <= 0.0 {
+            break;
+        }
+        for k in 0..=gc.sides {
+            set(m, gc.base + j * gc.ring + k, w);
+        }
+    }
 }
 
 /// Extra rings along the first part of a stem: `zones` are (arc length from the base, longest
@@ -1852,6 +1980,11 @@ pub struct Mesh {
     /// Position on its generator's gradient axis per vertex (see [`crate::model::BlendAxis`]),
     /// before noise; the blend weight of a pixel is computed from it and [`blend_noise`].
     pub axis: Vec<f32>,
+    /// Where a joined branch or root meets its parent, its bark cross-fades from the parent's
+    /// texture mapping into its own: per vertex the parent's texture coordinates (u, v) and the
+    /// weight of that mapping (0 = the vertex's own `uv` only). Shorter than `pos` (or empty):
+    /// the missing vertices have weight 0.
+    pub xuv: Vec<[f32; 3]>,
     /// Bark triangles first, then leaf triangles from `leaf_tri_start`.
     pub tris: Vec<[u32; 3]>,
     pub leaf_tri_start: usize,
@@ -2106,7 +2239,12 @@ pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) ->
                 let weld = doc.get(st.gen).map(|g| g.params.weld).unwrap_or(0.0);
                 match doc.settings.join_method {
                     JoinMethod::Stitch => {
-                        if let Some(s) = join_branch(&mut m, sk, &grids, &mut removed, margin, weld, si, pi) {
+                        // cross-fade the bark into the parent's where both wear the same material
+                        let same = match (doc.get(st.gen), doc.get(sk.stems[pi].gen)) {
+                            (Some(a), Some(b)) => a.material == b.material && a.blend == b.blend,
+                            _ => false,
+                        };
+                        if let Some(s) = join_branch(&mut m, sk, &grids, &mut removed, margin, weld, si, pi, same) {
                             grids[si].start = s;
                         }
                     }

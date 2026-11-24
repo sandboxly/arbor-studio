@@ -518,6 +518,8 @@ pub fn draw(painter: &egui::Painter, rect: Rect, a: &DrawArgs) -> PickData {
                     let n = m.nrm[i];
                     let w = wpos[i];
                     gm.verts.extend_from_slice(&[c.x, c.y, c.z, c.w, base[0], base[1], base[2], hl[0], hl[1], hl[2], amt, uv[0], 1.0 - uv[1], n.x, n.y, n.z, w.x, w.y, w.z, kind, m.axis.get(i).copied().unwrap_or(0.0)]);
+                    let x = m.xuv.get(i).copied().unwrap_or([0.0; 3]);
+                    gm.verts.extend_from_slice(&[x[0], 1.0 - x[1], x[2]]);
                 }
                 for &ti in &order {
                     let tri = m.tris[ti as usize];
@@ -743,6 +745,23 @@ fn render_core(doc: &Document, m: &Mesh, cam: &Camera, w: u32, h: u32, time: f32
         let [la, lb, lc] = tri.map(|i| m.axis.get(i as usize).copied().unwrap_or(0.0));
         let [pa, pb, pc] = tri.map(|i| m.pos[i as usize]);
         let [ua, ub, uc] = tri.map(|i| m.uv[i as usize]);
+        // cross-fade into the parent's bark where a branch joins it
+        let [xa, xb, xc] = tri.map(|i| m.xuv.get(i as usize).copied().unwrap_or([0.0; 3]));
+        let xfade = xa[2] > 0.0 || xb[2] > 0.0 || xc[2] > 0.0;
+        let sample = |img: &image::RgbaImage, u: f32, v: f32, w0: f32, w1: f32, w2: f32| -> [f32; 4] {
+            let px = crate::textures::sample(img, u, 1.0 - v);
+            let mut c = px.map(|x| x as f32 / 255.0);
+            if xfade {
+                let xw = xa[2] * w0 + xb[2] * w1 + xc[2] * w2;
+                if xw > 0.001 {
+                    let q = crate::textures::sample(img, xa[0] * w0 + xb[0] * w1 + xc[0] * w2, 1.0 - (xa[1] * w0 + xb[1] * w1 + xc[1] * w2));
+                    for k in 0..4 {
+                        c[k] += (q[k] as f32 / 255.0 - c[k]) * xw;
+                    }
+                }
+            }
+            c
+        };
         for y in miny..=maxy {
             for x in minx..=maxx {
                 let p = Pos2::new(x as f32 + 0.5, y as f32 + 0.5);
@@ -759,11 +778,11 @@ fn render_core(doc: &Document, m: &Mesh, cam: &Camera, w: u32, h: u32, time: f32
                     let u = ua[0] * w0 + ub[0] * w1 + uc[0] * w2;
                     let v = ua[1] * w0 + ub[1] * w1 + uc[1] * w2;
                     if let Some((timg, cutout)) = texture {
-                        let px = crate::textures::sample(timg, u, 1.0 - v);
-                        if *cutout && px[3] < 128 {
+                        let px = sample(timg, u, v, w0, w1, w2);
+                        if *cutout && px[3] < 0.5 {
                             continue;
                         }
-                        t = [px[0] as f32 / 255.0, px[1] as f32 / 255.0, px[2] as f32 / 255.0];
+                        t = [px[0], px[1], px[2]];
                     }
                     if let (Some(t2), Some((k, bl))) = (texture2, blend) {
                         let x = la * w0 + lb * w1 + lc * w2;
@@ -772,8 +791,8 @@ fn render_core(doc: &Document, m: &Mesh, cam: &Camera, w: u32, h: u32, time: f32
                         if bw > 0.0 {
                             let c2 = match t2 {
                                 Some((img2, _)) => {
-                                    let px = crate::textures::sample(img2, u, 1.0 - v);
-                                    [px[0] as f32 / 255.0, px[1] as f32 / 255.0, px[2] as f32 / 255.0]
+                                    let px = sample(img2, u, v, w0, w1, w2);
+                                    [px[0], px[1], px[2]]
                                 }
                                 None => [1.0; 3],
                             };

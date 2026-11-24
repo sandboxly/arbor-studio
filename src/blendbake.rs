@@ -304,6 +304,10 @@ pub fn bake_mesh(doc: &Document, m: &mut Mesh, max_size: u32, dir: &Path, file_s
                         vmat_new.push(id);
                         m.stem.push(m.stem[s]);
                         m.leaf.push(false);
+                        if let Some(&x) = m.xuv.get(s) {
+                            m.xuv.resize(m.pos.len() - 1, [0.0; 3]);
+                            m.xuv.push(x);
+                        }
                         src.push(v);
                         m.pos.len() as u32 - 1
                     });

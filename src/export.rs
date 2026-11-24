@@ -635,6 +635,17 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
         } else {
             None
         };
+        // bark cross-fade at joints: the parent's texture coordinates and their weight
+        let xfade_acc = if m.xuv.iter().any(|x| x[2] > 0.0) {
+            let x = |i: usize| m.xuv.get(i).copied().unwrap_or([0.0; 3]);
+            let uvv = push_view(&mut bin, &mut views, &f32s((0..n).flat_map(|i| [x(i)[0], 1.0 - x(i)[1]])), Some(34962));
+            accessors.push(json!({"bufferView": uvv, "componentType": 5126, "count": n, "type": "VEC2"}));
+            let wv = push_view(&mut bin, &mut views, &f32s((0..n).flat_map(|i| [x(i)[2], 0.0])), Some(34962));
+            accessors.push(json!({"bufferView": wv, "componentType": 5126, "count": n, "type": "VEC2"}));
+            Some((accessors.len() - 2, accessors.len() - 1))
+        } else {
+            None
+        };
         // growth: morph targets (position offsets) and the one-bone skin
         let mut targets = vec![];
         let mut skin_attrs = None;
@@ -689,6 +700,12 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
             });
             if let Some(ba) = blend_acc {
                 prim["attributes"]["TEXCOORD_2"] = json!(ba);
+            }
+            if let Some((xu, xw)) = xfade_acc {
+                // texture coordinate sets must be numbered without gaps
+                let first = if blend_acc.is_some() { 3 } else { 2 };
+                prim["attributes"][format!("TEXCOORD_{first}")] = json!(xu);
+                prim["attributes"][format!("TEXCOORD_{}", first + 1)] = json!(xw);
             }
             if let Some((bk, k, gen)) = b {
                 if let Some(bl) = doc.get(gen).and_then(|g| g.blend.as_ref()) {
@@ -814,6 +831,12 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
             "materials": doc.generators.iter().filter_map(|g| g.blend.as_ref().map(|b| json!({"generator": g.name, "blend": b}))).collect::<Vec<_>>(),
             "bake": "Export with bake_material_blend to get plain materials instead (each transition baked into a texture of its own).",
         });
+    }
+    if meshes.iter().any(|(_, m)| m.xuv.iter().any(|x| x[2] > 0.0)) {
+        gltf["extras"]["joint_crossfade"] = {
+            let (a, b) = if meshes.iter().any(|(_, m)| !m.axis.is_empty()) { (3, 4) } else { (2, 3) };
+            json!(format!("Where a branch or root joins its parent, its bark cross-fades from the parent's texture mapping into its own: TEXCOORD_{a} holds the parent's texture coordinates and TEXCOORD_{b}.x the weight of that mapping (1 at the opening in the parent, 0 a few branch radii out). colour = mix(texture(TEXCOORD_0), texture(TEXCOORD_{a}), TEXCOORD_{b}.x), the same for the normal map (each in its own tangent frame). Without it the texture changes mapping at the opening."))
+        };
     }
     if !baked.is_empty() {
         gltf["extras"]["material_blend_baked"] = json!("Material gradients were baked: materials with extras.baked_material_blend hold the transitions (their own textures, the blend and noise painted in); everything else uses each layer's own material.");

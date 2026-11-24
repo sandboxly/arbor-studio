@@ -36,7 +36,7 @@
 </div>
 
 <h2>Bark texture at joints</h2>
-<p>The strip between the opening in the parent and the branch uses the branch's own texture coordinates, continued from the branch. The bark of the branch therefore flows into the joint, without smearing between the parent's and the branch's texture. See <a href="materials.html">Materials and textures</a> for how bark textures are mapped.</p>
+<p>The strip between the opening in the parent and the branch uses the branch's own texture coordinates, continued from the branch, so the bark is not smeared between the parent's and the branch's mapping. Where the branch and its parent use the same material (with <strong>Stitch</strong>), the bark also cross-fades: at the opening the strip shows exactly the parent's bark, and over about three branch radii it fades into the branch's own. There is no line where the two meet, which matters most where big roots flare out of the trunk. See <a href="materials.html">Materials and textures</a> for how bark textures are mapped.</p>
 
 <h2>Roots</h2>
 <p>Roots and side roots are joined in the same way. A trunk with roots reaches a little below the ground, so every root grows out of bark and the base of the trunk stays closed.</p>

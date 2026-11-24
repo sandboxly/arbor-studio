@@ -11,8 +11,10 @@ use std::sync::{Arc, Mutex};
 
 /// Floats per vertex: clip position (4), unlit colour (3), highlight overlay rgb + amount (4),
 /// uv (2), normal (3), world position (3), kind (1: 0 bark, 1 leaf, 2 already lit), position on
-/// the material gradient's axis (1, see [`crate::grow::Mesh::axis`]).
-pub const STRIDE: usize = 21;
+/// the material gradient's axis (1, see [`crate::grow::Mesh::axis`]), the parent's texture
+/// coordinates and their weight where a branch's bark cross-fades into its parent's (3, see
+/// [`crate::grow::Mesh::xuv`]).
+pub const STRIDE: usize = 24;
 
 /// Triangles drawn with the same textures.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -111,7 +113,7 @@ impl GpuRenderer {
     }
 }
 
-const ATTRS: [(&str, i32); 8] = [("a_pos", 4), ("a_base", 3), ("a_hl", 4), ("a_uv", 2), ("a_nrm", 3), ("a_wpos", 3), ("a_kind", 1), ("a_layer", 1)];
+const ATTRS: [(&str, i32); 9] = [("a_pos", 4), ("a_base", 3), ("a_hl", 4), ("a_uv", 2), ("a_nrm", 3), ("a_wpos", 3), ("a_kind", 1), ("a_layer", 1), ("a_xuv", 3)];
 
 impl Res {
     unsafe fn new(gl: &glow::Context) -> Result<Res, String> {
@@ -124,9 +126,9 @@ impl Res {
             let precision = if ver.is_embedded() { "#extension GL_OES_standard_derivatives : enable\nprecision highp float;" } else { "" };
             let vs = format!(
                 "{decl}\n{precision}\n\
-                {vin} vec4 a_pos;\n{vin} vec3 a_base;\n{vin} vec4 a_hl;\n{vin} vec2 a_uv;\n{vin} vec3 a_nrm;\n{vin} vec3 a_wpos;\n{vin} float a_kind;\n{vin} float a_layer;\n\
-                {vout} vec3 v_base;\n{vout} vec4 v_hl;\n{vout} vec2 v_uv;\n{vout} vec3 v_nrm;\n{vout} vec3 v_wpos;\n{vout} float v_kind;\n{vout} float v_layer;\n\
-                void main() {{ gl_Position = a_pos; v_base = a_base; v_hl = a_hl; v_uv = a_uv; v_nrm = a_nrm; v_wpos = a_wpos; v_kind = a_kind; v_layer = a_layer; }}\n"
+                {vin} vec4 a_pos;\n{vin} vec3 a_base;\n{vin} vec4 a_hl;\n{vin} vec2 a_uv;\n{vin} vec3 a_nrm;\n{vin} vec3 a_wpos;\n{vin} float a_kind;\n{vin} float a_layer;\n{vin} vec3 a_xuv;\n\
+                {vout} vec3 v_base;\n{vout} vec4 v_hl;\n{vout} vec2 v_uv;\n{vout} vec3 v_nrm;\n{vout} vec3 v_wpos;\n{vout} float v_kind;\n{vout} float v_layer;\n{vout} vec3 v_xuv;\n\
+                void main() {{ gl_Position = a_pos; v_base = a_base; v_hl = a_hl; v_uv = a_uv; v_nrm = a_nrm; v_wpos = a_wpos; v_kind = a_kind; v_layer = a_layer; v_xuv = a_xuv; }}\n"
             );
             let fs = format!(
                 r#"{decl}
@@ -151,6 +153,7 @@ uniform float u_strength2;
 uniform float u_blend;
 uniform vec4 u_ramp;
 {fin} float v_layer;
+{fin} vec3 v_xuv;
 {fin} vec3 v_base;
 {fin} vec4 v_hl;
 {fin} vec2 v_uv;
@@ -173,6 +176,35 @@ float vnoise(vec3 p) {{
   float x11 = mix(hash13(i + vec3(0.0, 1.0, 1.0)), hash13(i + vec3(1.0, 1.0, 1.0)), u.x);
   return mix(mix(x00, x10, u.y), mix(x01, x11, u.y), u.z);
 }}
+// a colour texture, cross-faded with the parent's mapping where a branch joins it
+vec4 xsamp(sampler2D s) {{
+  vec4 a = {tex_fn}(s, v_uv);
+  if (v_xuv.z > 0.001) a = mix(a, {tex_fn}(s, v_xuv.xy), v_xuv.z);
+  return a;
+}}
+// a normal map's tangent-space normal at `uv`, green and strength applied
+vec3 nsamp(sampler2D s, vec2 uv, float green, float strength) {{
+  vec3 tn = {tex_fn}(s, uv).xyz * 2.0 - 1.0;
+  tn.y *= green;
+  tn.xy *= strength;
+  return tn;
+}}
+// bend normal `n` by tangent-space `tn` in the frame of texture coordinates `uv`
+// (from screen-space derivatives of position and uv: no tangents needed)
+vec3 bend(vec3 n, vec2 uv, vec3 tn) {{
+  vec3 dp1 = dFdx(v_wpos);
+  vec3 dp2 = dFdy(v_wpos);
+  vec2 duv1 = dFdx(uv);
+  vec2 duv2 = dFdy(uv);
+  vec3 dp2perp = cross(dp2, n);
+  vec3 dp1perp = cross(n, dp1);
+  vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+  vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+  if (dot(T, T) > 1e-36 && dot(B, B) > 1e-36) {{
+    return normalize(normalize(T) * tn.x + normalize(B) * tn.y + n * max(tn.z, 0.05));
+  }}
+  return n;
+}}
 void main() {{
   // material gradient: weight of the next layer's material at this pixel
   // (u_ramp = where the transition is, half its ramp, how far noise moves it, noise size)
@@ -193,43 +225,32 @@ void main() {{
   }}
   vec4 t = vec4(1.0);
   if (u_use_tex > 0.5) {{
-    t = {tex_fn}(u_tex, v_uv);
+    t = xsamp(u_tex);
     if (t.a < 0.5) discard;
   }}
   if (bw > 0.0) {{
-    vec4 t2 = u_use_tex2 > 0.5 ? {tex_fn}(u_tex2, v_uv) : vec4(1.0);
+    vec4 t2 = u_use_tex2 > 0.5 ? xsamp(u_tex2) : vec4(1.0);
     t = mix(t, t2, bw);
   }}
   vec3 n = normalize(v_nrm);
   if ((u_use_nrm > 0.5 || (bw > 0.0 && u_use_nrm2 > 0.5)) && v_kind < 1.5) {{
-    // tangent frame from screen-space derivatives of position and uv (no tangents needed)
-    vec3 dp1 = dFdx(v_wpos);
-    vec3 dp2 = dFdy(v_wpos);
-    vec2 duv1 = dFdx(v_uv);
-    vec2 duv2 = dFdy(v_uv);
-    vec3 dp2perp = cross(dp2, n);
-    vec3 dp1perp = cross(n, dp1);
-    vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
-    vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
-    if (dot(T, T) > 1e-36 && dot(B, B) > 1e-36) {{
-      vec3 tn = vec3(0.0, 0.0, 1.0);
-      if (u_use_nrm > 0.5) {{
-        tn = {tex_fn}(u_nrm, v_uv).xyz * 2.0 - 1.0;
-        // B points down the image (texture rows grow downwards): OpenGL maps store green = up
-        tn.y *= u_green;
-        tn.xy *= u_strength;
-      }}
-      if (bw > 0.0) {{
-        vec3 tn2 = vec3(0.0, 0.0, 1.0);
-        if (u_use_nrm2 > 0.5) {{
-          tn2 = {tex_fn}(u_nrm2, v_uv).xyz * 2.0 - 1.0;
-          tn2.y *= u_green2;
-          tn2.xy *= u_strength2;
-        }}
-        tn = mix(tn, tn2, bw);
-      }}
-      n = normalize(normalize(T) * tn.x + normalize(B) * tn.y + n * max(tn.z, 0.05));
+    // B points down the image (texture rows grow downwards): OpenGL maps store green = up
+    vec3 tn = u_use_nrm > 0.5 ? nsamp(u_nrm, v_uv, u_green, u_strength) : vec3(0.0, 0.0, 1.0);
+    if (bw > 0.0) {{
+      vec3 tn2 = u_use_nrm2 > 0.5 ? nsamp(u_nrm2, v_uv, u_green2, u_strength2) : vec3(0.0, 0.0, 1.0);
+      tn = mix(tn, tn2, bw);
     }}
+    vec3 n1 = bend(n, v_uv, tn);
+    if (v_xuv.z > 0.001) {{
+      // the same in the parent's mapping, with its own tangent frame
+      vec3 tx = u_use_nrm > 0.5 ? nsamp(u_nrm, v_xuv.xy, u_green, u_strength) : vec3(0.0, 0.0, 1.0);
+      if (bw > 0.0) {{
+        vec3 tx2 = u_use_nrm2 > 0.5 ? nsamp(u_nrm2, v_xuv.xy, u_green2, u_strength2) : vec3(0.0, 0.0, 1.0);
+        tx = mix(tx, tx2, bw);
+      }}
+      n1 = normalize(mix(n1, bend(n, v_xuv.xy, tx), v_xuv.z));
+    }}
+    n = n1;
   }}
   vec3 l = normalize(u_light);
   vec3 k;

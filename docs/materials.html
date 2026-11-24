@@ -78,7 +78,7 @@
 
 <h2>How bark textures are mapped</h2>
 <p>A bark texture wraps once around each stem for each unit of <strong>around</strong> tiling. Along the stem it repeats once per circumference of the stem at that point, multiplied by the <strong>along</strong> tiling. This keeps the texture's proportions on thick trunks and thin twigs alike: the bark pattern is smaller on thin branches, as on a real tree. The circumference is measured on the actual surface, including buttress flare and flutes.</p>
-<p>Texture coordinates continue across <a href="joints.html">joints</a>, so the bark of a branch flows into its collar.</p>
+<p>Texture coordinates continue across <a href="joints.html">joints</a>, so the bark of a branch flows into its collar, and where branch and parent share a material the bark cross-fades from the parent's into the branch's, so there is no seam where roots and branches meet the trunk. GLB files carry the parent's coordinates and the fade weight in two extra texture coordinate sets, described in the file's <code>extras.joint_crossfade</code>, for engines with a custom shader.</p>
 <div class="gallery wide">
 <figure><img src="images/material-bark.jpg" alt="Textured trunk at noon"><figcaption>Bark texture and normal map, Noon lighting</figcaption></figure>
 <figure><img src="images/material-bark-evening.jpg" alt="Textured trunk in the evening"><figcaption>The same in Evening lighting</figcaption></figure>
