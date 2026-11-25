@@ -14,7 +14,7 @@ the source or the docs in this repository.
 
 ## Hero
 
-- Eyebrow: Tree editor for games · v0.4.0
+- Eyebrow: Tree editor for games · v0.4.1
 - H1: Game-ready trees. Ready for your favorite AI agent.
 - Subhead: ArborStudio is a desktop editor that grows trees from trunk, branch, root and leaf generators and
   exports them as GLB or OBJ with four LODs, a billboard and wind weights. Every operation in the editor is
@@ -110,7 +110,7 @@ the source or the docs in this repository.
 
 ## 7. Download
 
-- H2: v0.4.0 for macOS, Windows and Linux.
+- H2: v0.4.1 for macOS, Windows and Linux.
 - Files: macOS 11 or later, Apple silicon and Intel: ArborStudio-macos-universal.dmg, 14.8 MB ·
   Windows 10 or later, 64-bit: arbor_studio-windows-x86_64.msi, 4.3 MB ·
   Linux x86-64, X11 or Wayland: arbor_studio-linux-x86_64.tar.gz, 6.3 MB.
@@ -121,7 +121,7 @@ the source or the docs in this repository.
 
 ## Footer
 
-- ArborStudio 0.4.0 · MIT licence · Source · Issues · Docs · Written in Rust.
+- ArborStudio 0.4.1 · MIT licence · Source · Issues · Docs · Written in Rust.
 
 ## Open items (left off the page until they exist)
 

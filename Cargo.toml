@@ -1,6 +1,6 @@
 [package]
 name = "arbor_studio"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "Procedural tree modeller with a built-in MCP server for coding agents"
 license = "MIT"

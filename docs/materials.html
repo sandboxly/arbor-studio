@@ -40,7 +40,9 @@
 <dt>Roughness <span class="range">0 to 1</span></dt>
 <dd>Surface roughness for physically based shading in engines. Bark is usually close to 1.</dd>
 <dt>Tiling: around, along <span class="range">0.05 to 50</span></dt>
-<dd>How often a bark texture repeats around each stem (<strong>around</strong>) and along it (<strong>along</strong>).</dd>
+<dd>How often a bark texture repeats around each stem (<strong>around</strong>) and along it (<strong>along</strong>). Along counts repeats per circumference of the stem, so equal values keep a square image square. In a <a href="#gradient">material gradient</a>, every layer shows its own material's tiling.</dd>
+<dt>Keep the image's proportions</dt>
+<dd>Works out <strong>along</strong> from the image's shape (around × width ÷ height), so a tall bark photo is not squashed along the stem. The along field then shows the value in use.</dd>
 <dt>Cut-out</dt>
 <dd>Transparent pixels of the texture become holes. Use it for leaf cards.</dd>
 <dt>Two-sided</dt>

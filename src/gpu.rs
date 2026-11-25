@@ -187,9 +187,13 @@ float vnoise(vec3 p) {{
 }}
 // a colour texture at texture coordinate scale `sc` (a gradient layer's own tiling),
 // cross-faded with the parent's mapping where a branch joins it
+// (v_uv and v_xuv carry 1 - v: scale v from the bottom, as the other renderers and the bake do)
+vec2 scl(vec2 uv, vec2 sc) {{
+  return vec2(uv.x * sc.x, 1.0 - (1.0 - uv.y) * sc.y);
+}}
 vec4 xsamp(sampler2D s, vec2 sc) {{
-  vec4 a = {tex_fn}(s, v_uv * sc);
-  if (v_xuv.z > 0.001) a = mix(a, {tex_fn}(s, v_xuv.xy * sc), v_xuv.z);
+  vec4 a = {tex_fn}(s, scl(v_uv, sc));
+  if (v_xuv.z > 0.001) a = mix(a, {tex_fn}(s, scl(v_xuv.xy, sc)), v_xuv.z);
   return a;
 }}
 // a normal map's tangent-space normal at `uv`, green and strength applied
@@ -245,17 +249,17 @@ void main() {{
   vec3 n = normalize(v_nrm);
   if ((u_use_nrm > 0.5 || (bw > 0.0 && u_use_nrm2 > 0.5)) && v_kind < 1.5) {{
     // B points down the image (texture rows grow downwards): OpenGL maps store green = up
-    vec3 tn = u_use_nrm > 0.5 ? nsamp(u_nrm, v_uv * u_uvs, u_green, u_strength) : vec3(0.0, 0.0, 1.0);
+    vec3 tn = u_use_nrm > 0.5 ? nsamp(u_nrm, scl(v_uv, u_uvs), u_green, u_strength) : vec3(0.0, 0.0, 1.0);
     if (bw > 0.0) {{
-      vec3 tn2 = u_use_nrm2 > 0.5 ? nsamp(u_nrm2, v_uv * u_uvs2, u_green2, u_strength2) : vec3(0.0, 0.0, 1.0);
+      vec3 tn2 = u_use_nrm2 > 0.5 ? nsamp(u_nrm2, scl(v_uv, u_uvs2), u_green2, u_strength2) : vec3(0.0, 0.0, 1.0);
       tn = mix(tn, tn2, bw);
     }}
     vec3 n1 = bend(n, v_uv, tn);
     if (v_xuv.z > 0.001) {{
       // the same in the parent's mapping, with its own tangent frame
-      vec3 tx = u_use_nrm > 0.5 ? nsamp(u_nrm, v_xuv.xy * u_uvs, u_green, u_strength) : vec3(0.0, 0.0, 1.0);
+      vec3 tx = u_use_nrm > 0.5 ? nsamp(u_nrm, scl(v_xuv.xy, u_uvs), u_green, u_strength) : vec3(0.0, 0.0, 1.0);
       if (bw > 0.0) {{
-        vec3 tx2 = u_use_nrm2 > 0.5 ? nsamp(u_nrm2, v_xuv.xy * u_uvs2, u_green2, u_strength2) : vec3(0.0, 0.0, 1.0);
+        vec3 tx2 = u_use_nrm2 > 0.5 ? nsamp(u_nrm2, scl(v_xuv.xy, u_uvs2), u_green2, u_strength2) : vec3(0.0, 0.0, 1.0);
         tx = mix(tx, tx2, bw);
       }}
       n1 = normalize(mix(n1, bend(n, v_xuv.xy, tx), v_xuv.z));

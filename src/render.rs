@@ -746,6 +746,10 @@ fn render_core(doc: &Document, m: &Mesh, cam: &Camera, w: u32, h: u32, time: f32
         let (_, mat, next) = m.tri_layers(doc, ti);
         let texture = tex.get(&mat);
         let texture2 = next.map(|m2| tex.get(&m2));
+        // every gradient layer shows its own material's tiling
+        let tgen = m.gen[tri[0] as usize];
+        let sc_a = doc.layer_uv_scale(tgen, mat);
+        let sc_b = next.map(|m2| doc.layer_uv_scale(tgen, m2)).unwrap_or([1.0, 1.0]);
         let blend = m.tri_blend(doc, ti);
         let [la, lb, lc] = tri.map(|i| m.axis.get(i as usize).copied().unwrap_or(0.0));
         let [pa, pb, pc] = tri.map(|i| m.pos[i as usize]);
@@ -753,13 +757,13 @@ fn render_core(doc: &Document, m: &Mesh, cam: &Camera, w: u32, h: u32, time: f32
         // cross-fade into the parent's bark where a branch joins it
         let [xa, xb, xc] = tri.map(|i| m.xuv.get(i as usize).copied().unwrap_or([0.0; 3]));
         let xfade = xa[2] > 0.0 || xb[2] > 0.0 || xc[2] > 0.0;
-        let sample = |img: &image::RgbaImage, u: f32, v: f32, w0: f32, w1: f32, w2: f32| -> [f32; 4] {
-            let px = crate::textures::sample(img, u, 1.0 - v);
+        let sample = |img: &image::RgbaImage, u: f32, v: f32, w0: f32, w1: f32, w2: f32, sc: [f32; 2]| -> [f32; 4] {
+            let px = crate::textures::sample(img, u * sc[0], 1.0 - v * sc[1]);
             let mut c = px.map(|x| x as f32 / 255.0);
             if xfade {
                 let xw = xa[2] * w0 + xb[2] * w1 + xc[2] * w2;
                 if xw > 0.001 {
-                    let q = crate::textures::sample(img, xa[0] * w0 + xb[0] * w1 + xc[0] * w2, 1.0 - (xa[1] * w0 + xb[1] * w1 + xc[1] * w2));
+                    let q = crate::textures::sample(img, (xa[0] * w0 + xb[0] * w1 + xc[0] * w2) * sc[0], 1.0 - (xa[1] * w0 + xb[1] * w1 + xc[1] * w2) * sc[1]);
                     for k in 0..4 {
                         c[k] += (q[k] as f32 / 255.0 - c[k]) * xw;
                     }
@@ -783,7 +787,7 @@ fn render_core(doc: &Document, m: &Mesh, cam: &Camera, w: u32, h: u32, time: f32
                     let u = ua[0] * w0 + ub[0] * w1 + uc[0] * w2;
                     let v = ua[1] * w0 + ub[1] * w1 + uc[1] * w2;
                     if let Some((timg, cutout)) = texture {
-                        let px = sample(timg, u, v, w0, w1, w2);
+                        let px = sample(timg, u, v, w0, w1, w2, sc_a);
                         if *cutout && px[3] < 0.5 {
                             continue;
                         }
@@ -796,7 +800,7 @@ fn render_core(doc: &Document, m: &Mesh, cam: &Camera, w: u32, h: u32, time: f32
                         if bw > 0.0 {
                             let c2 = match t2 {
                                 Some((img2, _)) => {
-                                    let px = sample(img2, u, v, w0, w1, w2);
+                                    let px = sample(img2, u, v, w0, w1, w2, sc_b);
                                     [px[0], px[1], px[2]]
                                 }
                                 None => [1.0; 3],

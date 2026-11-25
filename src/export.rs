@@ -841,7 +841,7 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
             "weight": "w = smoothstep(at - half_ramp, at + half_ramp, TEXCOORD_2.x + noise_reach * noise(world_position / noise_scale)); final = mix(material, material_b, w) for colour, normal and roughness. noise is smooth value noise in -1..1; without it (or per vertex) use w = clamp(TEXCOORD_2.y - layer, 0, 1).",
             "materials": doc.generators.iter().filter_map(|g| g.blend.as_ref().map(|b| json!({"generator": g.name, "blend": b}))).collect::<Vec<_>>(),
             "bake": "Export with bake_material_blend to get plain materials instead (each transition baked into a texture of its own).",
-            "uv_scale": "Every layer shows its own material's tiling: a primitive's extras.uv_scale [u, v] (absent: [1, 1]) multiplies TEXCOORD_0 (and the joint cross-fade's coordinates) for its material, and material_blend.uv_scale_b does the same for material_b.",
+            "uv_scale": "Every layer shows its own material's tiling: with a primitive's extras.uv_scale [su, sv] (absent: [1, 1]) its material samples at (TEXCOORD_0.x * su, 1 - (1 - TEXCOORD_0.y) * sv), the same for the joint cross-fade's coordinates, and material_blend.uv_scale_b does the same for material_b.",
         });
     }
     if meshes.iter().any(|(_, m)| m.xuv.iter().any(|x| x[2] > 0.0)) {
