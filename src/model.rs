@@ -890,8 +890,13 @@ pub struct Material {
     /// The normal map uses the DirectX convention (green = down) instead of OpenGL (green = up).
     pub normal_flip_green: bool,
     pub roughness: f32,
-    /// Texture repeats around (u) and along (v) a stem. Leaves always use 1 x 1.
+    /// Texture repeats around (u) and along (v) a stem. Leaves always use 1 x 1. The along
+    /// value counts repeats per circumference of the stem, so [n, n] keeps a SQUARE image
+    /// square; see `keep_proportions` for any other shape.
     pub tiling: [f32; 2],
+    /// Work out the along repeats from the image's shape (`tiling[0]` times its width over
+    /// its height), so a tall bark photo keeps its proportions; `tiling[1]` is then unused.
+    pub keep_proportions: bool,
     /// Treat transparent texture pixels as holes (for leaf cards).
     pub alpha_cutout: bool,
     pub double_sided: bool,
@@ -952,6 +957,7 @@ impl Default for Material {
             normal_flip_green: false,
             roughness: 0.85,
             tiling: [1.0, 1.0],
+            keep_proportions: false,
             alpha_cutout: false,
             double_sided: false,
             atlas: vec![],
@@ -959,7 +965,32 @@ impl Default for Material {
     }
 }
 
+/// Width over height of an image file, read from its header once per path.
+fn image_aspect(path: &str) -> Option<f32> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<HashMap<String, Option<f32>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(a) = cache.lock().ok()?.get(path) {
+        return *a;
+    }
+    let a = image::image_dimensions(path).ok().filter(|(w, h)| *w > 0 && *h > 0).map(|(w, h)| w as f32 / h as f32);
+    if let Ok(mut c) = cache.lock() {
+        c.insert(path.to_string(), a);
+    }
+    a
+}
+
 impl Material {
+    /// The tiling the bark is drawn with: `tiling`, or with `keep_proportions` the along
+    /// repeats that keep the image's shape (texels square on the stem).
+    pub fn effective_tiling(&self) -> [f32; 2] {
+        match (self.keep_proportions, self.texture.as_deref().or(self.normal_map.as_deref()).and_then(image_aspect)) {
+            (true, Some(aspect)) => [self.tiling[0], (self.tiling[0] * aspect).clamp(0.05, 50.0)],
+            _ => self.tiling,
+        }
+    }
+
     /// The atlas picture for a leaf, from a random number 0..1 (None: the whole image).
     pub fn atlas_pick(&self, r: f32) -> Option<&AtlasCell> {
         let total: f32 = self.atlas.iter().map(|c| c.weight).sum();
@@ -1541,6 +1572,14 @@ impl Document {
     pub fn gen_material(&self, gen_id: u32) -> Option<&Material> {
         self.get(gen_id).and_then(|g| g.material).and_then(|m| self.material(m))
     }
+    /// How a gradient layer's material maps onto a generator's bark: the factor its texture
+    /// coordinates (laid out with the generator's own material's tiling) are multiplied by so
+    /// the layer shows its OWN tiling. [1, 1] for the generator's own material.
+    pub fn layer_uv_scale(&self, gen_id: u32, mat_id: u32) -> [f32; 2] {
+        let base = self.gen_material(gen_id).map(|m| m.effective_tiling()).unwrap_or([1.0, 1.0]);
+        let own = self.material(mat_id).map(|m| m.effective_tiling()).unwrap_or(base);
+        [own[0] / base[0].max(1e-6), own[1] / base[1].max(1e-6)]
+    }
     pub fn add_material(&mut self, mut m: Material) -> u32 {
         let id = self.materials.iter().map(|m| m.id + 1).max().unwrap_or(1).max(1);
         m.id = id;
@@ -2115,8 +2154,34 @@ pub const MATERIAL_REFERENCE: &[(&str, &str, &str)] = &[
     ("normal_strength", "0..4 (1 = as painted)", "How strongly the normal map bends the lighting."),
     ("normal_flip_green", "true|false", "The normal map is DirectX style (green = down); default OpenGL style (green = up, as glTF expects)."),
     ("roughness", "0..1", "Surface roughness for engines."),
-    ("tiling", "[u, v] 0.05..50", "How often a bark texture repeats around (u) and along (v) a stem."),
+    ("tiling", "[u, v] 0.05..50", "How often a bark texture repeats around (u) and along (v) a stem; v counts repeats per circumference, so [n, n] keeps a square image square. A gradient layer shows its own material's tiling."),
+    ("keep_proportions", "bool", "Take the along repeats from the image's shape (tiling u times width / height), so a tall bark photo is not squashed; tiling v is then unused."),
     ("alpha_cutout", "bool", "Transparent texture pixels become holes (leaf cards)."),
     ("double_sided", "bool", "Render both faces in engines. Leaf materials are always exported double-sided."),
     ("atlas", "[{rect [x, y, w, h], pivot [x, y], weight}], up to 64", "Leaf texture atlas: one rectangle per leaf picture (pixels of the texture, origin top left). Each leaf shows one picture, picked at random by weight, on a card shaped like it and hanging from its pivot (where the stalk meets the twig; default the middle of the bottom edge)."),
 ];
+
+#[cfg(test)]
+mod tiling_tests {
+    use super::*;
+
+    /// A tall bark photo keeps its shape with `keep_proportions`, and a gradient layer is drawn
+    /// with its own tiling relative to the generator's material.
+    #[test]
+    fn layers_show_their_own_tiling_and_keep_their_proportions() {
+        let dir = std::env::temp_dir().join(format!("arbor_tiling_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let tall = dir.join("tall.png");
+        image::RgbaImage::new(512, 2048).save(&tall).unwrap();
+        let mut doc = Document::default();
+        let grey = doc.add_material(Material { tiling: [2.0, 2.0], texture: Some(tall.display().to_string()), ..Default::default() });
+        let orange = doc.add_material(Material { tiling: [1.0, 1.0], keep_proportions: true, texture: Some(tall.display().to_string()), ..Default::default() });
+        let gen = doc.generators[0].id;
+        doc.generators[0].material = Some(grey);
+        assert_eq!(doc.material(grey).unwrap().effective_tiling(), [2.0, 2.0]);
+        assert_eq!(doc.material(orange).unwrap().effective_tiling(), [1.0, 0.25]);
+        assert_eq!(doc.layer_uv_scale(gen, grey), [1.0, 1.0]);
+        assert_eq!(doc.layer_uv_scale(gen, orange), [0.5, 0.125]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}

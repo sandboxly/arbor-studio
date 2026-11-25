@@ -2286,13 +2286,23 @@ fn material_editor(
             ui.label("Roughness");
             ui.add(egui::Slider::new(&mut m.roughness, 0.0..=1.0));
             ui.end_row();
-            ui.label("Tiling").on_hover_text("How often a bark texture repeats around and along each stem.");
+            ui.label("Tiling").on_hover_text("How often a bark texture repeats around each stem, and along it per circumference: equal values keep a square image square. A gradient layer shows its own tiling.");
             ui.horizontal(|ui| {
                 ui.label("around");
                 ui.add(egui::DragValue::new(&mut m.tiling[0]).speed(0.05).range(0.05..=50.0));
                 ui.label("along");
-                ui.add(egui::DragValue::new(&mut m.tiling[1]).speed(0.05).range(0.05..=50.0));
+                if m.keep_proportions && m.effective_tiling() != m.tiling {
+                    // worked out from the image's shape
+                    let along = m.effective_tiling()[1];
+                    ui.add_enabled(false, egui::DragValue::new(&mut along.clone()).speed(0.05));
+                } else {
+                    ui.add(egui::DragValue::new(&mut m.tiling[1]).speed(0.05).range(0.05..=50.0));
+                }
             });
+            ui.end_row();
+            ui.label("");
+            ui.checkbox(&mut m.keep_proportions, "Keep the image's proportions")
+                .on_hover_text("Work out the along repeats from the image's shape, so a tall bark photo is not squashed.");
             ui.end_row();
             ui.label("Cut-out");
             ui.checkbox(&mut m.alpha_cutout, "Transparent pixels are holes (leaf cards)");

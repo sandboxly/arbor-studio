@@ -2110,7 +2110,7 @@ pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) ->
         let shade = 1.0 - (st.depth as f32 * 0.06).min(0.2);
         let mat = doc.gen_material(st.gen);
         let mat_id = mat.map(|m| m.id).unwrap_or(0);
-        let tiling = mat.map(|m| m.tiling).unwrap_or([1.0, 1.0]);
+        let tiling = mat.map(|m| m.effective_tiling()).unwrap_or([1.0, 1.0]);
         let col = mat.map(|m| m.color.map(|c| c as f32 / 255.0)).unwrap_or(bark);
         let c = [col[0] * shade, col[1] * shade, col[2] * shade];
         // parallel transport frame

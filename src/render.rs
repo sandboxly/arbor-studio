@@ -524,6 +524,7 @@ pub fn draw(painter: &egui::Painter, rect: Rect, a: &DrawArgs) -> PickData {
                 for &ti in &order {
                     let tri = m.tris[ti as usize];
                     let (_, mat, next) = m.tri_layers(a.doc, ti as usize);
+                    let gen = m.gen[tri[0] as usize];
                     let ramp = m.tri_blend(a.doc, ti as usize).map(|(k, b)| [b.layers[k].at, b.half_ramp(), b.noise_reach(), b.noise_scale]);
                     let key = crate::gpu::GroupKey {
                         color: a.textures.get(&mat).copied(),
@@ -539,7 +540,9 @@ pub fn draw(painter: &egui::Painter, rect: Rect, a: &DrawArgs) -> PickData {
                             normal: a.normals.get(&m2).map(|n| n.0),
                             flip_green: a.normals.get(&m2).map(|n| n.1).unwrap_or(false),
                             strength_milli: a.normals.get(&m2).map(|n| (n.2 * 1000.0) as u32).unwrap_or(1000),
+                            uv_scale: a.doc.layer_uv_scale(gen, m2).map(f32::to_bits),
                         }),
+                        uv_scale: a.doc.layer_uv_scale(gen, mat).map(f32::to_bits),
                     };
                     gm.groups.entry(key).or_default().extend_from_slice(&tri);
                 }
@@ -557,7 +560,9 @@ pub fn draw(painter: &egui::Painter, rect: Rect, a: &DrawArgs) -> PickData {
                 let mut run_tex = egui::TextureId::default();
                 for &ti in &order {
                     let tri = m.tris[ti as usize];
-                    let tex = a.textures.get(&m.tri_layers(a.doc, ti as usize).1).copied();
+                    let lm = m.tri_layers(a.doc, ti as usize).1;
+                    let tex = a.textures.get(&lm).copied();
+                    let sc = a.doc.layer_uv_scale(m.gen[tri[0] as usize], lm);
                     let want = tex.unwrap_or_default();
                     if want != run_tex && !run.indices.is_empty() {
                         let full = std::mem::replace(&mut run, egui::Mesh::default());
@@ -567,7 +572,7 @@ pub fn draw(painter: &egui::Painter, rect: Rect, a: &DrawArgs) -> PickData {
                     run_tex = want;
                     for &vi in &tri {
                         let vi = vi as usize;
-                        let uv = if tex.is_some() { Pos2::new(m.uv[vi][0], 1.0 - m.uv[vi][1]) } else { egui::epaint::WHITE_UV };
+                        let uv = if tex.is_some() { Pos2::new(m.uv[vi][0] * sc[0], 1.0 - m.uv[vi][1] * sc[1]) } else { egui::epaint::WHITE_UV };
                         run.indices.push(run.vertices.len() as u32);
                         run.vertices.push(Vertex { pos: screen[vi], uv, color: cols[vi] });
                     }

@@ -26,6 +26,9 @@ pub struct GroupKey {
     pub strength_milli: u32,
     /// Material gradients: the next layer's textures, blended in by `layer - band`.
     pub blend: Option<BlendKey>,
+    /// The texture coordinates' scale for this material on this bark (f32 bits): a gradient
+    /// layer shows its own tiling ([`crate::model::Document::layer_uv_scale`]).
+    pub uv_scale: [u32; 2],
 }
 
 /// The second material of a blended group and its transition (f32 bit patterns, for hashing):
@@ -40,6 +43,8 @@ pub struct BlendKey {
     pub normal: Option<egui::TextureId>,
     pub flip_green: bool,
     pub strength_milli: u32,
+    /// The next layer's texture coordinate scale (f32 bits), as [`GroupKey::uv_scale`].
+    pub uv_scale: [u32; 2],
 }
 
 /// One frame's worth of geometry for the GPU.
@@ -80,6 +85,8 @@ struct Res {
     u_strength2: Option<glow::UniformLocation>,
     u_blend: Option<glow::UniformLocation>,
     u_ramp: Option<glow::UniformLocation>,
+    u_uvs: Option<glow::UniformLocation>,
+    u_uvs2: Option<glow::UniformLocation>,
 }
 
 /// Lazily created GL resources, shared with the paint callbacks.
@@ -152,6 +159,8 @@ uniform float u_green2;
 uniform float u_strength2;
 uniform float u_blend;
 uniform vec4 u_ramp;
+uniform vec2 u_uvs;
+uniform vec2 u_uvs2;
 {fin} float v_layer;
 {fin} vec3 v_xuv;
 {fin} vec3 v_base;
@@ -176,10 +185,11 @@ float vnoise(vec3 p) {{
   float x11 = mix(hash13(i + vec3(0.0, 1.0, 1.0)), hash13(i + vec3(1.0, 1.0, 1.0)), u.x);
   return mix(mix(x00, x10, u.y), mix(x01, x11, u.y), u.z);
 }}
-// a colour texture, cross-faded with the parent's mapping where a branch joins it
-vec4 xsamp(sampler2D s) {{
-  vec4 a = {tex_fn}(s, v_uv);
-  if (v_xuv.z > 0.001) a = mix(a, {tex_fn}(s, v_xuv.xy), v_xuv.z);
+// a colour texture at texture coordinate scale `sc` (a gradient layer's own tiling),
+// cross-faded with the parent's mapping where a branch joins it
+vec4 xsamp(sampler2D s, vec2 sc) {{
+  vec4 a = {tex_fn}(s, v_uv * sc);
+  if (v_xuv.z > 0.001) a = mix(a, {tex_fn}(s, v_xuv.xy * sc), v_xuv.z);
   return a;
 }}
 // a normal map's tangent-space normal at `uv`, green and strength applied
@@ -225,27 +235,27 @@ void main() {{
   }}
   vec4 t = vec4(1.0);
   if (u_use_tex > 0.5) {{
-    t = xsamp(u_tex);
+    t = xsamp(u_tex, u_uvs);
     if (t.a < 0.5) discard;
   }}
   if (bw > 0.0) {{
-    vec4 t2 = u_use_tex2 > 0.5 ? xsamp(u_tex2) : vec4(1.0);
+    vec4 t2 = u_use_tex2 > 0.5 ? xsamp(u_tex2, u_uvs2) : vec4(1.0);
     t = mix(t, t2, bw);
   }}
   vec3 n = normalize(v_nrm);
   if ((u_use_nrm > 0.5 || (bw > 0.0 && u_use_nrm2 > 0.5)) && v_kind < 1.5) {{
     // B points down the image (texture rows grow downwards): OpenGL maps store green = up
-    vec3 tn = u_use_nrm > 0.5 ? nsamp(u_nrm, v_uv, u_green, u_strength) : vec3(0.0, 0.0, 1.0);
+    vec3 tn = u_use_nrm > 0.5 ? nsamp(u_nrm, v_uv * u_uvs, u_green, u_strength) : vec3(0.0, 0.0, 1.0);
     if (bw > 0.0) {{
-      vec3 tn2 = u_use_nrm2 > 0.5 ? nsamp(u_nrm2, v_uv, u_green2, u_strength2) : vec3(0.0, 0.0, 1.0);
+      vec3 tn2 = u_use_nrm2 > 0.5 ? nsamp(u_nrm2, v_uv * u_uvs2, u_green2, u_strength2) : vec3(0.0, 0.0, 1.0);
       tn = mix(tn, tn2, bw);
     }}
     vec3 n1 = bend(n, v_uv, tn);
     if (v_xuv.z > 0.001) {{
       // the same in the parent's mapping, with its own tangent frame
-      vec3 tx = u_use_nrm > 0.5 ? nsamp(u_nrm, v_xuv.xy, u_green, u_strength) : vec3(0.0, 0.0, 1.0);
+      vec3 tx = u_use_nrm > 0.5 ? nsamp(u_nrm, v_xuv.xy * u_uvs, u_green, u_strength) : vec3(0.0, 0.0, 1.0);
       if (bw > 0.0) {{
-        vec3 tx2 = u_use_nrm2 > 0.5 ? nsamp(u_nrm2, v_xuv.xy, u_green2, u_strength2) : vec3(0.0, 0.0, 1.0);
+        vec3 tx2 = u_use_nrm2 > 0.5 ? nsamp(u_nrm2, v_xuv.xy * u_uvs2, u_green2, u_strength2) : vec3(0.0, 0.0, 1.0);
         tx = mix(tx, tx2, bw);
       }}
       n1 = normalize(mix(n1, bend(n, v_xuv.xy, tx), v_xuv.z));
@@ -336,6 +346,8 @@ void main() {{
                 u_strength2: u("u_strength2"),
                 u_blend: u("u_blend"),
                 u_ramp: u("u_ramp"),
+                u_uvs: u("u_uvs"),
+                u_uvs2: u("u_uvs2"),
             })
         }
     }
@@ -394,6 +406,10 @@ void main() {{
                 gl.uniform_1_f32(self.u_use_nrm2.as_ref(), if nrm2.is_some() { 1.0 } else { 0.0 });
                 gl.uniform_1_f32(self.u_green2.as_ref(), if key.blend.map(|b| b.flip_green).unwrap_or(false) { 1.0 } else { -1.0 });
                 gl.uniform_1_f32(self.u_strength2.as_ref(), key.blend.map(|b| b.strength_milli as f32 / 1000.0).unwrap_or(1.0));
+                let sc = key.uv_scale.map(f32::from_bits);
+                gl.uniform_2_f32(self.u_uvs.as_ref(), sc[0], sc[1]);
+                let sc2 = key.blend.map(|b| b.uv_scale.map(f32::from_bits)).unwrap_or([1.0, 1.0]);
+                gl.uniform_2_f32(self.u_uvs2.as_ref(), sc2[0], sc2[1]);
                 gl.active_texture(glow::TEXTURE3);
                 gl.bind_texture(glow::TEXTURE_2D, nrm2.or(fallback));
                 gl.active_texture(glow::TEXTURE2);

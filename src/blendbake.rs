@@ -7,7 +7,9 @@
 //! painted from the two materials' full-size images mixed with the same weight (noise mask
 //! included) the viewport uses. Those triangles get their own copies of their vertices, with
 //! texture coordinates into the atlas; positions, normals, colours and wind stay the same, so
-//! nothing moves apart.
+//! nothing moves apart. Every layer shows its OWN material's tiling (`Document::layer_uv_scale`):
+//! a layer's triangles get vertex copies with their coordinates scaled, and a transition samples
+//! each layer at its own scale, its atlas as dense as the denser of the two in metres.
 
 use crate::grow::Mesh;
 use crate::model::Document;
@@ -164,11 +166,21 @@ pub fn bake_mesh(doc: &Document, m: &mut Mesh, max_size: u32, dir: &Path, file_s
     // which layer material every bark triangle uses, and the transition triangles per (gen, k)
     let mut groups: Vec<((u32, usize), Vec<usize>)> = vec![];
     let mut vmat_new = m.vmat.clone();
+    // triangles drawn with one layer whose tiling differs from the generator's own material:
+    // they get vertex copies with that layer's texture coordinates (per (gen, material))
+    let mut rescale: Vec<((u32, u32), Vec<usize>)> = vec![];
     for ti in 0..m.leaf_tri_start.min(m.tris.len()) {
         let (_, a, next) = m.tri_layers(doc, ti);
         if next.is_none() {
             for &v in &m.tris[ti] {
                 vmat_new[v as usize] = a;
+            }
+            let gen = m.gen[m.tris[ti][0] as usize];
+            if doc.layer_uv_scale(gen, a) != [1.0, 1.0] {
+                match rescale.iter_mut().find(|(key, _)| *key == (gen, a)) {
+                    Some((_, v)) => v.push(ti),
+                    None => rescale.push(((gen, a), vec![ti])),
+                }
             }
             continue;
         }
@@ -184,8 +196,10 @@ pub fn bake_mesh(doc: &Document, m: &mut Mesh, max_size: u32, dir: &Path, file_s
         let Some(blend) = doc.get(gen).and_then(|g| g.blend.clone()) else { continue };
         let (ida, idb) = (doc.layer_material_id(gen, k as u32), doc.layer_material_id(gen, k as u32 + 1));
         let (la, lb) = (look(doc, ida, &mut cache), look(doc, idb, &mut cache));
+        // each layer shows its own tiling: its texels per unit of the generator's coordinates
+        let (sa, sb) = (doc.layer_uv_scale(gen, ida), doc.layer_uv_scale(gen, idb));
         let (da, db) = (density(&la), density(&lb));
-        let dens = (da.0.max(db.0), da.1.max(db.1));
+        let dens = ((da.0 * sa[0]).max(db.0 * sb[0]), (da.1 * sa[1]).max(db.1 * sb[1]));
         // one cell per stem: the stem's texture-space rectangle over its transition triangles;
         // a long, narrow one is cut into bands along the stem so the atlas stays near square
         let mut per_stem: Vec<(u32, Vec<usize>)> = vec![];
@@ -276,11 +290,11 @@ pub fn bake_mesh(doc: &Document, m: &mut Mesh, max_size: u32, dir: &Path, file_s
                             let pos = m.pos[tri[0] as usize] * bw[0] + m.pos[tri[1] as usize] * bw[1] + m.pos[tri[2] as usize] * bw[2];
                             let nz = if blend.noise > 0.0 { crate::grow::blend_noise(pos, blend.noise_scale) } else { 0.0 };
                             let wb = blend.weight(k, x_axis, nz);
-                            let (ca, cb) = (sample_color(&la, u, v), sample_color(&lb, u, v));
+                            let (ca, cb) = (sample_color(&la, u * sa[0], v * sa[1]), sample_color(&lb, u * sb[0], v * sb[1]));
                             let c3 = [0, 1, 2].map(|i| ((ca[i] + (cb[i] - ca[i]) * wb) * 255.0).round().clamp(0.0, 255.0) as u8);
                             col.put_pixel(x, y, image::Rgba([c3[0], c3[1], c3[2], 255]));
                             if let Some(nm) = nrm.as_mut() {
-                                let n = (sample_normal(&la, u, v) * (1.0 - wb) + sample_normal(&lb, u, v) * wb).normalize_or(Vec3::Z);
+                                let n = (sample_normal(&la, u * sa[0], v * sa[1]) * (1.0 - wb) + sample_normal(&lb, u * sb[0], v * sb[1]) * wb).normalize_or(Vec3::Z);
                                 let e = |x: f32| ((x * 0.5 + 0.5) * 255.0).round().clamp(0.0, 255.0) as u8;
                                 nm.put_pixel(x, y, image::Rgba([e(n.x), e(n.y), e(n.z), 255]));
                             }
@@ -358,6 +372,38 @@ pub fn bake_mesh(doc: &Document, m: &mut Mesh, max_size: u32, dir: &Path, file_s
             None => None,
         };
         out.push(BakedMaterial { id, name, texture: tex, normal_map, roughness: 0.5 * (la.roughness + lb.roughness) });
+    }
+    // one layer's triangles in its own tiling: vertex copies (a ring between two layers sits
+    // at a different texture coordinate in each)
+    for ((gen, mat), tris) in rescale {
+        let sc = doc.layer_uv_scale(gen, mat);
+        let mut remap: HashMap<u32, u32> = HashMap::new();
+        for ti in tris {
+            for i in 0..3 {
+                let v = m.tris[ti][i];
+                let nv = *remap.entry(v).or_insert_with(|| {
+                    let s = v as usize;
+                    m.pos.push(m.pos[s]);
+                    m.nrm.push(m.nrm[s]);
+                    m.col.push(m.col[s]);
+                    m.uv.push([m.uv[s][0] * sc[0], m.uv[s][1] * sc[1]]);
+                    m.wind.push(m.wind[s]);
+                    m.phase.push(m.phase[s]);
+                    m.gen.push(m.gen[s]);
+                    m.vmat.push(mat);
+                    vmat_new.push(mat);
+                    m.stem.push(m.stem[s]);
+                    m.leaf.push(false);
+                    if let Some(&x) = m.xuv.get(s) {
+                        m.xuv.resize(m.pos.len() - 1, [0.0; 3]);
+                        m.xuv.push([x[0] * sc[0], x[1] * sc[1], x[2]]);
+                    }
+                    src.push(v);
+                    m.pos.len() as u32 - 1
+                });
+                m.tris[ti][i] = nv;
+            }
+        }
     }
     // remaining copies keep the vmat they were given; originals take their layer's material
     m.vmat = vmat_new;

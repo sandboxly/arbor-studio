@@ -677,18 +677,25 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
 
         let mut prims = vec![];
         // one primitive per material, and one more per gradient transition into a second one
-        let mut groups: Vec<(usize, Option<(SlotKey, usize, u32)>, Vec<usize>)> = vec![];
+        // a primitive per material, transition and texture coordinate scale (a gradient layer
+        // shows its own tiling: extras.uv_scale)
+        let mut groups: Vec<(usize, Option<(SlotKey, usize, u32)>, [u32; 2], Vec<usize>)> = vec![];
         for ti in 0..m.tris.len() {
             let a = tri_key(doc, m, ti);
             let Some(mi) = slots.iter().position(|s| s.key == a) else { continue };
             let b = tri_blend_key(doc, m, ti);
-            match groups.iter_mut().find(|g| g.0 == mi && g.1 == b) {
-                Some(g) => g.2.push(ti),
-                None => groups.push((mi, b, vec![ti])),
+            let gen = m.gen[m.tris[ti][0] as usize];
+            // (a baked mesh has its gradient axis cleared and its layers' coordinates scaled)
+            let sc = if ti < m.leaf_tri_start && !m.axis.is_empty() { doc.layer_uv_scale(gen, m.tri_layers(doc, ti).1) } else { [1.0, 1.0] };
+            let sc = sc.map(f32::to_bits);
+            match groups.iter_mut().find(|g| g.0 == mi && g.1 == b && g.2 == sc) {
+                Some(g) => g.3.push(ti),
+                None => groups.push((mi, b, sc, vec![ti])),
             }
         }
         groups.sort_by_key(|g| (g.0, g.1.is_some()));
-        for (mi, b, tris) in groups {
+        for (mi, b, sc, tris) in groups {
+            let sc = sc.map(f32::from_bits);
             let idx: Vec<u8> = tris.iter().flat_map(|&ti| m.tris[ti].iter().flat_map(|i| i.to_le_bytes()).collect::<Vec<u8>>()).collect();
             let count = idx.len() / 4;
             let iv = push_view(&mut bin, &mut views, &idx, Some(34963));
@@ -718,8 +725,12 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
                         "half_ramp": bl.half_ramp(),
                         "noise_reach": bl.noise_reach(),
                         "noise_scale": bl.noise_scale,
+                        "uv_scale_b": doc.layer_uv_scale(gen, match bk { SlotKey::Mat(id) => id, _ => 0 }),
                     }});
                 }
+            }
+            if sc != [1.0, 1.0] {
+                prim["extras"]["uv_scale"] = json!(sc);
             }
             if let Some((j, w)) = skin_attrs {
                 prim["attributes"]["JOINTS_0"] = json!(j);
@@ -830,6 +841,7 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
             "weight": "w = smoothstep(at - half_ramp, at + half_ramp, TEXCOORD_2.x + noise_reach * noise(world_position / noise_scale)); final = mix(material, material_b, w) for colour, normal and roughness. noise is smooth value noise in -1..1; without it (or per vertex) use w = clamp(TEXCOORD_2.y - layer, 0, 1).",
             "materials": doc.generators.iter().filter_map(|g| g.blend.as_ref().map(|b| json!({"generator": g.name, "blend": b}))).collect::<Vec<_>>(),
             "bake": "Export with bake_material_blend to get plain materials instead (each transition baked into a texture of its own).",
+            "uv_scale": "Every layer shows its own material's tiling: a primitive's extras.uv_scale [u, v] (absent: [1, 1]) multiplies TEXCOORD_0 (and the joint cross-fade's coordinates) for its material, and material_blend.uv_scale_b does the same for material_b.",
         });
     }
     if meshes.iter().any(|(_, m)| m.xuv.iter().any(|x| x[2] > 0.0)) {

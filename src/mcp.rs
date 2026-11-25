@@ -1406,6 +1406,7 @@ fn material_schema(adding: bool) -> Value {
         "normal_flip_green": {"type": "boolean", "description": "true for DirectX-style normal maps (green = down); default OpenGL style"},
         "roughness": {"type": "number", "minimum": 0, "maximum": 1},
         "tiling": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2, "description": "Bark texture repeats [around, along] a stem"},
+        "keep_proportions": {"type": "boolean", "description": "Take the along repeats from the image's shape (tiling[0] x width / height)"},
         "alpha_cutout": {"type": "boolean", "description": "Transparent texture pixels become holes (leaf cards)"},
         "double_sided": {"type": "boolean"},
         "atlas": {"type": "array", "maxItems": 64, "items": {"type": "object", "properties": {
@@ -1474,7 +1475,7 @@ fn material_arg(doc: &Document, v: &Value) -> Result<Option<u32>, String> {
 /// Apply the material fields present in the tool arguments, checking image paths.
 fn apply_material_patch(m: &mut Material, a: &Value) -> Result<(), String> {
     let mut patch = Map::new();
-    for k in ["name", "color", "texture", "normal_map", "normal_strength", "normal_flip_green", "roughness", "tiling", "alpha_cutout", "double_sided"] {
+    for k in ["name", "color", "texture", "normal_map", "normal_strength", "normal_flip_green", "roughness", "tiling", "keep_proportions", "alpha_cutout", "double_sided"] {
         if let Some(v) = a.get(k) {
             let mut v = v.clone();
             if (k == "texture" || k == "normal_map") && v.is_string() {
