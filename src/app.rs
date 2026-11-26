@@ -1165,6 +1165,12 @@ fn properties_ui(ui: &mut Ui, sh: &mut Shared, stats: &Stats, editing_material: 
                     }
                     crow(ui, if trunk { "Lean" } else { "Angle" }, "angle", &["angle"], &mut p.curves, ccx, |ui| ui.add(egui::Slider::new(&mut p.angle, 0.0..=if trunk { 60.0 } else { 120.0 }).suffix("°")));
                     crow(ui, "Angle variation", "angle_variation", &["angle_variation"], &mut p.curves, ccx, |ui| ui.add(egui::Slider::new(&mut p.angle_variation, 0.0..=60.0).suffix("°")));
+                    if leaves {
+                        if p.gravity < 0.0 {
+                            p.gravity = 0.0;
+                        }
+                        prow(ui, "Gravity (hang)", "gravity", |ui| ui.add(egui::Slider::new(&mut p.gravity, 0.0..=1.0)).on_hover_text("0 = leaves point along their angle off the stem, 1 = they hang straight down"));
+                    }
                     if !leaves {
                         if rootlike {
                             if p.gravity < 0.0 {

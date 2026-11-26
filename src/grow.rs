@@ -1775,6 +1775,16 @@ fn grow_children(cx: &Ctx, gen_id: u32, stem_idx: usize, sk: &mut Skeleton) {
                         ldir = (ldir - n2 * ldir.dot(n2)).normalize_or(ldir);
                         normal = n2;
                     }
+                    let hang = p.gravity;
+                    if hang > 0.0 {
+                        // gravity on a leaf: its weight swings its direction toward straight down
+                        // (1 = hanging plumb), and its face turns with it (kept square to the new
+                        // direction). Negative gravity does not lift leaves; face_up does that.
+                        let down = (ldir * (1.0 - hang) - Vec3::Y * hang).normalize_or(-Vec3::Y);
+                        let n = normal - down * normal.dot(down);
+                        normal = n.normalize_or(side.cross(down).normalize_or(Vec3::Z));
+                        ldir = down;
+                    }
                     let base = doc.gen_material(g.id).map(|m| m.color).unwrap_or(doc.settings.leaf_color);
                     let color = leaf_color(&doc.settings, base, &mut rng);
                     let pos = pos + radial * pr * 0.8;

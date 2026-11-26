@@ -2111,7 +2111,7 @@ pub const PARAM_REFERENCE: &[(&str, &str, &str, &str)] = &[
     ("profile", "branches", "conical|spherical|hemispherical|cylindrical|flame|inverse_conical", "How child length changes along the parent: shapes the crown."),
     ("angle", "all", "0..180 deg", "Angle away from the parent direction (trunk: lean from vertical)."),
     ("angle_variation", "all", "0..90 deg", "Random angle variation."),
-    ("gravity", "trunk, branches, roots", "-1..1 (roots 0..1)", "Bend: positive droops downwards, negative curves upwards. Roots and side roots: how steeply they head into the soil, 0 = run along the ground surface, 1 = dive straight down (they never rise out of the ground)."),
+    ("gravity", "trunk, branches, roots, leaves", "-1..1 (roots and leaves 0..1)", "Bend: positive droops downwards, negative curves upwards. Leaves: how far their weight swings them toward hanging straight down, 0 = along their angle off the stem, 1 = plumb. Roots and side roots: how steeply they head into the soil, 0 = run along the ground surface, 1 = dive straight down (they never rise out of the ground)."),
     ("wiggle", "trunk, branches", "0..1", "Random kinks along the stem."),
     ("segments", "trunk, branches", "1..64", "Length-wise resolution."),
     ("radius", "trunk, branches", "trunk metres; others 0.01..1", "Trunk: base radius in metres. Others: fraction of the parent's radius where attached."),
