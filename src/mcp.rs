@@ -196,7 +196,8 @@ fn params_schema() -> Value {
                 "start_pct": {"type": "number", "minimum": 0, "maximum": 1},
                 "offset": {"type": "number", "minimum": 0, "maximum": 3},
                 "offset_variation": {"type": "number", "minimum": 0, "maximum": 3},
-                "shed": {"type": "number", "minimum": 0, "maximum": 1, "description": "Branches: 0 (default) kept for life; otherwise shed while young, gone by this growth point (see growth.shed in get_parameter_reference)"}
+                "shed": {"type": "number", "minimum": 0, "maximum": 1, "description": "Branches or leaves: 0 (default) kept for life; otherwise shed while young, gone by this growth point (see growth.shed in get_parameter_reference)"},
+                "young_size": {"type": "number", "minimum": 0.05, "maximum": 1, "description": "Leaves: size on a seedling as a share of the grown size (default 0.45; single leaves 0.8-0.9)"}
             }},
             "leaf_shape": {"type": "string", "enum": ["broad", "narrow", "needle", "round", "frond"]},
             "leaf_aspect": {"type": "number"}

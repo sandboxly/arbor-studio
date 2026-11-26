@@ -202,7 +202,7 @@ fn prune_finest(doc: &Document, sk: &mut Skeleton, prune: f32) -> f32 {
         st.forks = st.forks.iter().filter(|&&f| map[f] != usize::MAX).map(|&f| map[f]).collect();
     }
     sk.stems = stems;
-    let kept = |l: &Leaf| !shed[l.stem];
+    let kept = |l: &Leaf| !shed[l.stem] && !doc.get(l.gen).is_some_and(|g| doc.is_shed(g));
     let before = sk.leaves.iter().filter(|l| kept(l)).count().max(1);
     let after = sk.leaves.iter().filter(|l| kept(l) && !gone[l.stem]).count();
     sk.leaves.retain(|l| !gone[l.stem]);

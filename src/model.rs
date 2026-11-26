@@ -330,12 +330,16 @@ pub struct GenGrowth {
     /// Random extra delay of up to this much per stem or leaf, so neighbours do not start
     /// together.
     pub offset_variation: f32,
-    /// Stems: shed while young. 0 = kept for life; otherwise the growth point by which this
-    /// generator's stems (with everything on them) have withered back into their parent and
-    /// gone, as a pine sheds its lower whorls while its bole lengthens. A shed generator is in
-    /// the growth only: the grown tree, its exports without growth, its billboard and its
-    /// collision never have it.
+    /// Shed while young. 0 = kept for life; otherwise the growth point by which this
+    /// generator's stems (with everything on them) or leaves have withered away and gone, as a
+    /// pine sheds its lower whorls while its bole lengthens, or a birch sapling's single leaves
+    /// give way to the grown crown's sprays. A shed generator is in the growth only: the grown
+    /// tree, its exports without growth, its billboard and its collision never have it.
     pub shed: f32,
+    /// Leaves: their size on a seedling, as a share of their grown size; they reach it as the
+    /// tree grows. A single leaf is nearly its full size on a sapling (0.85); a card that is a
+    /// spray of many leaves is better kept off the young tree (a later `offset`) than shrunk.
+    pub young_size: f32,
 }
 
 impl Default for GenGrowth {
@@ -352,6 +356,7 @@ impl Default for GenGrowth {
             offset: 0.0,
             offset_variation: 0.02,
             shed: 0.0,
+            young_size: 0.45,
         }
     }
 }
@@ -367,9 +372,10 @@ impl GenGrowth {
         self.offset = f(self.offset, 0.0, 3.0, 0.0);
         self.offset_variation = f(self.offset_variation, 0.0, 3.0, 0.0);
         self.shed = f(self.shed, 0.0, 1.0, 0.0);
+        self.young_size = f(self.young_size, 0.05, 1.0, 0.45);
     }
 
-    /// This generator's stems are shed while the tree is young.
+    /// This generator's stems or leaves are shed while the tree is young.
     pub fn sheds(&self) -> bool {
         self.shed > 0.0
     }
@@ -1451,7 +1457,7 @@ impl Document {
     /// A generator whose stems are shed while the tree is young (`GenGrowth::shed`): a stem
     /// generator on a parent (a trunk is never shed), enabled.
     pub fn is_shed(&self, g: &Generator) -> bool {
-        g.enabled && g.parent.is_some() && g.kind != GenKind::Leaves && g.params.growth.sheds()
+        g.enabled && g.parent.is_some() && g.params.growth.sheds()
     }
     /// The document has stems that are shed while the tree is young.
     pub fn has_shed(&self) -> bool {
@@ -2146,7 +2152,8 @@ pub const PARAM_REFERENCE: &[(&str, &str, &str, &str)] = &[
     ("growth.start_pct", "branches, roots, leaves", "0..1", "With sync parent or siblings: 0 = start as early as possible, 1 = as late."),
     ("growth.offset", "branches, roots, leaves", "0..3", "Delay added to every start, in shares of the trunk's growth time."),
     ("growth.offset_variation", "branches, roots, leaves", "0..3", "Random extra delay of up to this much per stem or leaf, so neighbours do not all start together."),
-    ("growth.shed", "branches", "0..1", "Shed while young: 0 (default) keeps the stems for life; otherwise the growth point by which they have withered back into their parent and gone, with their twigs and leaves (they shrink away over the last quarter before it). For the low branches a young tree has and sheds as its bole lengthens: a pine sapling is needled to the ground, the grown pine's crown starts high. Add them as their own generator low on the trunk. A shed generator is in the growth only: the grown tree, exports without growth, the billboard and the collision never have it."),
+    ("growth.shed", "branches, leaves", "0..1", "Shed while young: 0 (default) keeps the stems or leaves for life; otherwise the growth point by which they have withered back into their parent and gone, with their twigs and leaves (they shrink away over the last quarter before it). For the low branches a young tree has and sheds as its bole lengthens: a pine sapling is needled to the ground, the grown pine's crown starts high. Add them as their own generator low on the trunk. For leaves: a sapling's own foliage, such as single leaves where the grown crown carries sprays of many (a spray shrunk onto a sapling shows tiny leaves). A shed generator is in the growth only: the grown tree, exports without growth, the billboard and the collision never have it."),
+    ("growth.young_size", "leaves", "0.05..1", "Leaf size on a seedling, as a share of the grown size; it reaches 1 as the tree grows (default 0.45). Leaves do not shrink much on a young tree: a single leaf wants 0.8 to 0.9. A card that pictures a spray of many leaves is better kept off the young tree (a later offset, or shed single leaves in its place) than shrunk."),
     ("buried", "roots", "0..1", "How deep roots sink into the ground: 0 lies on top, 1 just under the surface."),
     ("force_response", "trunk, branches", "0..3", "How strongly the tree's forces (add_force) bend this generator; 0 ignores them."),
 ];

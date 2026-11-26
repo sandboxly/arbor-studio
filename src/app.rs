@@ -1456,8 +1456,9 @@ fn gen_growth_ui(ui: &mut Ui, g: &mut crate::model::GenGrowth, kind: GenKind) {
                 }
                 prow(ui, "Offset", "growth.offset", |ui| ui.add(egui::Slider::new(&mut g.offset, 0.0..=3.0)));
                 prow(ui, "Offset variation", "growth.offset_variation", |ui| ui.add(egui::Slider::new(&mut g.offset_variation, 0.0..=3.0)));
-                if !leaves {
-                    prow(ui, "Shed by", "growth.shed", |ui| ui.add(egui::Slider::new(&mut g.shed, 0.0..=1.0).custom_formatter(|x, _| if x <= 0.0 { "never".into() } else { format!("{:.0}%", x * 100.0) })));
+                prow(ui, "Shed by", "growth.shed", |ui| ui.add(egui::Slider::new(&mut g.shed, 0.0..=1.0).custom_formatter(|x, _| if x <= 0.0 { "never".into() } else { format!("{:.0}%", x * 100.0) })));
+                if leaves {
+                    prow(ui, "Young leaf size", "growth.young_size", |ui| ui.add(egui::Slider::new(&mut g.young_size, 0.05..=1.0)));
                 }
             }
         });

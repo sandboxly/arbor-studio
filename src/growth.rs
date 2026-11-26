@@ -301,9 +301,16 @@ impl Timing {
                         let h2 = hash01(7919 * i as u32 + 11);
                         // on a stem that is shed while young they all come out in the first half
                         // of its life, not until LEAF_END: most would never be seen
-                        let shed = chain.iter().filter(|&&c| sk.stems[c].parent.is_some()).map(|&c| gs[c].0.shed).filter(|&x| x > 0.0).fold(f32::INFINITY, f32::min);
+                        let shed = chain.iter().filter(|&&c| sk.stems[c].parent.is_some()).map(|&c| gs[c].0.shed).chain([g.shed]).filter(|&x| x > 0.0).fold(f32::INFINITY, f32::min);
                         let end = if shed.is_finite() { LEAF_END.min(0.5 * shed * (1.0 - WITHER)).max(s0) } else { LEAF_END };
                         s = if up + 1 == chain.len() && chain.len() > 1 { s0 + 0.04 * h2 } else { s0 + h2 * h2 * (end - s0).max(0.0) };
+                        // a young tree's OWN leaves (a generator that is shed) are all out
+                        // with their shoot: a sapling is not bare while its crown fills in
+                        // (out first, as a bud breaks, the shoot lengthening after)
+                        if g.sheds() {
+                            s = start[p] + 0.005 * h2;
+                            d *= 0.3;
+                        }
                     }
                     GrowthSync::Parent => s = pl.max(start[p] + g.start_pct * time[p]),
                     GrowthSync::InPlace => s = pl,
@@ -831,7 +838,7 @@ impl Grower {
                 StemInfo { axis: Axis::new(st), base, parent, fold, radii: st.radii.clone(), length: polyline_length(st), joint: joints[i], root: st.root, fork: st.fork, g: settings(doc, st.gen).0 }
             })
             .collect();
-        let leaves = sk
+        let leaves: Vec<LeafInfo> = sk
             .leaves
             .iter()
             .map(|l| {
@@ -843,7 +850,7 @@ impl Grower {
             })
             .collect();
         let leader = sk.stems.iter().position(|s| s.parent.is_none() && !s.root);
-        let shedding = stems.iter().any(|s| s.parent.is_some() && s.g.sheds());
+        let shedding = stems.iter().any(|s| s.parent.is_some() && s.g.sheds()) || leaves.iter().any(|l: &LeafInfo| l.g.sheds());
         Grower { timing, base: m.pos.clone(), bind, stems, openings, leaves, leader, shedding }
     }
 
@@ -1001,7 +1008,7 @@ impl Grower {
                 Bind::Fixed => false,
                 Bind::Stem { s, .. } => states[s as usize].alive < 1.0,
                 Bind::Joint { s, child, .. } => states[s as usize].alive < 1.0 || states[child as usize].alive < 1.0,
-                Bind::Leaf { l } => self.leaves.get(l as usize).is_some_and(|li| states[li.stem].alive < 1.0),
+                Bind::Leaf { l } => self.leaves.get(l as usize).is_some_and(|li| states[li.stem].alive < 1.0 || li.g.sheds()),
             }
         };
         let tree = self.leader.map(|i| states[i].scale).unwrap_or(g);
@@ -1038,10 +1045,10 @@ impl Grower {
                         match Timing::progress(self.timing.leaf_start[l as usize], self.timing.leaf_time[l as usize], g) {
                             None => anchor,
                             Some(x) => {
-                                // a young tree's leaves are a little smaller (a leaf card is often
-                                // a spray of leaves: 0.7 of a grown birch's spray was half as long
-                                // as a 0.8 m sapling, 2026-11-26)
-                                let size = (gs.start_size + (1.0 - gs.start_size) * gs.speed_curve.at(x)) * (0.45 + 0.55 * tree.clamp(0.0, 1.0)) * st.alive;
+                                // a young tree's leaves are a little smaller (`young_size`: a
+                                // single leaf hardly, 2026-11-26), and shed ones wither away
+                                let young = gs.young_size + (1.0 - gs.young_size) * tree.clamp(0.0, 1.0);
+                                let size = (gs.start_size + (1.0 - gs.start_size) * gs.speed_curve.at(x)) * young * st.alive * left(gs.shed, g);
                                 let xo = (x / gs.orientation_time).min(1.0);
                                 let turned = gs.start_angle + (1.0 - gs.start_angle) * gs.speed_curve.at(xo);
                                 let r = Quat::IDENTITY.slerp(li.fold, 1.0 - turned);
@@ -1230,6 +1237,50 @@ mod tests {
         let p02 = gr.positions(0.2);
         let young_area: f32 = shed_tris.iter().map(|t| area(&p02, t)).sum();
         assert!(young_area > 0.01, "the young tree's whorls have {young_area} m²");
+    }
+
+    /// A shed LEAF generator (a sapling's own leaves): in the growth only, all out on the
+    /// young tree, withered to nothing on the grown one, which is the plain tree exactly.
+    #[test]
+    fn shed_leaves_are_in_the_growth_only() {
+        let mut doc = preset("Birch").unwrap();
+        let mut g = doc.generators.iter().find(|g| g.kind == GenKind::Leaves).unwrap().clone();
+        g.id = doc.generators.iter().map(|g| g.id).max().unwrap() + 1;
+        g.params.growth.shed = 0.3;
+        g.params.growth.young_size = 0.85;
+        let shed_gen = g.id;
+        doc.generators.push(g);
+        assert!(doc.has_shed());
+        let grown = grow(&doc, 0);
+        assert_eq!(grown.leaves.len(), grow(&doc.without_shed(), 0).leaves.len());
+        let young = crate::grow::grow_young(&doc, 0);
+        assert!(young.leaves.iter().any(|l| l.gen == shed_gen));
+        let m = build_mesh(&doc, &young, 0);
+        let timing = Timing::new(&doc, &young);
+        let gr = Grower::new(&doc, &young, &m, &timing);
+        let shed_v: Vec<bool> = gr.bind.iter().map(|b| matches!(b, Bind::Leaf { l } if young.leaves[*l as usize].gen == shed_gen)).collect();
+        // all of a sapling's own leaves are out early, with their shoots (but for `offset_variation`)
+        for (i, l) in young.leaves.iter().enumerate() {
+            if l.gen == shed_gen {
+                let st = timing.leaf_start[i];
+                let stem = timing.stem_start[l.stem];
+                assert!(st <= stem + 0.03, "leaf {i} starts at {st}, its shoot at {stem}");
+            }
+        }
+        let area = |p: &[Vec3], t: &[u32; 3]| (p[t[1] as usize] - p[t[0] as usize]).cross(p[t[2] as usize] - p[t[0] as usize]).length() * 0.5;
+        let tris: Vec<&[u32; 3]> = m.tris.iter().filter(|t| t.iter().all(|&v| shed_v[v as usize])).collect();
+        assert!(!tris.is_empty());
+        let p1 = gr.positions(1.0);
+        for (v, (&a, &b)) in p1.iter().zip(&m.pos).enumerate() {
+            if !shed_v[v] {
+                assert_eq!(a, b, "vertex {v} of the grown tree moved");
+            }
+        }
+        let left: f32 = tris.iter().map(|t| area(&p1, t)).sum();
+        assert!(left < 1e-6, "shed leaves left {left} m² at full growth");
+        let p = gr.positions(0.1);
+        let young_area: f32 = tris.iter().map(|t| area(&p, t)).sum();
+        assert!(young_area > 0.01, "the young tree's own leaves have {young_area} m²");
     }
 
     #[test]
