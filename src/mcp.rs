@@ -195,7 +195,8 @@ fn params_schema() -> Value {
                 "sync": {"type": "string", "enum": ["auto", "parent", "siblings", "parent_start_end", "in_place"]},
                 "start_pct": {"type": "number", "minimum": 0, "maximum": 1},
                 "offset": {"type": "number", "minimum": 0, "maximum": 3},
-                "offset_variation": {"type": "number", "minimum": 0, "maximum": 3}
+                "offset_variation": {"type": "number", "minimum": 0, "maximum": 3},
+                "shed": {"type": "number", "minimum": 0, "maximum": 1, "description": "Branches: 0 (default) kept for life; otherwise shed while young, gone by this growth point (see growth.shed in get_parameter_reference)"}
             }},
             "leaf_shape": {"type": "string", "enum": ["broad", "narrow", "needle", "round", "frond"]},
             "leaf_aspect": {"type": "number"}
@@ -1137,7 +1138,16 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             let lod = arg_u32(a, "lod").unwrap_or(view.lod).min(4);
             let lm = crate::billboard::lod_mesh(&doc, lod);
             let growth = growth_arg(a, &doc.growth)?.unwrap_or(1.0);
-            let m = if growth < 1.0 {
+            let m = if growth < 1.0 && doc.has_shed() && lod < crate::billboard::BILLBOARD_LOD {
+                // a tree that sheds stems grows on the young tree's mesh
+                let (sk, ym, _) = crate::budget::young_level_mesh(&doc, lod);
+                let timing = crate::growth::Timing::new(&doc, &sk);
+                let mut gm = crate::growth::Grower::new(&doc, &sk, &ym, &timing).mesh_at(&ym, growth);
+                // the grown tree's frame, so growth pictures line up
+                gm.height = lm.mesh.height;
+                gm.radius = lm.mesh.radius;
+                gm
+            } else if growth < 1.0 {
                 let timing = crate::growth::Timing::new(&doc, &lm.skeleton);
                 crate::growth::Grower::new(&doc, &lm.skeleton, &lm.mesh, &timing).mesh_at(&lm.mesh, growth)
             } else {

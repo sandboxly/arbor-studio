@@ -100,8 +100,12 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
     let mut meshes = Vec::new();
     let mut stats = Vec::new();
     let mut fits = Vec::new();
-    // every level is reduced from the same full tree, and fitted to its triangle budget
-    let full = grow(doc, 0);
+    // every level is reduced from the same full tree, and fitted to its triangle budget. With
+    // the growth, a tree that sheds stems while young is the young tree (with them): the
+    // grown tree's base positions have them withered away (below), so its triangles are
+    // there, collapsed. Its billboard and collision are the grown tree's.
+    let young = doc.growth.export && doc.has_shed();
+    let full = if young { crate::grow::grow_young(doc, 0) } else { grow(doc, 0) };
     for &l in &levels {
         let (sk, m, fit) = crate::budget::fit_level(doc, &full, l);
         stats.push(m.stats(&sk));
@@ -109,7 +113,7 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
         meshes.push((l, m, sk));
     }
     let name = safe_name(&doc.name);
-    let caps = crate::collision::capsules(doc, &meshes[0].2);
+    let caps = if young { crate::collision::capsules(doc, &grow(doc, 0)) } else { crate::collision::capsules(doc, &meshes[0].2) };
     // billboard LOD: atlas picture saved next to the export, cards added as the last level
     let mut bb_texture: Option<String> = None;
     let mut extra_files = vec![];
@@ -130,6 +134,14 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
         let pairs: Vec<(&Mesh, &crate::grow::Skeleton)> = meshes.iter().map(|(_, m, sk)| (m, sk)).collect();
         (timing.clone(), crate::growth::animate(doc, &timing, &pairs))
     });
+    // the grown tree is the growth at 1: what was shed lies collapsed where it came out
+    if let (true, Some((_, anim))) = (young, growth.as_ref()) {
+        for (i, (_, m, _)) in meshes.iter_mut().enumerate() {
+            if let Some(last) = anim.shapes[i].last() {
+                m.pos = last.clone();
+            }
+        }
+    }
     // material gradients baked into plain materials (OBJ always: it cannot carry blend weights)
     let mut baked: Vec<crate::blendbake::BakedMaterial> = vec![];
     let has_blend = meshes.iter().any(|(_, m, _)| !m.axis.is_empty());

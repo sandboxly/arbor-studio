@@ -7,6 +7,7 @@
 //!   arbor_studio --mcp-stdio                 run as a stdio MCP server (relays to the window, starting it if needed)
 //!   arbor_studio --headless [--mcp-stdio]    no window: MCP over HTTP, or in-process over stdio
 //!   arbor_studio --screenshot out.png        draw ~120 frames, save the window as PNG and exit
+#![recursion_limit = "256"]
 
 mod app;
 mod billboard;

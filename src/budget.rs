@@ -197,6 +197,16 @@ pub fn level_mesh(doc: &Document, level: u32) -> (Skeleton, Mesh, LevelFit) {
     fit_level(doc, &full, level)
 }
 
+/// The mesh the growth animates at one level of detail: `level_mesh` with the stems the tree
+/// sheds while young (the same as `level_mesh` for a tree that sheds nothing).
+pub fn young_level_mesh(doc: &Document, level: u32) -> (Skeleton, Mesh, LevelFit) {
+    if !doc.has_shed() {
+        return level_mesh(doc, level);
+    }
+    let full = crate::grow::grow_young(doc, 0);
+    fit_level(doc, &full, level)
+}
+
 /// LOD0 to LOD3 against their budgets (the tree is grown once).
 pub fn report(doc: &Document) -> Vec<LevelFit> {
     let full = grow(doc, 0);

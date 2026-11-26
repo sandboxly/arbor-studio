@@ -90,6 +90,9 @@ pub struct ArborApp {
     pending_atlas: Option<std::sync::Arc<image::RgbaImage>>,
     /// Growth preview: moves the shown mesh's vertices (made when first needed).
     grower: Option<crate::growth::Grower>,
+    /// The young tree's skeleton and mesh the growth animates, for a tree that sheds stems
+    /// while young (with them; `None` grows on `skeleton` and `mesh`).
+    young: Option<(Skeleton, Mesh)>,
     /// The shown mesh at the previewed growth.
     grown: Option<(f32, Mesh)>,
 }
@@ -180,6 +183,7 @@ impl ArborApp {
             bb_tex: None,
             pending_atlas: None,
             grower: None,
+            young: None,
             grown: None,
         }
     }
@@ -203,6 +207,7 @@ impl ArborApp {
             self.fit = lm.fit;
             self.built = Some((sh.doc.clone(), lod));
             self.grower = None;
+            self.young = None;
             self.grown = None;
         }
         if sh.frame_camera {
@@ -879,17 +884,30 @@ impl eframe::App for ArborApp {
             let growing = sh.view.growth < 1.0;
             if growing && self.grown.as_ref().map(|(g, _)| *g) != Some(sh.view.growth) {
                 if self.grower.is_none() {
-                    let timing = crate::growth::Timing::new(&sh.doc, &self.skeleton);
-                    self.grower = Some(crate::growth::Grower::new(&sh.doc, &self.skeleton, &self.mesh, &timing));
+                    // a tree that sheds stems while young grows on the young tree's mesh
+                    if sh.doc.has_shed() && sh.view.lod < crate::billboard::BILLBOARD_LOD {
+                        let (sk, m, _) = crate::budget::young_level_mesh(&sh.doc, sh.view.lod);
+                        self.young = Some((sk, m));
+                    }
+                    let (sk, m) = self.young.as_ref().map(|(s, m)| (s, m)).unwrap_or((&self.skeleton, &self.mesh));
+                    let timing = crate::growth::Timing::new(&sh.doc, sk);
+                    self.grower = Some(crate::growth::Grower::new(&sh.doc, sk, m, &timing));
                 }
-                let gm = self.grower.as_ref().unwrap().mesh_at(&self.mesh, sh.view.growth);
+                let base = self.young.as_ref().map(|(_, m)| m).unwrap_or(&self.mesh);
+                let mut gm = self.grower.as_ref().unwrap().mesh_at(base, sh.view.growth);
+                (gm.height, gm.radius) = (self.mesh.height, self.mesh.radius);
                 self.grown = Some((sh.view.growth, gm));
             }
             let shown_mesh = match &self.grown {
                 Some((_, gm)) if growing => gm,
                 _ => &self.mesh,
             };
-            let args = render::DrawArgs { doc: &sh.doc, mesh: shown_mesh, skeleton: &self.skeleton, view: &view, selected: shown, time: self.time, textures: &self.mat_textures, normals: &self.mat_normals, selected_stem: if sh.view.node_mode { sh.selected_node.and_then(|k| self.skeleton.stems.iter().position(|s| s.key == k)).map(|i| i as u32) } else { None }, gpu: if self.has_gl { Some(&self.gpu) } else { None } };
+            // the young tree's mesh numbers its stems by the young skeleton
+            let shown_sk = match (&self.young, growing) {
+                (Some((sk, _)), true) => sk,
+                _ => &self.skeleton,
+            };
+            let args = render::DrawArgs { doc: &sh.doc, mesh: shown_mesh, skeleton: shown_sk, view: &view, selected: shown, time: self.time, textures: &self.mat_textures, normals: &self.mat_normals, selected_stem: if sh.view.node_mode { sh.selected_node.and_then(|k| shown_sk.stems.iter().position(|s| s.key == k)).map(|i| i as u32) } else { None }, gpu: if self.has_gl { Some(&self.gpu) } else { None } };
             self.pick = render::draw(&painter, rect, &args);
             let info = format!(
                 "Perspective · {} · LOD{}{}",
@@ -1438,6 +1456,9 @@ fn gen_growth_ui(ui: &mut Ui, g: &mut crate::model::GenGrowth, kind: GenKind) {
                 }
                 prow(ui, "Offset", "growth.offset", |ui| ui.add(egui::Slider::new(&mut g.offset, 0.0..=3.0)));
                 prow(ui, "Offset variation", "growth.offset_variation", |ui| ui.add(egui::Slider::new(&mut g.offset_variation, 0.0..=3.0)));
+                if !leaves {
+                    prow(ui, "Shed by", "growth.shed", |ui| ui.add(egui::Slider::new(&mut g.shed, 0.0..=1.0).custom_formatter(|x, _| if x <= 0.0 { "never".into() } else { format!("{:.0}%", x * 100.0) })));
+                }
             }
         });
         ui.label(RichText::new("Preview with ▶ Grow or the Growth slider under TREE.").size(11.0).color(HEADER));

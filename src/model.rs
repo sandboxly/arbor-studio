@@ -330,6 +330,12 @@ pub struct GenGrowth {
     /// Random extra delay of up to this much per stem or leaf, so neighbours do not start
     /// together.
     pub offset_variation: f32,
+    /// Stems: shed while young. 0 = kept for life; otherwise the growth point by which this
+    /// generator's stems (with everything on them) have withered back into their parent and
+    /// gone, as a pine sheds its lower whorls while its bole lengthens. A shed generator is in
+    /// the growth only: the grown tree, its exports without growth, its billboard and its
+    /// collision never have it.
+    pub shed: f32,
 }
 
 impl Default for GenGrowth {
@@ -345,6 +351,7 @@ impl Default for GenGrowth {
             start_pct: 0.0,
             offset: 0.0,
             offset_variation: 0.02,
+            shed: 0.0,
         }
     }
 }
@@ -359,6 +366,12 @@ impl GenGrowth {
         self.start_pct = f(self.start_pct, 0.0, 1.0, 0.0);
         self.offset = f(self.offset, 0.0, 3.0, 0.0);
         self.offset_variation = f(self.offset_variation, 0.0, 3.0, 0.0);
+        self.shed = f(self.shed, 0.0, 1.0, 0.0);
+    }
+
+    /// This generator's stems are shed while the tree is young.
+    pub fn sheds(&self) -> bool {
+        self.shed > 0.0
     }
 }
 
@@ -1435,6 +1448,26 @@ impl Default for Document {
 }
 
 impl Document {
+    /// A generator whose stems are shed while the tree is young (`GenGrowth::shed`): a stem
+    /// generator on a parent (a trunk is never shed), enabled.
+    pub fn is_shed(&self, g: &Generator) -> bool {
+        g.enabled && g.parent.is_some() && g.kind != GenKind::Leaves && g.params.growth.sheds()
+    }
+    /// The document has stems that are shed while the tree is young.
+    pub fn has_shed(&self) -> bool {
+        self.generators.iter().any(|g| self.is_shed(g))
+    }
+    /// The grown tree's document: every shed generator disabled (with what grows on it, which
+    /// then has nothing to grow on). Every generator rolls its own random numbers, so the rest
+    /// of the tree is the same as with them.
+    pub fn without_shed(&self) -> Document {
+        let mut d = self.clone();
+        let shed: Vec<u32> = d.generators.iter().filter(|g| self.is_shed(g)).map(|g| g.id).collect();
+        for g in d.generators.iter_mut().filter(|g| shed.contains(&g.id)) {
+            g.enabled = false;
+        }
+        d
+    }
     pub fn get(&self, id: u32) -> Option<&Generator> {
         self.generators.iter().find(|g| g.id == id)
     }
@@ -2102,7 +2135,7 @@ pub const PARAM_REFERENCE: &[(&str, &str, &str, &str)] = &[
     ("split_angle", "trunk, branches, roots", "0..80 deg", "How far each leader leans away from the stem's direction."),
     ("weld", "branches", "0..1", "Welding: the branch base swells into a collar that blends into the parent instead of a hard joint."),
     ("curves", "all", "{key: {points: [[x,y],...]}}", "Shaping curves, see curve_reference / set_curve."),
-    ("growth", "all", "{speed, speed_curve, radius_curve, start_size, start_angle, orientation_time, sync, start_pct, offset, offset_variation}", "How this generator's stems or leaves grow in the growth animation; see the growth.* rows."),
+    ("growth", "all", "{speed, speed_curve, radius_curve, start_size, start_angle, orientation_time, sync, start_pct, offset, offset_variation, shed}", "How this generator's stems or leaves grow in the growth animation; see the growth.* rows."),
     ("growth.speed", "all", "0.05..10", "Speed scale. Trunk: it reaches its full size in 1/speed of the growth. With sync auto a branch reaches its full size relative to its parent in 0.25/speed of the trunk's growth time. With the other syncs a stem takes its length relative to the trunk divided by speed (a stem as long as the trunk takes 1/speed of the trunk's time). Leaves unfold in 0.15/speed of the trunk's time."),
     ("growth.speed_curve", "all", "linear, ease_in, ease_out, s_curve", "How the size grows over the part's own growth: steady, slow start, slow end, or slow-fast-slow."),
     ("growth.radius_curve", "trunk, branches, roots", "linear, ease_in, ease_out, s_curve", "How the radius grows over the stem's own growth, against the speed curve (the length's): the same curve keeps the stem's mature proportions, so a 0.8 m sapling of a 17 m birch with a 34 cm foot is 16 mm thick; ease_in makes young stems slimmer, ease_out stouter (at most twice). A branch is never thicker than its parent where it comes out."),
@@ -2113,6 +2146,7 @@ pub const PARAM_REFERENCE: &[(&str, &str, &str, &str)] = &[
     ("growth.start_pct", "branches, roots, leaves", "0..1", "With sync parent or siblings: 0 = start as early as possible, 1 = as late."),
     ("growth.offset", "branches, roots, leaves", "0..3", "Delay added to every start, in shares of the trunk's growth time."),
     ("growth.offset_variation", "branches, roots, leaves", "0..3", "Random extra delay of up to this much per stem or leaf, so neighbours do not all start together."),
+    ("growth.shed", "branches", "0..1", "Shed while young: 0 (default) keeps the stems for life; otherwise the growth point by which they have withered back into their parent and gone, with their twigs and leaves (they shrink away over the last quarter before it). For the low branches a young tree has and sheds as its bole lengthens: a pine sapling is needled to the ground, the grown pine's crown starts high. Add them as their own generator low on the trunk. A shed generator is in the growth only: the grown tree, exports without growth, the billboard and the collision never have it."),
     ("buried", "roots", "0..1", "How deep roots sink into the ground: 0 lies on top, 1 just under the surface."),
     ("force_response", "trunk, branches", "0..3", "How strongly the tree's forces (add_force) bend this generator; 0 ignores them."),
 ];

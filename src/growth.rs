@@ -513,6 +513,8 @@ struct State {
     /// How thick it is relative to its final thickness, compared with its parent's frame
     /// (opens the parent's bark for it).
     open: f32,
+    /// How much is left of it and of what grows on it (below 1: shed, withering away).
+    alive: f32,
 }
 
 impl State {
@@ -566,6 +568,23 @@ pub struct Grower {
     openings: Vec<Option<Opening>>,
     leaves: Vec<LeafInfo>,
     leader: Option<usize>,
+    /// Some stems are shed while the tree is young (`GenGrowth::shed`): the grown tree is not
+    /// the base mesh as it is, it has them withered away.
+    shedding: bool,
+}
+
+/// A shed stem withers back into its parent over this share of the growth before its shed
+/// point.
+const WITHER: f32 = 0.25;
+
+/// How much is left of a stem shed at `shed` (0 = never) at growth `g`: 1 until it starts to
+/// wither, 0 once it is gone.
+fn left(shed: f32, g: f32) -> f32 {
+    if shed <= 0.0 {
+        return 1.0;
+    }
+    let x = ((shed - g) / (WITHER * shed)).clamp(0.0, 1.0);
+    x * x * (3.0 - 2.0 * x)
 }
 
 impl Grower {
@@ -820,7 +839,8 @@ impl Grower {
             })
             .collect();
         let leader = sk.stems.iter().position(|s| s.parent.is_none() && !s.root);
-        Grower { timing, base: m.pos.clone(), bind, stems, openings, leaves, leader }
+        let shedding = stems.iter().any(|s| s.parent.is_some() && s.g.sheds());
+        Grower { timing, base: m.pos.clone(), bind, stems, openings, leaves, leader, shedding }
     }
 
     /// Every stem's state at growth `g`.
@@ -848,10 +868,13 @@ impl Grower {
             let st = match si.parent {
                 // the radius curve is the radius's own growth; the state's radius is against the
                 // stem's present size (the length's growth), so equal curves keep the proportions
-                None => State { len, radius: stout(rc, f), origin: si.base, rot: Quat::IDENTITY, scale: f, open: 1.0 },
+                None => State { len, radius: stout(rc, f), origin: si.base, rot: Quat::IDENTITY, scale: f, open: 1.0, alive: 1.0 },
                 Some((p, a, c)) => {
                     let ps = state(p, g, gr, out);
-                    let scale = ps.scale * f;
+                    // a shed stem withers back into its parent, with all that grows on it
+                    let own = left(gs.shed, g);
+                    let alive = ps.alive * own;
+                    let scale = ps.scale * f * own;
                     let pr = gr.stems[p].factor(&ps, gr.openings[i].map_or(a, |o| o.t)).1;
                     // never thicker, against its final size, than the parent where it comes out,
                     // so its joint stays inside the parent's bark; a root's flare keeps the
@@ -863,7 +886,7 @@ impl Grower {
                     } else {
                         0.0
                     };
-                    let open = f * radius;
+                    let open = f * own * radius;
                     let rot = ps.rot * Quat::from_axis_angle(si.fold.0, -(1.0 - fold) * si.fold.1);
                     // where it comes out of the parent's bark is the centre of the opening there as
                     // the parent is now, so the opening and the branch close around the same point
@@ -875,7 +898,7 @@ impl Grower {
                         }
                         None => gr.place(p, &ps, a, c, si.base),
                     };
-                    State { len, radius, origin, rot, scale, open }
+                    State { len, radius, origin, rot, scale, open, alive }
                 }
             };
             out[i] = Some(st);
@@ -964,14 +987,27 @@ impl Grower {
     /// Vertex positions at growth `g` (1 = the mature mesh).
     pub fn positions(&self, g: f32) -> Vec<Vec3> {
         let g = g.clamp(0.0, 1.0);
-        if g >= 1.0 {
+        if g >= 1.0 && !self.shedding {
             return self.base.clone();
         }
         let states = self.states(g);
+        // the grown tree: the base mesh, but for what it has shed
+        let shed_at = |b: &Bind| -> bool {
+            match *b {
+                Bind::Fixed => false,
+                Bind::Stem { s, .. } => states[s as usize].alive < 1.0,
+                Bind::Joint { s, child, .. } => states[s as usize].alive < 1.0 || states[child as usize].alive < 1.0,
+                Bind::Leaf { l } => self.leaves.get(l as usize).is_some_and(|li| states[li.stem].alive < 1.0),
+            }
+        };
         let tree = self.leader.map(|i| states[i].scale).unwrap_or(g);
         let mut out = Vec::with_capacity(self.base.len());
         for (v, b) in self.bind.iter().enumerate() {
             let p0 = self.base[v];
+            if g >= 1.0 && !shed_at(b) {
+                out.push(p0);
+                continue;
+            }
             let p = match *b {
                 Bind::Fixed => p0 * tree,
                 Bind::Stem { s, t, c } => self.place(s as usize, &states[s as usize], t, c, p0),
@@ -1001,7 +1037,7 @@ impl Grower {
                                 // a young tree's leaves are a little smaller (a leaf card is often
                                 // a spray of leaves: 0.7 of a grown birch's spray was half as long
                                 // as a 0.8 m sapling, 2026-11-26)
-                                let size = (gs.start_size + (1.0 - gs.start_size) * gs.speed_curve.at(x)) * (0.45 + 0.55 * tree.clamp(0.0, 1.0));
+                                let size = (gs.start_size + (1.0 - gs.start_size) * gs.speed_curve.at(x)) * (0.45 + 0.55 * tree.clamp(0.0, 1.0)) * st.alive;
                                 let xo = (x / gs.orientation_time).min(1.0);
                                 let turned = gs.start_angle + (1.0 - gs.start_angle) * gs.speed_curve.at(xo);
                                 let r = Quat::IDENTITY.slerp(li.fold, 1.0 - turned);
@@ -1068,7 +1104,7 @@ pub fn clips(growth: &crate::model::Growth) -> Vec<(String, f32, f32)> {
 mod tests {
     use super::*;
     use crate::grow::{build_mesh, grow};
-    use crate::model::preset;
+    use crate::model::{preset, Document, GenKind};
 
     fn shown_leaves(m: &Mesh, p: &[Vec3]) -> usize {
         (0..m.leaf_first.len())
@@ -1077,6 +1113,89 @@ mod tests {
                 p[a].distance(p[a + 2]) > 1e-4
             })
             .count()
+    }
+
+    /// The Pine preset with low whorls on its trunk that it sheds by `shed` (a copy of its first
+    /// branch generator, with the twigs and needles on it copied too).
+    fn shedding_pine(shed: f32) -> Document {
+        let mut doc = preset("Pine").unwrap();
+        let trunk = doc.generators.iter().find(|g| g.parent.is_none()).unwrap().id;
+        let first = doc.generators.iter().find(|g| g.parent == Some(trunk) && g.kind == GenKind::Branches).unwrap().id;
+        let mut next = doc.generators.iter().map(|g| g.id).max().unwrap() + 1;
+        // copy `id`'s subtree under `parent`
+        fn copy(doc: &mut Document, id: u32, parent: u32, next: &mut u32) -> u32 {
+            let mut g = doc.get(id).unwrap().clone();
+            let new = *next;
+            *next += 1;
+            g.id = new;
+            g.parent = Some(parent);
+            doc.generators.push(g);
+            let kids: Vec<u32> = doc.children(Some(id)).map(|c| c.id).collect();
+            for k in kids {
+                copy(doc, k, new, next);
+            }
+            new
+        }
+        let young = copy(&mut doc, first, trunk, &mut next);
+        let g = doc.get_mut(young).unwrap();
+        g.params.start = 0.03;
+        g.params.end = 0.5;
+        g.params.length *= 0.6;
+        g.params.growth.shed = shed;
+        doc
+    }
+
+    #[test]
+    fn shed_stems_are_in_the_growth_only() {
+        let doc = shedding_pine(0.4);
+        assert!(doc.has_shed());
+        // the grown tree is the tree without them, stem for stem and vertex for vertex
+        let grown = grow(&doc, 0);
+        let plain = grow(&doc.without_shed(), 0);
+        assert_eq!(grown.stems.len(), plain.stems.len());
+        assert_eq!(build_mesh(&doc, &grown, 0).pos, build_mesh(&doc.without_shed(), &plain, 0).pos);
+        let young = crate::grow::grow_young(&doc, 0);
+        assert!(young.stems.len() > grown.stems.len(), "the young tree has the shed whorls");
+        let m = build_mesh(&doc, &young, 0);
+        let gr = Grower::new(&doc, &young, &m, &Timing::new(&doc, &young));
+        let shed_gens: Vec<u32> = doc.generators.iter().filter(|g| doc.is_shed(g)).map(|g| g.id).collect();
+        // which vertices belong to a shed stem or to something on one
+        let on_shed: Vec<bool> = (0..young.stems.len())
+            .map(|mut i| loop {
+                if shed_gens.contains(&young.stems[i].gen) {
+                    break true;
+                }
+                match young.stems[i].parent {
+                    Some(p) => i = p,
+                    None => break false,
+                }
+            })
+            .collect();
+        let shed_v: Vec<bool> = m.stem.iter().map(|&s| on_shed.get(s as usize).copied().unwrap_or(false)).collect();
+        assert!(shed_v.iter().any(|&b| b));
+        // at full growth: everything else is the base mesh exactly; the shed whorls are gone
+        // (every one of their triangles collapsed)
+        let p1 = gr.positions(1.0);
+        let mut moved = 0;
+        for (v, (&a, &b)) in p1.iter().zip(&m.pos).enumerate() {
+            // the parent's bark closes again where a shed stem came out
+            let closing = matches!(gr.bind[v], Bind::Joint { child, .. } if on_shed[child as usize]);
+            if !shed_v[v] && !closing {
+                assert_eq!(a, b, "vertex {v} of the grown tree moved");
+            } else if a != b {
+                moved += 1;
+            }
+        }
+        assert!(moved > 0);
+        let area = |p: &[Vec3], t: &[u32; 3]| (p[t[1] as usize] - p[t[0] as usize]).cross(p[t[2] as usize] - p[t[0] as usize]).length() * 0.5;
+        let shed_tris: Vec<&[u32; 3]> = m.tris.iter().filter(|t| t.iter().all(|&v| shed_v[v as usize])).collect();
+        assert!(!shed_tris.is_empty());
+        let left: f32 = shed_tris.iter().map(|t| area(&p1, t)).sum();
+        assert!(left < 1e-6, "shed whorls left {left} m² at full growth");
+        // while young they are there
+        let p02 = gr.positions(0.2);
+        let young_area: f32 = shed_tris.iter().map(|t| area(&p02, t)).sum();
+        assert!(young_area > 0.01, "the young tree's whorls have {young_area} m²");
     }
 
     #[test]

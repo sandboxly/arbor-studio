@@ -1566,7 +1566,22 @@ fn push_leaders(cx: &Ctx, sk: &mut Skeleton, idx: usize, leaders: Vec<Leader>, p
     }
 }
 
+/// The grown tree's skeleton: without the stems it shed while young (`GenGrowth::shed`).
 pub fn grow(doc: &Document, level: u32) -> Skeleton {
+    if doc.has_shed() {
+        grow_doc(&doc.without_shed(), level)
+    } else {
+        grow_doc(doc, level)
+    }
+}
+
+/// The skeleton the growth animates: with the stems the tree sheds while young. Its other
+/// stems are the grown tree's, one for one (every generator rolls its own random numbers).
+pub fn grow_young(doc: &Document, level: u32) -> Skeleton {
+    grow_doc(doc, level)
+}
+
+fn grow_doc(doc: &Document, level: u32) -> Skeleton {
     // expected height of the tree (its tallest trunk), for curves along the tree's height
     let tree_h = doc
         .generators
