@@ -340,7 +340,7 @@ impl Timing {
 const EARLY_LEAVES: f32 = 0.15;
 /// With Auto, about this many leaves come out with the young trunk, so even a seedling has
 /// leaves.
-const SEEDLING_LEAVES: f32 = 14.0;
+const SEEDLING_LEAVES: f32 = 80.0;
 
 /// The growth points the animation is sampled at: an even spread plus every stage, always
 /// including 0 and 1.
@@ -998,10 +998,10 @@ impl Grower {
                         match Timing::progress(self.timing.leaf_start[l as usize], self.timing.leaf_time[l as usize], g) {
                             None => anchor,
                             Some(x) => {
-                                // a young tree's leaves are a little smaller: 0.7 of the grown
-                                // tree's on a seedling (a sapling's leaves are near full size;
-                                // 0.45 until 2026-11-26 made a 0.8 m birch's leaves half size)
-                                let size = (gs.start_size + (1.0 - gs.start_size) * gs.speed_curve.at(x)) * (0.7 + 0.3 * tree.clamp(0.0, 1.0));
+                                // a young tree's leaves are a little smaller (a leaf card is often
+                                // a spray of leaves: 0.7 of a grown birch's spray was half as long
+                                // as a 0.8 m sapling, 2026-11-26)
+                                let size = (gs.start_size + (1.0 - gs.start_size) * gs.speed_curve.at(x)) * (0.45 + 0.55 * tree.clamp(0.0, 1.0));
                                 let xo = (x / gs.orientation_time).min(1.0);
                                 let turned = gs.start_angle + (1.0 - gs.start_angle) * gs.speed_curve.at(xo);
                                 let r = Quat::IDENTITY.slerp(li.fold, 1.0 - turned);
