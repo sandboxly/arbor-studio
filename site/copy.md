@@ -68,7 +68,7 @@ the source or the docs in this repository.
 
 - Eyebrow: Growth animation: the whole tree grows
 - H2: The tree grows in your game, from a shoot to the crown you designed.
-- Lead: The whole tree grows at once, the way trees do: every shoot grows a little each season, so a young tree is a small, slender tree with its own branches that thickens, widens and fills in with leaves. Branches come out of closed bark.
+- Lead: The whole tree grows at once, the way trees do: every shoot grows a little each season, so a young tree is a small tree in its mature proportions, with its own branches that thickens, widens and fills in with leaves. Branches come out of closed bark.
 - Animation 1 (tall): the person's oak from the hero, 744 stems, growth 0 to 1, camera turning 50° and pulling back as the tree grows.
   Rendered with render_preview at 72 points of the growth. WebP, GIF fallback, still for reduced motion.
 - Animation 2 (wide): closer to the crown, growth 0.2 to 1, camera pulling back with the tree's size.

@@ -112,7 +112,7 @@ Optional: `MACOS_BUNDLE_ID` (default `io.github.arbor-studio`) and an icon at `m
   (`<Tree>_Collision_NN`), `unreal` (`UCX_<mesh>_NN`) or `godot` (`-convcolonly`); capsule data in GLB node
   extras and in the JSON file.
 * **Growth animation** (Properties › Growth): the tree grows from a sprout to the mature tree on its own mesh,
-  the whole tree at once, as trees grow (a young tree is a small, slender tree with its branches; every stem keeps
+  the whole tree at once, as trees grow (a young tree is a small tree in its mature proportions, with its branches; every stem keeps
   its shape and grows in size, branches come out of closed bark, leaves keep coming so the crown gets denser), with per-generator growth settings, through named stages (Sprout, Sapling, Young, Mature by default). GLB gets one morph target per keyframe, a
   one-bone skin (so engines that keep morph targets only on skinned meshes import them) and animations driving
   the morph weights: `Grow` plus one clip per stage. OBJ gets one file per stage; JSON the growth timing of every

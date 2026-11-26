@@ -14,9 +14,13 @@
 //! * a stem's size relative to its parent follows a growth function from its bud break
 //!   (Prusinkiewicz et al., "Animation of plant development", SIGGRAPH 1993); buds low on a
 //!   parent break first, twigs a little after their branch;
-//! * stems thicken all their life and young trees are slender: the radius grows faster than
-//!   the size (to the power 1.3; elastic similarity predicts 1.5 for diameter against height),
-//!   times the radius curve, and a branch is never thicker than its parent where it comes out;
+//! * a young stem has its mature proportions: with the default curves its radius grows as its
+//!   length does, so a 0.8 m birch sapling of a 17 m birch with a 34 cm foot is 16 mm thick at
+//!   the foot, as real saplings are. The radius curve is the radius's own growth (against the
+//!   speed curve, the length's); a branch is never thicker than its parent where it comes out.
+//!   Until 2026-11-26 the radius also grew with size^1.3 and the radius curve came on top of the
+//!   size, so a 1.5 m birch sapling was 3 mm thick (474 times as tall as thick, against the
+//!   mature tree's 50): a hair. Elastic similarity is a law of grown trees, not of saplings;
 //! * leaves come out with the young shoots and keep coming over the whole growth, so even a
 //!   seedling has leaves and the crown gets denser as it grows;
 //! * other syncs start a part Start % of the way through the parent's growth, together with
@@ -44,8 +48,9 @@ const STAGGER: f32 = 0.1;
 /// With Auto, a branch reaches its full size relative to its parent in this share of the
 /// trunk's growth time at speed 1 (from then on it grows with the parent).
 const REL_TIME: f32 = 0.25;
-/// Young stems are slender: the radius grows with the size to the power 1 + SLENDER.
-const SLENDER: f32 = 0.3;
+/// A young stem is at most this many times as thick, against its length, as when it is grown
+/// (a radius curve ahead of the speed curve: ease-out radius on linear length is 2x at the start).
+const STOUT_MAX: f32 = 2.0;
 /// With Auto, new leaves keep coming out until this point of the growth.
 const LEAF_END: f32 = 0.85;
 /// A branch starts once its parent has grown this many times its base radius past where it
@@ -53,6 +58,12 @@ const LEAF_END: f32 = 0.85;
 const JOINT_REACH: f32 = 2.5;
 /// A growing tip is a cone this many times as long as the stem is thick there.
 const TIP_SLOPE: f32 = 2.5;
+
+/// A stem's radius factor against its present size: its radius growth `rc` over its length
+/// growth `f` (1 when they agree: the mature proportions).
+fn stout(rc: f32, f: f32) -> f32 {
+    if f > 1e-6 { (rc / f).min(STOUT_MAX) } else { 0.0 }
+}
 
 /// A fixed pseudo-random number in 0..1 for `i`.
 fn hash01(i: u32) -> f32 {
@@ -829,8 +840,9 @@ impl Grower {
             };
             let len = if f > 0.0 { 1.0 } else if si.parent.is_some() { si.joint } else { 0.0 };
             let st = match si.parent {
-                // young trees are slender: thickness grows faster than size (size^1.3)
-                None => State { len, radius: rc * f.powf(SLENDER), origin: si.base, rot: Quat::IDENTITY, scale: f, open: 1.0 },
+                // the radius curve is the radius's own growth; the state's radius is against the
+                // stem's present size (the length's growth), so equal curves keep the proportions
+                None => State { len, radius: stout(rc, f), origin: si.base, rot: Quat::IDENTITY, scale: f, open: 1.0 },
                 Some((p, a, c)) => {
                     let ps = state(p, g, gr, out);
                     let scale = ps.scale * f;
@@ -841,7 +853,7 @@ impl Grower {
                     let radius = if si.root {
                         pr
                     } else if f > 1e-6 {
-                        (rc * scale.powf(SLENDER)).min(pr / f)
+                        stout(rc, f).min(pr / f)
                     } else {
                         0.0
                     };
