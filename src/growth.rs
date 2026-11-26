@@ -1149,6 +1149,36 @@ mod tests {
         doc
     }
 
+    /// Every level of the young tree, at the grown tree's fit, holds the grown level's stems
+    /// exactly (the shed ones besides): shedding neither changes the budget nor which twigs a
+    /// lower level leaves out.
+    #[test]
+    fn shed_stems_leave_the_grown_levels_alone() {
+        let doc = shedding_pine(0.4);
+        let grown = crate::grow::grow(&doc, 0);
+        let young = crate::grow::grow_young(&doc, 0);
+        for level in 0..4 {
+            let (plain, _, pf) = crate::budget::level_mesh(&doc, level);
+            let (sk, _, yf) = crate::budget::young_level(&doc, &grown, &young, level);
+            assert_eq!(pf.reduction, yf.reduction, "level {level}");
+            let mut shed = vec![false; sk.stems.len()];
+            for i in 0..sk.stems.len() {
+                shed[i] = doc.get(sk.stems[i].gen).is_some_and(|g| doc.is_shed(g)) || sk.stems[i].parent.is_some_and(|p| shed[p]);
+            }
+            let kept: Vec<_> = sk.stems.iter().zip(&shed).filter(|(_, s)| !**s).map(|(st, _)| (st.gen, st.points.clone())).collect();
+            let want: Vec<_> = plain.stems.iter().map(|st| (st.gen, st.points.clone())).collect();
+            assert_eq!(kept.len(), want.len(), "level {level}: stems");
+            for (k, (a, b)) in kept.iter().zip(&want).enumerate() {
+                assert_eq!(a.0, b.0, "level {level}: stem {k}'s generator");
+                // a stem the shed ones grow from carries their joints as extra rings: the same
+                // curve through more points (every grown point among them)
+                let missing = b.1.iter().filter(|q| !a.1.iter().any(|p| (*p - **q).length() < 1e-4)).count();
+                let off = b.1.iter().map(|q| a.1.windows(2).map(|w| { let d = w[1] - w[0]; let t = ((*q - w[0]).dot(d) / d.length_squared().max(1e-12)).clamp(0.0, 1.0); (w[0] + d * t - *q).length() }).fold(f32::MAX, f32::min)).fold(0.0f32, f32::max);
+                assert!(off < 1e-3, "level {level}: stem {k} moved ({missing} of {} points, {off} m off the young curve)", b.1.len());
+            }
+        }
+    }
+
     #[test]
     fn shed_stems_are_in_the_growth_only() {
         let doc = shedding_pine(0.4);

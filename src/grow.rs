@@ -155,13 +155,19 @@ pub fn lod_blend(level: u32, s: f32) -> Lod {
 /// Leave out the finest stems: a share `prune` of the stems that are not trunks or a trunk's
 /// split leaders, smallest (base radius × length) first, each with everything growing on it.
 /// Returns the share of the leaves kept.
-fn prune_finest(sk: &mut Skeleton, prune: f32) -> f32 {
+fn prune_finest(doc: &Document, sk: &mut Skeleton, prune: f32) -> f32 {
     let n = sk.stems.len();
     let structural = |i: usize| {
         let st = &sk.stems[i];
         st.parent.is_none() || (st.fork && st.parent.is_some_and(|p| sk.stems[p].parent.is_none()))
     };
-    let mut cand: Vec<usize> = (0..n).filter(|&i| !structural(i)).collect();
+    // SHED stems (`growth.shed`, `grow_young`) are neither ranked nor cut: the grown tree's
+    // levels leave out exactly the twigs they leave out without them (parents come first).
+    let mut shed = vec![false; n];
+    for i in 0..n {
+        shed[i] = doc.get(sk.stems[i].gen).is_some_and(|g| doc.is_shed(g)) || sk.stems[i].parent.is_some_and(|p| shed[p]);
+    }
+    let mut cand: Vec<usize> = (0..n).filter(|&i| !structural(i) && !shed[i]).collect();
     if cand.is_empty() || prune <= 0.0 {
         return 1.0;
     }
@@ -196,12 +202,14 @@ fn prune_finest(sk: &mut Skeleton, prune: f32) -> f32 {
         st.forks = st.forks.iter().filter(|&&f| map[f] != usize::MAX).map(|&f| map[f]).collect();
     }
     sk.stems = stems;
-    let before = sk.leaves.len().max(1);
+    let kept = |l: &Leaf| !shed[l.stem];
+    let before = sk.leaves.iter().filter(|l| kept(l)).count().max(1);
+    let after = sk.leaves.iter().filter(|l| kept(l) && !gone[l.stem]).count();
     sk.leaves.retain(|l| !gone[l.stem]);
     for l in &mut sk.leaves {
         l.stem = map[l.stem];
     }
-    sk.leaves.len() as f32 / before as f32
+    after as f32 / before as f32
 }
 
 /// Sides around a stem: (full detail, at this LOD). Trunks keep at least five sides at low
@@ -233,7 +241,7 @@ pub fn reduce_detail(doc: &Document, sk: &mut Skeleton, lodf: &Lod) {
     let mut leaf_grow = 1.0;
     if lodf.prune > 0.0 {
         // the leaves of left-out twigs: the others grow a little more to keep the crown's area
-        leaf_grow = 1.0 / prune_finest(sk, lodf.prune).max(0.05).sqrt();
+        leaf_grow = 1.0 / prune_finest(doc, sk, lodf.prune).max(0.05).sqrt();
     }
     let keep_rings = joint_rings(doc, sk);
     for si in 0..sk.stems.len() {

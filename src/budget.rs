@@ -203,8 +203,17 @@ pub fn young_level_mesh(doc: &Document, level: u32) -> (Skeleton, Mesh, LevelFit
     if !doc.has_shed() {
         return level_mesh(doc, level);
     }
-    let full = crate::grow::grow_young(doc, 0);
-    fit_level(doc, &full, level)
+    young_level(doc, &grow(doc, 0), &crate::grow::grow_young(doc, 0), level)
+}
+
+/// One level of the young tree (`young`, from `grow_young`) at the detail the GROWN tree
+/// (`grown`) is fitted to: the budget is the grown tree's, and the shed stems ride along at its
+/// reduction. Fitting the young tree itself cut the grown crown to make room for stems that are
+/// gone by then (the Langsommar pine, 2026-11-26: LOD1 12.8 k -> 5.5 k triangles).
+pub fn young_level(doc: &Document, grown: &Skeleton, young: &Skeleton, level: u32) -> (Skeleton, Mesh, LevelFit) {
+    let (_, _, fit) = fit_level(doc, grown, level);
+    let (sk, m) = at(doc, young, level, fit.reduction);
+    (sk, m, fit)
 }
 
 /// LOD0 to LOD3 against their budgets (the tree is grown once).

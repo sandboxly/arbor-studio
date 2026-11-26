@@ -105,15 +105,19 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
     // grown tree's base positions have them withered away (below), so its triangles are
     // there, collapsed. Its billboard and collision are the grown tree's.
     let young = doc.growth.export && doc.has_shed();
-    let full = if young { crate::grow::grow_young(doc, 0) } else { grow(doc, 0) };
+    let full = grow(doc, 0);
+    let young_full = young.then(|| crate::grow::grow_young(doc, 0));
     for &l in &levels {
-        let (sk, m, fit) = crate::budget::fit_level(doc, &full, l);
+        let (sk, m, fit) = match &young_full {
+            Some(y) => crate::budget::young_level(doc, &full, y, l),
+            None => crate::budget::fit_level(doc, &full, l),
+        };
         stats.push(m.stats(&sk));
         fits.push(fit);
         meshes.push((l, m, sk));
     }
     let name = safe_name(&doc.name);
-    let caps = if young { crate::collision::capsules(doc, &grow(doc, 0)) } else { crate::collision::capsules(doc, &meshes[0].2) };
+    let caps = if young { crate::collision::capsules(doc, &full) } else { crate::collision::capsules(doc, &meshes[0].2) };
     // billboard LOD: atlas picture saved next to the export, cards added as the last level
     let mut bb_texture: Option<String> = None;
     let mut extra_files = vec![];
@@ -130,7 +134,7 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
     }
     // growth animation: every level grows on the full tree's timing
     let mut growth = doc.growth.export.then(|| {
-        let timing = crate::growth::Timing::new(doc, &full);
+        let timing = crate::growth::Timing::new(doc, young_full.as_ref().unwrap_or(&full));
         let pairs: Vec<(&Mesh, &crate::grow::Skeleton)> = meshes.iter().map(|(_, m, sk)| (m, sk)).collect();
         (timing.clone(), crate::growth::animate(doc, &timing, &pairs))
     });
