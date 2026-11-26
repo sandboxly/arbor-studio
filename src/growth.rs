@@ -39,15 +39,21 @@ use glam::{Quat, Vec3};
 use serde::Serialize;
 use std::collections::HashMap;
 
+// THE TIMES BELOW ARE SHARES OF THE TRUNK'S GROWTH, and the trunk's height grows in step with
+// it, so 0.05 is a 0.8 m sapling of a 17 m birch. A real sapling of that size has side shoots
+// and a few dozen full leaves. Until 2026-11-26 a bud broke 0.06 after its parent's plus up to
+// 0.1 (and the generator's default offset variation another 0.1), a shoot took 0.25 to reach
+// its share and a leaf 0.15 to unfold, so each order of branching waited up to a quarter of the
+// tree's life: a 0.8 m birch was a bare pole and a 4 m one a sparse broom.
 /// A leaf unfolds in this share of the trunk's growth time at speed 1.
-const LEAF_TIME: f32 = 0.15;
+const LEAF_TIME: f32 = 0.04;
 /// With Auto, a branch's bud breaks this long (share of the trunk's growth time) after its
 /// parent's, less for buds low on the parent; plus up to STAGGER at random.
-const BUD_DELAY: f32 = 0.06;
-const STAGGER: f32 = 0.1;
+const BUD_DELAY: f32 = 0.012;
+const STAGGER: f32 = 0.02;
 /// With Auto, a branch reaches its full size relative to its parent in this share of the
 /// trunk's growth time at speed 1 (from then on it grows with the parent).
-const REL_TIME: f32 = 0.25;
+const REL_TIME: f32 = 0.06;
 /// A young stem is at most this many times as thick, against its length, as when it is grown
 /// (a radius curve ahead of the speed curve: ease-out radius on linear length is 2x at the start).
 const STOUT_MAX: f32 = 2.0;
@@ -992,8 +998,10 @@ impl Grower {
                         match Timing::progress(self.timing.leaf_start[l as usize], self.timing.leaf_time[l as usize], g) {
                             None => anchor,
                             Some(x) => {
-                                // a young tree's leaves are a little smaller
-                                let size = (gs.start_size + (1.0 - gs.start_size) * gs.speed_curve.at(x)) * (0.45 + 0.55 * tree.clamp(0.0, 1.0));
+                                // a young tree's leaves are a little smaller: 0.7 of the grown
+                                // tree's on a seedling (a sapling's leaves are near full size;
+                                // 0.45 until 2026-11-26 made a 0.8 m birch's leaves half size)
+                                let size = (gs.start_size + (1.0 - gs.start_size) * gs.speed_curve.at(x)) * (0.7 + 0.3 * tree.clamp(0.0, 1.0));
                                 let xo = (x / gs.orientation_time).min(1.0);
                                 let turned = gs.start_angle + (1.0 - gs.start_angle) * gs.speed_curve.at(xo);
                                 let r = Quat::IDENTITY.slerp(li.fold, 1.0 - turned);

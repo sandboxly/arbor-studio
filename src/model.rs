@@ -308,7 +308,7 @@ impl GrowthSync {
 #[serde(default)]
 pub struct GenGrowth {
     /// Speed scale: stems grow `speed` times as fast as the trunk's pace (a stem as long as
-    /// the first trunk takes 1 / speed of the trunk's time); leaves unfold in 0.15 / speed of it.
+    /// the first trunk takes 1 / speed of the trunk's time); leaves unfold in 0.04 / speed of it.
     pub speed: f32,
     /// How the length (leaves: the size) grows over the part's own growth.
     pub speed_curve: GrowthCurve,
@@ -344,7 +344,7 @@ impl Default for GenGrowth {
             sync: GrowthSync::Auto,
             start_pct: 0.0,
             offset: 0.0,
-            offset_variation: 0.1,
+            offset_variation: 0.02,
         }
     }
 }
