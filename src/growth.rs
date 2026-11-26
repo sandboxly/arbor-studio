@@ -299,7 +299,11 @@ impl Timing {
                         let up = if h < SEEDLING_LEAVES / nl.max(1) as f32 { chain.len() - 1 } else if h < EARLY_LEAVES { 1.min(chain.len() - 1) } else { 0 };
                         let s0 = start[chain[up]] + 0.02;
                         let h2 = hash01(7919 * i as u32 + 11);
-                        s = if up + 1 == chain.len() && chain.len() > 1 { s0 + 0.04 * h2 } else { s0 + h2 * h2 * (LEAF_END - s0).max(0.0) };
+                        // on a stem that is shed while young they all come out in the first half
+                        // of its life, not until LEAF_END: most would never be seen
+                        let shed = chain.iter().filter(|&&c| sk.stems[c].parent.is_some()).map(|&c| gs[c].0.shed).filter(|&x| x > 0.0).fold(f32::INFINITY, f32::min);
+                        let end = if shed.is_finite() { LEAF_END.min(0.5 * shed * (1.0 - WITHER)).max(s0) } else { LEAF_END };
+                        s = if up + 1 == chain.len() && chain.len() > 1 { s0 + 0.04 * h2 } else { s0 + h2 * h2 * (end - s0).max(0.0) };
                     }
                     GrowthSync::Parent => s = pl.max(start[p] + g.start_pct * time[p]),
                     GrowthSync::InPlace => s = pl,
