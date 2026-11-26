@@ -80,6 +80,16 @@ fn level_name(name: &str, level: u32, with_lods: bool) -> String {
     }
 }
 
+/// The document to export with or without the ambient occlusion baked into the vertex colours
+/// (COLOR_0). Without it, COLOR_0 is only the materials' colours, the branch shading and each
+/// leaf's variation: what an engine with its own AO multiplies its base colour by.
+pub fn with_baked_ao(mut doc: Document, bake_ao: bool) -> Document {
+    if !bake_ao {
+        doc.settings.ao_strength = 0.0;
+    }
+    doc
+}
+
 pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with_billboard: bool, bake_blend: bool) -> Result<ExportResult, String> {
     if let Some(dir) = path.parent() {
         if !dir.as_os_str().is_empty() {
@@ -830,7 +840,7 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
         "extras": {
             "wind": doc.settings.wind,
             "wind_attribute": "TEXCOORD_1: x = branch sway weight, y = leaf flutter weight",
-            "color_attribute": "COLOR_0: material colour/tint with per-leaf variation and baked ambient occlusion; multiplies the base colour texture",
+            "color_attribute": if doc.settings.ao_strength > 0.0 { "COLOR_0: material colour/tint with branch shading, per-leaf variation and baked ambient occlusion; multiplies the base colour texture" } else { "COLOR_0: material colour/tint with branch shading and per-leaf variation (no ambient occlusion baked); multiplies the base colour texture" },
             "normal_maps": "glTF normal maps are OpenGL style (green = up). Materials whose source map was DirectX style have normal_flip_green: true in their extras; those maps were flipped on export.",
         },
     });

@@ -79,6 +79,8 @@ pub struct ArborApp {
     export_billboard: bool,
     /// Bake material gradients into plain materials in GLB exports.
     export_bake_blend: bool,
+    /// Bake ambient occlusion into the exported vertex colours (off for engines with their own AO).
+    export_bake_ao: bool,
     /// macOS: the menus in the system menu bar.
     #[cfg(target_os = "macos")]
     native_menu: Option<crate::native_menu::NativeMenu>,
@@ -171,6 +173,7 @@ impl ArborApp {
             force_scroll: None,
             export_billboard: true,
             export_bake_blend: false,
+            export_bake_ao: true,
             #[cfg(target_os = "macos")]
             native_menu: Some(crate::native_menu::NativeMenu::install(&cc.egui_ctx)),
             variation_count: 5,
@@ -413,6 +416,7 @@ impl eframe::App for ArborApp {
                     ui.checkbox(&mut self.export_lods, "Include LOD0–3 in exports");
                     ui.checkbox(&mut self.export_billboard, "Include billboard LOD in exports");
                     ui.checkbox(&mut self.export_bake_blend, "Bake material gradients (GLB)").on_hover_text("Plain materials instead of blend weights, for engines without a custom shader. OBJ is always baked.");
+                    ui.checkbox(&mut self.export_bake_ao, "Bake ambient occlusion into vertex colours").on_hover_text("Untick for an engine with its own ambient occlusion (SSAO, GTAO): the vertex colours then carry only the materials' colours, the branch shading and each leaf's colour variation.");
                     if ui.button("Export GLB (glTF) — Unity / Unreal / Godot…").clicked() {
                         actions.push(Action::Export(Format::Glb, self.export_lods));
                     }
@@ -522,6 +526,7 @@ impl eframe::App for ArborApp {
                     ui.checkbox(&mut self.export_lods, "Include LOD0–3");
                     ui.checkbox(&mut self.export_billboard, "Include billboard LOD");
                     ui.checkbox(&mut self.export_bake_blend, "Bake material gradients (GLB)").on_hover_text("Plain materials instead of blend weights, for engines without a custom shader. OBJ is always baked.");
+                    ui.checkbox(&mut self.export_bake_ao, "Bake ambient occlusion into vertex colours").on_hover_text("Untick for an engine with its own ambient occlusion (SSAO, GTAO): the vertex colours then carry only the materials' colours, the branch shading and each leaf's colour variation.");
                     if ui.button("GLB (glTF 2.0)").clicked() {
                         actions.push(Action::Export(Format::Glb, self.export_lods));
                     }
@@ -1946,7 +1951,7 @@ impl ArborApp {
                 }
             }
             Action::ExportVariations(fmt) => {
-                let doc = self.shared.lock().unwrap().doc.clone();
+                let doc = export::with_baked_ao(self.shared.lock().unwrap().doc.clone(), self.export_bake_ao);
                 if let Some(dir) = rfd::FileDialog::new().set_title("Folder for the variations").pick_folder() {
                     match export::export_variations(&doc, &dir, self.variation_count, doc.settings.seed, fmt, self.export_lods, self.export_billboard, self.export_bake_blend) {
                         Ok(v) => {
@@ -1965,6 +1970,8 @@ impl ArborApp {
     }
 
     fn export_to(&mut self, doc: &Document, p: &std::path::Path, fmt: Format, lods: bool, bb: bool) {
+        let without_ao;
+        let doc = if self.export_bake_ao { doc } else { without_ao = export::with_baked_ao(doc.clone(), false); &without_ao };
         match export::export(doc, p, fmt, lods, bb, self.export_bake_blend) {
             Ok(r) => {
                 self.status = format!("Exported {}", r.files.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join(", "));

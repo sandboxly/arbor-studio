@@ -296,6 +296,7 @@ pub fn tool_list() -> Vec<Value> {
             "include_lods": {"type": "boolean"},
             "include_billboard": {"type": "boolean"},
             "include_growth": {"type": "boolean", "description": "Add the growth animation (default: the tree's growth.export setting). glb: morph targets with a Grow clip and one clip per stage; obj: one extra file per stage (<name>_<Stage>.obj); json: growth timing per stem and leaf. See set_growth."},
+            "bake_ao": {"type": "boolean", "description": "Bake ambient occlusion into the vertex colours (COLOR_0); default true. false for an engine with its own AO: COLOR_0 then carries only the materials' colours, the branch shading and each leaf's colour variation."},
             "bake_material_blend": {"type": "boolean", "description": "glb: bake material gradients (set_material_blend) into plain materials, each transition with a texture of its own, for engines without a custom shader. Default false: every material is kept and the blend goes in TEXCOORD_2 (see the file's extras.material_blend). obj is always baked (textures saved next to the file)."}
         }), &["path"]),
         tool("export_variations", "Export variations", "Export several individuals of the current species (different seeds) into a folder, one file each: <Tree>_v01.glb, <Tree>_v02.glb, ... Mesh names carry the same suffix. Node edits are not applied to variations.", json!({
@@ -306,6 +307,7 @@ pub fn tool_list() -> Vec<Value> {
             "include_lods": {"type": "boolean"},
             "include_billboard": {"type": "boolean"},
             "include_growth": {"type": "boolean", "description": "Add the growth animation to every file (default: the tree's growth.export setting)"},
+            "bake_ao": {"type": "boolean", "description": "Bake ambient occlusion into the vertex colours (COLOR_0); default true. false for an engine with its own AO: COLOR_0 then carries only the materials' colours, the branch shading and each leaf's colour variation."},
             "bake_material_blend": {"type": "boolean", "description": "glb: bake material gradients into plain materials (see export_tree)"}
         }), &["folder", "count"]),
         tool("add_force", "Add force", "Add a force that bends stems while they grow. kind 'direction' pushes every stem along direction [x,y,z] (wind-swept or leaning trees); kind 'attractor' pulls stems towards position [x,y,z] in metres (light seeking), negative strength pushes them away (obstacles). Each generator's force_response parameter scales the effect (roots default to 0).", json!({
@@ -1221,6 +1223,9 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             let lods = a.get("include_lods").and_then(|v| v.as_bool()).unwrap_or(false);
             let bb = a.get("include_billboard").and_then(|v| v.as_bool()).unwrap_or(false);
             let mut doc = lock().doc.clone();
+            if a.get("bake_ao").and_then(|v| v.as_bool()) == Some(false) {
+                doc = export::with_baked_ao(doc, false);
+            }
             if let Some(g) = a.get("include_growth").and_then(|v| v.as_bool()) {
                 doc.growth.export = g;
             }
@@ -1253,6 +1258,9 @@ pub fn call_tool(s: &Server, name: &str, a: &Value) -> Result<Vec<Value>, String
             let lods = a.get("include_lods").and_then(|v| v.as_bool()).unwrap_or(false);
             let bb = a.get("include_billboard").and_then(|v| v.as_bool()).unwrap_or(false);
             let mut doc = lock().doc.clone();
+            if a.get("bake_ao").and_then(|v| v.as_bool()) == Some(false) {
+                doc = export::with_baked_ao(doc, false);
+            }
             if let Some(g) = a.get("include_growth").and_then(|v| v.as_bool()) {
                 doc.growth.export = g;
             }
