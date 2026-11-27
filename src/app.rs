@@ -1356,6 +1356,8 @@ fn properties_ui(ui: &mut Ui, sh: &mut Shared, stats: &Stats, editing_material: 
             prow(ui, "Autumn", "autumn", |ui| ui.add(egui::Slider::new(&mut d.settings.autumn, 0.0..=1.0)));
             prow(ui, "Fallen leaves", "leaf_drop", |ui| ui.add(egui::Slider::new(&mut d.settings.leaf_drop, 0.0..=1.0)));
             prow(ui, "Ambient occlusion", "ao_strength", |ui| ui.add(egui::Slider::new(&mut d.settings.ao_strength, 0.0..=1.0)));
+            prow(ui, "Crown normals", "crown_normals", |ui| ui.add(egui::Slider::new(&mut d.settings.crown_normals, 0.0..=1.0)));
+            prow(ui, "Crown lobes", "crown_lobes", |ui| ui.add(egui::Slider::new(&mut d.settings.crown_lobes, 0.0..=1.0)));
         });
     });
     if reseed {

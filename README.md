@@ -108,6 +108,11 @@ Optional: `MACOS_BUNDLE_ID` (default `io.github.arbor-studio`) and an icon at `m
   so the crown keeps its outline and leaf area.
 * GLB wind data: `TEXCOORD_1` (UV2) x = branch sway weight (0 at ground → 1 at tips), y = leaf flutter weight.
   `COLOR_0` holds the albedo colour times baked ambient occlusion (`ao_strength`).
+* **Crown lighting** (`crown_normals`, `crown_lobes`): leaf normals blended toward "out of the crown", the
+  whole crown's ellipsoid (lobes 0) or each lobe of a smoothed leaf-density field (lobes 1). The light then
+  gathers into a lit and a shaded side instead of breaking up per leaf. GLB also gets `_CROWN_DEPTH` (float,
+  0 on the crown's shell, 1 at its core), so a shader can darken the core's ambient without touching the
+  colours. Growth morph targets carry `NORMAL` and `_CROWN_DEPTH` deltas, so each stage is lit by its own crown.
 * **Collision**: capsules fitted to the trunk and thick branches, exported as convex hulls. Naming `neutral`
   (`<Tree>_Collision_NN`), `unreal` (`UCX_<mesh>_NN`) or `godot` (`-convcolonly`); capsule data in GLB node
   extras and in the JSON file.

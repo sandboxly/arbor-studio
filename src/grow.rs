@@ -2018,6 +2018,12 @@ pub struct Mesh {
     /// weight of that mapping (0 = the vertex's own `uv` only). Shorter than `pos` (or empty):
     /// the missing vertices have weight 0.
     pub xuv: Vec<[f32; 3]>,
+    /// How deep each vertex sits in the crown's leaf mass (0 the outer shell .. 1 the core,
+    /// [`crate::crown`]). Shorter than `pos` (or empty): the missing vertices are 0.
+    pub crown: Vec<f32>,
+    /// The leaves' own normals, before the crown bent them (`nrm` holds the bent ones). Shorter
+    /// than `pos` (or empty): the missing vertices' own normals are `nrm`.
+    pub flat_nrm: Vec<Vec3>,
     /// Bark triangles first, then leaf triangles from `leaf_tri_start`.
     pub tris: Vec<[u32; 3]>,
     pub leaf_tri_start: usize,
@@ -2489,7 +2495,30 @@ pub fn build_mesh_with(doc: &Document, sk: &Skeleton, lodf: &Lod, level: u32) ->
     m.radius = m.pos.iter().fold(0.1f32, |a, p| a.max((p.x * p.x + p.z * p.z).sqrt()));
     assign_layers(doc, sk, &below, &mut m);
     bake_ao(&mut m, doc.settings.ao_strength, level);
+    crown_light(doc, &mut m);
     m
+}
+
+/// The crown's normals and depth ([`crate::crown`]) for the mesh as it stands: its leaves' own
+/// normals blended by `crown_normals` toward the way out of the crown, and `crown` filled.
+/// Again after the positions change (the grown tree of a young one): it starts from the
+/// leaves' own normals every time.
+pub fn crown_light(doc: &Document, m: &mut Mesh) {
+    if m.flat_nrm.is_empty() {
+        m.flat_nrm = m.nrm.clone();
+    }
+    let n = m.pos.len();
+    let flat: Vec<Vec3> = (0..n).map(|i| m.flat_nrm.get(i).copied().unwrap_or(m.nrm[i])).collect();
+    match crate::crown::shape(&m.pos, &flat, &m.leaf, &m.leaf_first, &m.tris, m.leaf_tri_start, doc.settings.crown_normals, doc.settings.crown_lobes) {
+        Some((nrm, depth)) => {
+            m.nrm = nrm;
+            m.crown = depth;
+        }
+        None => {
+            m.nrm = flat;
+            m.crown.clear();
+        }
+    }
 }
 
 /// Material gradients: the layer value of every stem vertex of a generator with a gradient

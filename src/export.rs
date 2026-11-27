@@ -143,6 +143,10 @@ pub fn export(doc: &Document, path: &Path, format: Format, with_lods: bool, with
         for (i, (_, m, _)) in meshes.iter_mut().enumerate() {
             if let Some(last) = anim.shapes[i].last() {
                 m.pos = last.clone();
+                // the crown is the grown tree's, without the shed stems' leaves
+                if !m.leaf_first.is_empty() {
+                    crate::grow::crown_light(doc, m);
+                }
             }
         }
     }
@@ -653,6 +657,12 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
         let cv = push_view(&mut bin, &mut views, &f32s(m.col.iter().flat_map(|c| [c[0], c[1], c[2]])), Some(34962));
         accessors.push(json!({"bufferView": cv, "componentType": 5126, "count": n, "type": "VEC3"}));
         let col_acc = accessors.len() - 1;
+        // the crown's depth (crate::crown): 0 on the outer shell .. 1 at the core
+        let crown_acc = (!m.crown.is_empty()).then(|| {
+            let v = push_view(&mut bin, &mut views, &f32s((0..n).map(|i| m.crown.get(i).copied().unwrap_or(0.0))), Some(34962));
+            accessors.push(json!({"bufferView": v, "componentType": 5126, "count": n, "type": "SCALAR"}));
+            accessors.len() - 1
+        });
         // material gradients: x = position on the gradient's axis, y = layer value
         let blend_acc = if m.axis.len() == n {
             let bv = push_view(&mut bin, &mut views, &f32s(m.axis.iter().zip(&m.layer).flat_map(|(x, l)| [*x, *l])), Some(34962));
@@ -691,7 +701,24 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
                 }
                 let tv = push_view(&mut bin, &mut views, &f32s(d.iter().flat_map(|p| [p.x, p.y, p.z])), Some(34962));
                 accessors.push(json!({"bufferView": tv, "componentType": 5126, "count": n, "type": "VEC3", "min": mn, "max": mx}));
-                targets.push(json!({"POSITION": accessors.len() - 1}));
+                let mut target = json!({"POSITION": accessors.len() - 1});
+                // the crown of the tree at this keyframe: its leaves turned out of THAT crown
+                // (a sapling's out of its own, not the grown tree's) and their depth in it
+                if crown_acc.is_some() {
+                    let flat: Vec<glam::Vec3> = (0..n).map(|i| m.flat_nrm.get(i).copied().unwrap_or(m.nrm[i])).collect();
+                    let (kn, kd) = crate::crown::shape(shape, &flat, &m.leaf, &m.leaf_first, &m.tris, m.leaf_tri_start, doc.settings.crown_normals, doc.settings.crown_lobes).unwrap_or_else(|| (m.nrm.clone(), vec![0.0; n]));
+                    let nd: Vec<f32> = (0..n).flat_map(|i| {
+                        let d = kn[i].normalize_or(glam::Vec3::Y) - m.nrm[i].normalize_or(glam::Vec3::Y);
+                        [d.x, d.y, d.z]
+                    }).collect();
+                    let nv = push_view(&mut bin, &mut views, &f32s(nd.into_iter()), Some(34962));
+                    accessors.push(json!({"bufferView": nv, "componentType": 5126, "count": n, "type": "VEC3"}));
+                    target["NORMAL"] = json!(accessors.len() - 1);
+                    let dv = push_view(&mut bin, &mut views, &f32s((0..n).map(|i| kd[i] - m.crown.get(i).copied().unwrap_or(0.0))), Some(34962));
+                    accessors.push(json!({"bufferView": dv, "componentType": 5126, "count": n, "type": "SCALAR"}));
+                    target["_CROWN_DEPTH"] = json!(accessors.len() - 1);
+                }
+                targets.push(target);
             }
             let jv = push_view(&mut bin, &mut views, &vec![0u8; n * 4], Some(34962));
             accessors.push(json!({"bufferView": jv, "componentType": 5121, "count": n, "type": "VEC4"}));
@@ -731,6 +758,9 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
                 "indices": accessors.len() - 1,
                 "material": mi,
             });
+            if let Some(ca) = crown_acc {
+                prim["attributes"]["_CROWN_DEPTH"] = json!(ca);
+            }
             if let Some(ba) = blend_acc {
                 prim["attributes"]["TEXCOORD_2"] = json!(ba);
             }
@@ -857,6 +887,8 @@ fn write_glb(doc: &Document, name: &str, path: &Path, meshes: &[(u32, &Mesh)], w
             "wind": doc.settings.wind,
             "wind_attribute": "TEXCOORD_1: x = branch sway weight, y = leaf flutter weight",
             "color_attribute": if doc.settings.ao_strength > 0.0 { "COLOR_0: material colour/tint with branch shading, per-leaf variation and baked ambient occlusion; multiplies the base colour texture" } else { "COLOR_0: material colour/tint with branch shading and per-leaf variation (no ambient occlusion baked); multiplies the base colour texture" },
+            "crown": {"normals": doc.settings.crown_normals, "lobes": doc.settings.crown_lobes},
+            "crown_attribute": "_CROWN_DEPTH (float, every vertex): how deep the vertex sits in the crown's leaf mass, 0 on the outer shell .. 1 at the core (never 1 in a crown thinner than 2 m). Not in COLOR_0: darken the sky's (ambient) light on the leaves by it, not the albedo or the direct sun. With crown normals (extras.crown.normals > 0) the leaf normals are bent out of the crown by that share; morph targets carry NORMAL and _CROWN_DEPTH deltas so each growth keyframe is lit by its own crown.",
             "normal_maps": "glTF normal maps are OpenGL style (green = up). Materials whose source map was DirectX style have normal_flip_green: true in their extras; those maps were flipped on export.",
         },
     });

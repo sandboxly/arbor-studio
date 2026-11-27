@@ -1077,6 +1077,13 @@ pub struct TreeSettings {
     pub leaf_drop: f32,
     /// Strength of the ambient occlusion baked into vertex colours (0 = none).
     pub ao_strength: f32,
+    /// How far each leaf vertex's normal is bent from the leaf's own toward the way out of the
+    /// crown (0 = the leaf's own normal, 1 = straight out): the crown then lights as one volume,
+    /// with a lit side, a terminator and a shaded side ([`crate::crown`]).
+    pub crown_normals: f32,
+    /// What "out of the crown" follows: 0 = the whole crown's bounding ellipsoid, 1 = its lobes
+    /// (each dome of leaves its own, from a smoothed leaf density).
+    pub crown_lobes: f32,
     /// Growth stage: 1 = mature tree as designed, smaller values = younger (fewer, thinner, shorter stems).
     pub age: f32,
     /// Branches grow out of their parent's surface as one connected mesh (a hole is cut in the
@@ -1111,6 +1118,8 @@ impl Default for TreeSettings {
             autumn: 0.0,
             leaf_drop: 0.0,
             ao_strength: 0.75,
+            crown_normals: 0.0,
+            crown_lobes: 0.5,
             age: 1.0,
             join_branches: true,
             join_method: JoinMethod::Stitch,
@@ -1126,6 +1135,8 @@ impl TreeSettings {
         self.autumn = self.autumn.clamp(0.0, 1.0);
         self.leaf_drop = self.leaf_drop.clamp(0.0, 1.0);
         self.ao_strength = self.ao_strength.clamp(0.0, 1.0);
+        self.crown_normals = self.crown_normals.clamp(0.0, 1.0);
+        self.crown_lobes = self.crown_lobes.clamp(0.0, 1.0);
         self.age = self.age.clamp(0.05, 1.0);
         self.wind.strength = self.wind.strength.clamp(0.0, 2.0);
         self.wind.direction = self.wind.direction.rem_euclid(360.0);
@@ -2170,6 +2181,8 @@ pub const SETTINGS_REFERENCE: &[(&str, &str, &str)] = &[
     ("join_branches", "true|false (roots and side roots join the same way; trunks with roots reach a little below ground so roots always grow out of bark)", "Branches are extruded from their parent's surface as one connected mesh: the parent's bark gets an opening that is stitched to the branch (no hidden geometry inside, no seam). Off = separate tubes pushed into the parent."),
     ("age", "0.05..1", "Growth stage: 1 = the mature tree as designed; lower values grow a younger version of the same individual (shorter, thinner, fewer branches; deeper levels appear last). Step it to export growth stages."),
     ("ao_strength", "0..1", "Ambient occlusion baked into vertex colours (COLOR_0): inner branches and leaves deep in the crown get darker. 0 turns it off."),
+    ("crown_normals", "0..1", "Crown normals: bend each leaf vertex's normal from the leaf's own toward the way out of the crown, so the crown lights as one volume (a sunlit side, a soft terminator, a shaded side) instead of a speckle of cards each lit by its own turn. 0 (default) = the leaves' own normals; 0.6-0.9 for broadleaf crowns and needle tufts, the leaf's normal map still adds its detail. Export only: GLB/OBJ normals."),
+    ("crown_lobes", "0..1", "What crown normals point away from: 0 = the centre of the whole crown (its bounding ellipsoid), 1 = each lobe of leaves (a smoothed leaf density: a big oak's boughs each carry their own dome). Where a lobe has no clear outside (its core) the whole crown's direction is used. Every export also carries _CROWN_DEPTH (GLB) per vertex: 0 on the crown's outer shell .. 1 at its core, for the engine's sky light (not baked into the colours)."),
     ("wind.strength", "0..2", "Wind strength (preview and exported sway weights)."),
     ("wind.direction", "0..360 deg", "Direction the wind blows towards, around the vertical axis."),
     ("wind.gustiness", "0..1", "Irregular gusts."),

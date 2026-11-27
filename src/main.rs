@@ -13,6 +13,7 @@ mod app;
 mod billboard;
 mod blendbake;
 mod collision;
+mod crown;
 mod docshots;
 mod export;
 mod gpu;

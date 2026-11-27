@@ -109,6 +109,8 @@
 <tr><td>Autumn</td><td><code>autumn</code></td><td>0–1</td><td>Blends leaf colours towards autumn colours.</td></tr>
 <tr><td>Fallen leaves</td><td><code>leaf_drop</code></td><td>0–1</td><td>Share of leaves that have fallen.</td></tr>
 <tr><td>Ambient occlusion</td><td><code>ao_strength</code></td><td>0–1</td><td>Darkening of the inner crown, stored in the vertex colours.</td></tr>
+<tr><td>Crown normals</td><td><code>crown_normals</code></td><td>0–1</td><td>Blends each leaf's normal toward out of the crown, so the crown lights as a volume, not leaf by leaf. 0 keeps each leaf's own facing. GLB exports also get the <code>_CROWN_DEPTH</code> attribute (0 shell, 1 core).</td></tr>
+<tr><td>Crown lobes</td><td><code>crown_lobes</code></td><td>0–1</td><td>What the crown is for crown normals: 0 the whole tree's ellipsoid, 1 each lobe of the leaf mass.</td></tr>
 <tr><td>Wind: Strength</td><td><code>wind.strength</code></td><td>0–2</td><td>How far the tree moves in the wind.</td></tr>
 <tr><td>Wind: Direction</td><td><code>wind.direction</code></td><td>0°–360°</td><td>Direction the wind blows towards.</td></tr>
 <tr><td>Wind: Gustiness</td><td><code>wind.gustiness</code></td><td>0–1</td><td>Irregularity of the wind.</td></tr>

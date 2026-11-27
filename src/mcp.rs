@@ -246,7 +246,7 @@ pub fn tool_list() -> Vec<Value> {
             "contrast": {"type": "number", "minimum": 0, "maximum": 1},
             "clear": {"type": "boolean"}
         }), &["generator_id"]),
-        tool("update_settings", "Update tree settings", "Change global settings: name, seed, scale, bark_color, leaf_color, leaf_color_variation, autumn (0..1), leaf_drop (0..1, season: fallen leaves), ao_strength (0..1, baked ambient occlusion), age (0.05..1 growth stage) and wind {strength, direction, gustiness, speed}.", json!({
+        tool("update_settings", "Update tree settings", "Change global settings: name, seed, scale, bark_color, leaf_color, leaf_color_variation, autumn (0..1), leaf_drop (0..1, season: fallen leaves), ao_strength (0..1, baked ambient occlusion), crown_normals (0..1, leaf normals bent out of the crown), crown_lobes (0..1, out of the whole crown or of each lobe), age (0.05..1 growth stage) and wind {strength, direction, gustiness, speed}.", json!({
             "name": {"type": "string"},
             "seed": {"type": "integer"},
             "scale": {"type": "number"},
@@ -256,6 +256,8 @@ pub fn tool_list() -> Vec<Value> {
             "autumn": {"type": "number"},
             "leaf_drop": {"type": "number", "minimum": 0, "maximum": 1},
             "ao_strength": {"type": "number", "minimum": 0, "maximum": 1},
+            "crown_normals": {"type": "number", "minimum": 0, "maximum": 1, "description": "Bend leaf normals from the leaf's own (0) toward the way out of the crown (1): the crown lights as one volume"},
+            "crown_lobes": {"type": "number", "minimum": 0, "maximum": 1, "description": "Out of the whole crown's ellipsoid (0) or of each lobe of leaves (1)"},
             "age": {"type": "number", "minimum": 0.05, "maximum": 1, "description": "Growth stage (1 = mature)"},
             "join_branches": {"type": "boolean", "description": "Join branches to their parent (default true); join_method picks how"},
             "join_method": {"type": "string", "enum": ["stitch", "weld"], "description": "stitch = opening cut into the parent and stitched (one watertight mesh); weld = parent whole, branch base wrapped onto it with blended normals/colour/wind"},

@@ -55,6 +55,7 @@
 
 <h3>Vertex colours</h3>
 <p>GLB exports contain a vertex colour (<code>COLOR_0</code>) with the material colour, the per-leaf colour variation, the autumn colours and the baked ambient occlusion. Multiply it with the colour texture in your material to get the look of the viewport.</p>
+<p>They also contain <code>_CROWN_DEPTH</code>, one float per vertex: 0 on the crown's outer shell and 1 at its core (leaves only; bark is 0). Use it to darken the ambient light inside the crown. With <em>Crown normals</em> above 0, the leaf normals point out of the crown, and growth morph targets carry <code>NORMAL</code> and <code>_CROWN_DEPTH</code> deltas.</p>
 
 <h2 id="growth">Growth animation</h2>
 <p>With <strong>Include the growth in exports</strong> on (Properties › Growth), GLB files carry the growth from a sprout to the mature tree as morph targets with one clip per stage, OBJ exports add one file per stage and JSON adds the growth timing. See <a href="growth.html">Growth animation</a>.</p>
